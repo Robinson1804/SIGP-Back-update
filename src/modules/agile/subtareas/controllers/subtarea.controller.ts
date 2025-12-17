@@ -1,0 +1,74 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
+import { SubtareaService } from '../services/subtarea.service';
+import { CreateSubtareaDto } from '../dto/create-subtarea.dto';
+import { UpdateSubtareaDto } from '../dto/update-subtarea.dto';
+import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../common/guards/roles.guard';
+import { Roles } from '../../../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
+import { Role } from '../../../../common/constants/roles.constant';
+
+@Controller('subtareas')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubtareaController {
+  constructor(private readonly subtareaService: SubtareaService) {}
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  create(@Body() createDto: CreateSubtareaDto, @CurrentUser('id') userId: number) {
+    return this.subtareaService.create(createDto, userId);
+  }
+
+  @Get()
+  findAll(@Query('tareaId') tareaId?: string) {
+    return this.subtareaService.findAll(tareaId ? parseInt(tareaId, 10) : undefined);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.subtareaService.findOne(id);
+  }
+
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.DESARROLLADOR)
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: UpdateSubtareaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.subtareaService.update(id, updateDto, userId);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.subtareaService.remove(id, userId);
+  }
+}
+
+@Controller('tareas/:tareaId/subtareas')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class TareaSubtareasController {
+  constructor(private readonly subtareaService: SubtareaService) {}
+
+  @Get()
+  findByTarea(@Param('tareaId', ParseIntPipe) tareaId: number) {
+    return this.subtareaService.findByTarea(tareaId);
+  }
+
+  @Get('estadisticas')
+  getEstadisticas(@Param('tareaId', ParseIntPipe) tareaId: number) {
+    return this.subtareaService.getEstadisticasByTarea(tareaId);
+  }
+}
