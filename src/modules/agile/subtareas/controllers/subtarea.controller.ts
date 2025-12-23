@@ -13,6 +13,7 @@ import {
 import { SubtareaService } from '../services/subtarea.service';
 import { CreateSubtareaDto } from '../dto/create-subtarea.dto';
 import { UpdateSubtareaDto } from '../dto/update-subtarea.dto';
+import { ReordenarSubtareasDto } from '../dto/reordenar-subtareas.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
@@ -70,5 +71,14 @@ export class TareaSubtareasController {
   @Get('estadisticas')
   getEstadisticas(@Param('tareaId', ParseIntPipe) tareaId: number) {
     return this.subtareaService.getEstadisticasByTarea(tareaId);
+  }
+
+  @Patch('reordenar')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.DESARROLLADOR, Role.IMPLEMENTADOR)
+  reordenar(
+    @Param('tareaId', ParseIntPipe) tareaId: number,
+    @Body() dto: ReordenarSubtareasDto,
+  ) {
+    return this.subtareaService.reordenar(tareaId, dto.orden);
   }
 }

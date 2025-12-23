@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
@@ -35,14 +36,20 @@ export class Oei {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
-  @Column({ length: 500, nullable: true })
-  indicador: string;
+  @Column({ name: 'indicador_codigo', length: 50, nullable: true })
+  indicadorCodigo: string;
 
-  @Column({ name: 'linea_base', type: 'decimal', precision: 15, scale: 2, nullable: true })
-  lineaBase: number;
+  @Column({ name: 'indicador_nombre', length: 500, nullable: true })
+  indicadorNombre: string;
 
   @Column({ name: 'unidad_medida', length: 50, nullable: true })
   unidadMedida: string;
+
+  @Column({ name: 'linea_base_anio', type: 'int', nullable: true })
+  lineaBaseAnio: number;
+
+  @Column({ name: 'linea_base_valor', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  lineaBaseValor: number;
 
   @Column({ name: 'metas_anuales', type: 'jsonb', nullable: true })
   metasAnuales: MetaAnual[];
@@ -64,7 +71,11 @@ export class Oei {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Pgd, (pgd) => pgd.objetivosEstrategicos)
+  @ManyToOne(() => Pgd, (pgd) => pgd.objetivosEstrategicos, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'pgd_id' })
   pgd: Pgd;
+
+  // Relación con AEIs (Acciones Estratégicas Institucionales)
+  @OneToMany('Aei', 'oei')
+  aeis: any[];
 }

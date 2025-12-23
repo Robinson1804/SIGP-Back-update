@@ -12,10 +12,15 @@ import {
 } from '@nestjs/common';
 import { CronogramaService } from '../services/cronograma.service';
 import { TareaCronogramaService } from '../services/tarea-cronograma.service';
+import { DependenciaCronogramaService } from '../services/dependencia-cronograma.service';
+import { RutaCriticaService } from '../services/ruta-critica.service';
+import { ExportacionCronogramaService } from '../services/exportacion-cronograma.service';
 import { CreateCronogramaDto } from '../dto/create-cronograma.dto';
 import { UpdateCronogramaDto } from '../dto/update-cronograma.dto';
 import { CreateTareaCronogramaDto } from '../dto/create-tarea-cronograma.dto';
 import { UpdateTareaCronogramaDto } from '../dto/update-tarea-cronograma.dto';
+import { CreateDependenciaDto } from '../dto/create-dependencia.dto';
+import { ResultadoRutaCriticaDto, DatosExportacionDto } from '../dto/ruta-critica-response.dto';
 import { CronogramaEstado } from '../enums/cronograma.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
@@ -26,7 +31,11 @@ import { Role } from '../../../../common/constants/roles.constant';
 @Controller('cronogramas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CronogramaController {
-  constructor(private readonly cronogramaService: CronogramaService) {}
+  constructor(
+    private readonly cronogramaService: CronogramaService,
+    private readonly rutaCriticaService: RutaCriticaService,
+    private readonly exportacionService: ExportacionCronogramaService,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
@@ -77,6 +86,33 @@ export class CronogramaController {
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
     return this.cronogramaService.remove(id, userId);
   }
+
+  @Get(':id/ruta-critica')
+  getRutaCritica(@Param('id', ParseIntPipe) id: number): Promise<ResultadoRutaCriticaDto> {
+    return this.rutaCriticaService.calcularRutaCritica(id);
+  }
+
+  @Post(':id/recalcular')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  recalcularFechas(@Param('id', ParseIntPipe) id: number) {
+    return this.rutaCriticaService.recalcularFechas(id);
+  }
+
+  @Get(':id/exportar')
+  exportar(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('formato') formato: string,
+  ): Promise<DatosExportacionDto | string> {
+    if (formato === 'csv') {
+      return this.exportacionService.exportarCSV(id);
+    }
+    return this.exportacionService.exportarJSON(id);
+  }
+
+  @Get(':id/plantilla-importacion')
+  getPlantillaImportacion() {
+    return this.exportacionService.generarPlantillaImportacion();
+  }
 }
 
 @Controller('proyectos/:proyectoId/cronogramas')
@@ -87,6 +123,43 @@ export class ProyectoCronogramasController {
   @Get()
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.cronogramaService.findByProyecto(proyectoId);
+  }
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  createForProyecto(
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+    @Body() createDto: CreateCronogramaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.cronogramaService.create({ ...createDto, proyectoId }, userId);
+  }
+}
+
+// Endpoint singular para obtener el cronograma activo de un proyecto
+@Controller('proyectos/:proyectoId/cronograma')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class ProyectoCronogramaController {
+  constructor(private readonly cronogramaService: CronogramaService) {}
+
+  @Get()
+  async findActiveByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
+    const cronogramas = await this.cronogramaService.findByProyecto(proyectoId);
+    if (cronogramas.length === 0) {
+      return null;
+    }
+    // Retornar el cronograma mas reciente (activo)
+    return cronogramas[0];
+  }
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  createForProyecto(
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+    @Body() createDto: CreateCronogramaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.cronogramaService.create({ ...createDto, proyectoId }, userId);
   }
 }
 
@@ -131,5 +204,46 @@ export class CronogramaTareasController {
   @Get()
   findByCronograma(@Param('cronogramaId', ParseIntPipe) cronogramaId: number) {
     return this.tareaCronogramaService.findByCronograma(cronogramaId);
+  }
+}
+
+@Controller('cronogramas/:cronogramaId/dependencias')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class CronogramaDependenciasController {
+  constructor(
+    private readonly dependenciaService: DependenciaCronogramaService,
+  ) {}
+
+  @Get()
+  findByCronograma(@Param('cronogramaId', ParseIntPipe) cronogramaId: number) {
+    return this.dependenciaService.findByCronograma(cronogramaId);
+  }
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  create(
+    @Param('cronogramaId', ParseIntPipe) cronogramaId: number,
+    @Body() createDto: CreateDependenciaDto,
+  ) {
+    return this.dependenciaService.create(cronogramaId, createDto);
+  }
+
+  @Delete(':id')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.dependenciaService.remove(id);
+  }
+}
+
+@Controller('tareas-cronograma/:tareaId/dependencias')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class TareaDependenciasController {
+  constructor(
+    private readonly dependenciaService: DependenciaCronogramaService,
+  ) {}
+
+  @Get()
+  findByTarea(@Param('tareaId', ParseIntPipe) tareaId: number) {
+    return this.dependenciaService.findByTarea(tareaId);
   }
 }

@@ -7,12 +7,14 @@ import {
 } from 'class-validator';
 
 export class CreateCronogramaDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)
@@ -26,9 +28,11 @@ export class CreateCronogramaDto {
   @IsInt()
   version?: number;
 
+  @IsOptional()
   @IsDateString()
-  fechaInicio: string;
+  fechaInicio?: string;
 
+  @IsOptional()
   @IsDateString()
-  fechaFin: string;
+  fechaFin?: string;
 }

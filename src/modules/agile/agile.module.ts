@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificacionesModule } from '../notificaciones';
 
 // Epicas
 import { Epica } from './epicas/entities/epica.entity';
@@ -30,7 +31,7 @@ import {
 } from './historias-usuario/controllers/criterio-aceptacion.controller';
 
 // Tareas
-import { Tarea, EvidenciaTarea } from './tareas/entities';
+import { Tarea, TareaAsignado, EvidenciaTarea } from './tareas/entities';
 import { TareaService } from './tareas/services/tarea.service';
 import {
   TareaController,
@@ -84,6 +85,7 @@ import {
 
 @Module({
   imports: [
+    forwardRef(() => NotificacionesModule),
     TypeOrmModule.forFeature([
       // Epicas
       Epica,
@@ -96,6 +98,7 @@ import {
       HuRequerimiento,
       // Tareas
       Tarea,
+      TareaAsignado,
       EvidenciaTarea,
       // Subtareas
       Subtarea,

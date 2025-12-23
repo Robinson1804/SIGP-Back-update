@@ -62,3 +62,16 @@ export class SprintMetricasResponseDto {
   porcentajeAvanceHUs: number;
   porcentajeAvanceSP: number;
 }
+
+export class VelocidadProyectoResponseDto {
+  proyectoId: number;
+  velocidadPromedio: number;
+  velocidadUltimoSprint: number;
+  sprintsAnalizados: number;
+  historial: {
+    sprintId: number;
+    nombre: string;
+    storyPointsCompletados: number;
+    fechaFin: Date;
+  }[];
+}

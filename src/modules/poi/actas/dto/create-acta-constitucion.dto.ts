@@ -12,38 +12,86 @@ export class CreateActaConstitucionDto {
   @IsInt()
   proyectoId: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  nombre: string;
+  nombre?: string;
 
+  @IsOptional()
   @IsDateString()
-  fecha: string;
-
-  @IsString()
-  objetivoSmart: string;
-
-  @IsString()
-  alcance: string;
+  fecha?: string;
 
   @IsOptional()
   @IsString()
-  fueraDeAlcance?: string;
+  objetivoSmart?: string;
 
+  // Nuevos campos
   @IsOptional()
-  @IsArray()
-  entregables?: { nombre: string; descripcion?: string; fechaEstimada?: string }[];
+  @IsString()
+  justificacion?: string;
 
   @IsOptional()
   @IsArray()
-  riesgos?: { descripcion: string; impacto?: string; mitigacion?: string }[];
+  @IsString({ each: true })
+  alcance?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fueraDeAlcance?: string[];
+
+  @IsOptional()
+  @IsArray()
+  entregables?: {
+    nombre: string;
+    descripcion?: string;
+    fechaEstimada?: string;
+  }[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  supuestos?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  restricciones?: string[];
+
+  @IsOptional()
+  @IsArray()
+  riesgos?: {
+    descripcion: string;
+    probabilidad?: 'Alta' | 'Media' | 'Baja';
+    impacto?: 'Alto' | 'Medio' | 'Bajo';
+    mitigacion?: string;
+  }[];
 
   @IsOptional()
   @IsNumber()
   presupuestoEstimado?: number;
+
+  @IsOptional()
+  @IsArray()
+  cronogramaHitos?: {
+    nombre: string;
+    fechaEstimada: string;
+    descripcion?: string;
+  }[];
+
+  @IsOptional()
+  @IsArray()
+  equipoProyecto?: {
+    rol: string;
+    nombre: string;
+    responsabilidad?: string;
+    usuarioId?: number;
+  }[];
 
   @IsOptional()
   @IsString()

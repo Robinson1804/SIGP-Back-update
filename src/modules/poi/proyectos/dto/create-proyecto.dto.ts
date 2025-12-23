@@ -8,8 +8,19 @@ import {
   Matches,
   MaxLength,
   ArrayMinSize,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ProyectoEstado, Clasificacion } from '../enums/proyecto-estado.enum';
+
+// DTO para costos anuales
+export class CostoAnualDto {
+  @IsInt()
+  anio: number;
+
+  @IsNumber()
+  monto: number;
+}
 
 export class CreateProyectoDto {
   @IsString()
@@ -49,6 +60,12 @@ export class CreateProyectoDto {
   @MaxLength(100)
   coordinacion?: string;
 
+  // Área responsable del proyecto (ej: OTIN, OGD, etc.)
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  areaResponsable?: string;
+
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -63,6 +80,35 @@ export class CreateProyectoDto {
   @IsInt({ each: true })
   @ArrayMinSize(1)
   anios?: number[];
+
+  // Costos estimados por año [{anio, monto}]
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CostoAnualDto)
+  costosAnuales?: CostoAnualDto[];
+
+  // Alcance del proyecto (lista de items)
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  alcances?: string[];
+
+  // Problemática identificada
+  @IsOptional()
+  @IsString()
+  problematica?: string;
+
+  // Beneficiarios del proyecto
+  @IsOptional()
+  @IsString()
+  beneficiarios?: string;
+
+  // Beneficios del proyecto (lista de items)
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  beneficios?: string[];
 
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {

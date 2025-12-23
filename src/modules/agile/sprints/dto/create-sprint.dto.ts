@@ -17,13 +17,24 @@ export class CreateSprintDto {
 
   @IsOptional()
   @IsString()
+  objetivo?: string;
+
+  @IsOptional()
+  @IsString()
   sprintGoal?: string;
 
+  @IsOptional()
   @IsDateString()
-  fechaInicio: string;
+  fechaInicio?: string;
 
+  @IsOptional()
   @IsDateString()
-  fechaFin: string;
+  fechaFin?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  velocidadPlanificada?: number;
 
   @IsOptional()
   @IsInt()

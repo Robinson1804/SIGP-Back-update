@@ -1,47 +1,69 @@
-import { IsString, IsInt, IsOptional, MaxLength } from 'class-validator';
+import {
+  IsString, IsInt, IsOptional, IsNumber, IsArray, ValidateNested, MaxLength,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { MetaAnualDto } from '../../oei/dto/create-oei.dto';
 
 export class CreateOegdDto {
-  @ApiProperty({
-    description: 'ID del OGD al que pertenece este OEGD',
-    example: 1,
-  })
+  @ApiProperty({ description: 'ID del OGD', example: 1 })
   @IsInt()
   ogdId: number;
 
-  @ApiProperty({
-    description: 'Codigo unico del OEGD',
-    example: 'OEGD-001',
-    maxLength: 20,
-  })
+  @ApiPropertyOptional({ description: 'Código único (se autogenera)', example: 'OEGD N°1', maxLength: 20 })
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
-  @ApiProperty({
-    description: 'Nombre del Objetivo Especifico de Gestion Divisional',
-    example: 'Implementar sistema de seguimiento de proyectos',
-    maxLength: 300,
-  })
+  @ApiProperty({ description: 'Nombre del OEGD', maxLength: 300 })
   @IsString()
   @MaxLength(300)
   nombre: string;
 
-  @ApiPropertyOptional({
-    description: 'Descripcion detallada del OEGD',
-    example: 'Desarrollar e implementar un sistema que permita el monitoreo en tiempo real de los proyectos',
-  })
+  @ApiPropertyOptional({ description: 'Descripción' })
   @IsOptional()
   @IsString()
   descripcion?: string;
 
-  @ApiPropertyOptional({
-    description: 'Indicador de medicion del OEGD',
-    example: 'Numero de proyectos con seguimiento activo',
-    maxLength: 500,
-  })
+  @ApiPropertyOptional({ description: 'Código del indicador', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  indicadorCodigo?: string;
+
+  @ApiPropertyOptional({ description: 'Nombre del indicador', maxLength: 500 })
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  indicador?: string;
+  indicadorNombre?: string;
+
+  @ApiPropertyOptional({ description: 'Unidad de medida', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  unidadMedida?: string;
+
+  @ApiPropertyOptional({ description: 'Año línea base', example: 2024 })
+  @IsOptional()
+  @IsInt()
+  lineaBaseAnio?: number;
+
+  @ApiPropertyOptional({ description: 'Valor línea base', example: 0 })
+  @IsOptional()
+  @IsNumber()
+  lineaBaseValor?: number;
+
+  @ApiPropertyOptional({ description: 'Metas anuales', type: [MetaAnualDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetaAnualDto)
+  metasAnuales?: MetaAnualDto[];
+
+  @ApiPropertyOptional({ description: 'IDs de AEIs relacionadas', type: [Number] })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  aeiIds?: number[];
 }

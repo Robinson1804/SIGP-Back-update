@@ -67,37 +67,60 @@ export class DashboardActividadService {
         estado: TareaEstado.FINALIZADO,
         activo: true,
       },
-      select: ['id', 'createdAt', 'updatedAt'],
+      select: ['id', 'createdAt', 'updatedAt', 'fechaInicioProgreso', 'fechaCompletado'],
     });
 
     // Lead Time: tiempo desde creación hasta completado (promedio en días)
+    // Cycle Time: tiempo desde inicio de progreso hasta completado (preciso)
     let leadTimeTotal = 0;
     let cycleTimeTotal = 0;
-    let count = 0;
+    let leadTimeCount = 0;
+    let cycleTimeCount = 0;
 
     for (const tarea of tareasCompletadas) {
       const createdAt = new Date(tarea.createdAt);
-      const completedAt = new Date(tarea.updatedAt);
+      // Usar fechaCompletado si está disponible, sino updatedAt (fallback)
+      const completedAt = tarea.fechaCompletado
+        ? new Date(tarea.fechaCompletado)
+        : new Date(tarea.updatedAt);
 
+      // Lead Time: desde creación hasta completado
       const leadTimeDias =
         (completedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
       leadTimeTotal += leadTimeDias;
+      leadTimeCount++;
 
-      // Cycle Time aproximado (sin fecha de inicio de progreso, usamos 70% del lead time)
-      cycleTimeTotal += leadTimeDias * 0.7;
-      count++;
+      // Cycle Time preciso: desde inicio de progreso hasta completado
+      if (tarea.fechaInicioProgreso) {
+        const startedAt = new Date(tarea.fechaInicioProgreso);
+        const cycleTimeDias =
+          (completedAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
+        cycleTimeTotal += cycleTimeDias;
+        cycleTimeCount++;
+      } else {
+        // Fallback: aproximar cycle time como 70% del lead time
+        cycleTimeTotal += leadTimeDias * 0.7;
+        cycleTimeCount++;
+      }
     }
 
-    const leadTime = count > 0 ? Math.round((leadTimeTotal / count) * 10) / 10 : 0;
-    const cycleTime = count > 0 ? Math.round((cycleTimeTotal / count) * 10) / 10 : 0;
+    const leadTime = leadTimeCount > 0
+      ? Math.round((leadTimeTotal / leadTimeCount) * 10) / 10
+      : 0;
+    const cycleTime = cycleTimeCount > 0
+      ? Math.round((cycleTimeTotal / cycleTimeCount) * 10) / 10
+      : 0;
 
     // Throughput: tareas completadas en la última semana
     const hace7Dias = new Date();
     hace7Dias.setDate(hace7Dias.getDate() - 7);
 
-    const tareasUltimaSemana = tareasCompletadas.filter(
-      (t) => new Date(t.updatedAt) >= hace7Dias,
-    ).length;
+    const tareasUltimaSemana = tareasCompletadas.filter((t) => {
+      const completedAt = t.fechaCompletado
+        ? new Date(t.fechaCompletado)
+        : new Date(t.updatedAt);
+      return completedAt >= hace7Dias;
+    }).length;
 
     return {
       leadTime,
@@ -131,7 +154,7 @@ export class DashboardActividadService {
         estado: TareaEstado.FINALIZADO,
         activo: true,
       },
-      select: ['id', 'updatedAt'],
+      select: ['id', 'updatedAt', 'fechaCompletado'],
     });
 
     // Agrupar por semana
@@ -146,7 +169,10 @@ export class DashboardActividadService {
       const semanaKey = `Semana -${i + 1}`;
 
       const completadasEnSemana = tareasCompletadas.filter((t) => {
-        const fecha = new Date(t.updatedAt);
+        // Usar fechaCompletado si está disponible, sino updatedAt (fallback)
+        const fecha = t.fechaCompletado
+          ? new Date(t.fechaCompletado)
+          : new Date(t.updatedAt);
         return fecha >= inicioSemana && fecha < finSemana;
       }).length;
 

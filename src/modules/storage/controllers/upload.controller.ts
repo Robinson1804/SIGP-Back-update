@@ -33,6 +33,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Usuario } from '../../auth/entities/usuario.entity';
 
 import { ArchivoService } from '../services/archivo.service';
+import { MinioService } from '../services/minio.service';
 
 import {
   RequestUploadUrlDto,
@@ -46,7 +47,10 @@ import { ArchivoResponseDto } from '../dto/archivo.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('upload')
 export class UploadController {
-  constructor(private readonly archivoService: ArchivoService) {}
+  constructor(
+    private readonly archivoService: ArchivoService,
+    private readonly minioService: MinioService,
+  ) {}
 
   // =========================================================================
   // FLUJO PRESIGNADO (Recomendado para archivos grandes)
@@ -155,7 +159,7 @@ export class UploadController {
     @Body() body: any,
     @CurrentUser() user: Usuario,
   ): Promise<ArchivoResponseDto> {
-    // Primero solicitar URL (crea registro)
+    // Primero solicitar URL (crea registro en BD)
     const uploadInfo = await this.archivoService.requestUploadUrl(
       {
         entidadTipo: body.entidadTipo,
@@ -169,10 +173,16 @@ export class UploadController {
       user.id,
     );
 
-    // Subir archivo usando MinioService directamente (importar si es necesario)
-    // Este es un caso especial donde el backend hace la subida
+    // Subir archivo a MinIO usando el buffer
+    await this.minioService.putObject(
+      uploadInfo.bucket,
+      uploadInfo.objectKey,
+      file.buffer,
+      file.size,
+      { 'Content-Type': file.mimetype },
+    );
 
-    // Confirmar subida
+    // Confirmar subida (actualiza estado a disponible)
     return this.archivoService.confirmUpload(
       { archivoId: uploadInfo.archivoId },
       user.id,

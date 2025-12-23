@@ -11,6 +11,7 @@ import {
 import { CronogramaEstado } from '../enums/cronograma.enum';
 import { Proyecto } from '../../proyectos/entities/proyecto.entity';
 import { TareaCronograma } from './tarea-cronograma.entity';
+import { DependenciaCronograma } from './dependencia-cronograma.entity';
 
 @Entity({ schema: 'poi', name: 'cronogramas' })
 export class Cronograma {
@@ -67,4 +68,7 @@ export class Cronograma {
 
   @OneToMany(() => TareaCronograma, (tarea) => tarea.cronograma)
   tareas: TareaCronograma[];
+
+  @OneToMany(() => DependenciaCronograma, (dep) => dep.cronograma)
+  dependencias: DependenciaCronograma[];
 }

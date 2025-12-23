@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Proyecto } from '../entities/proyecto.entity';
@@ -6,12 +6,16 @@ import { CreateProyectoDto } from '../dto/create-proyecto.dto';
 import { UpdateProyectoDto } from '../dto/update-proyecto.dto';
 import { CambiarEstadoProyectoDto } from '../dto/cambiar-estado.dto';
 import { ProyectoEstado } from '../enums/proyecto-estado.enum';
+import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
+import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 
 @Injectable()
 export class ProyectoService {
   constructor(
     @InjectRepository(Proyecto)
     private readonly proyectoRepository: Repository<Proyecto>,
+    @Inject(forwardRef(() => NotificacionService))
+    private readonly notificacionService: NotificacionService,
   ) {}
 
   async create(createDto: CreateProyectoDto, userId?: number): Promise<Proyecto> {
@@ -36,7 +40,41 @@ export class ProyectoService {
       updatedBy: userId,
     });
 
-    return this.proyectoRepository.save(proyecto);
+    const proyectoGuardado = await this.proyectoRepository.save(proyecto);
+
+    // Notificar al coordinador si se le asigna el proyecto
+    if (createDto.coordinadorId && createDto.coordinadorId !== userId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.PROYECTOS,
+        createDto.coordinadorId,
+        {
+          titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
+          descripcion: `Se te ha asignado como Coordinador del proyecto "${proyectoGuardado.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoGuardado.id,
+          proyectoId: proyectoGuardado.id,
+          urlAccion: `/poi/proyectos/${proyectoGuardado.id}`,
+        },
+      );
+    }
+
+    // Notificar al Scrum Master si se le asigna
+    if (createDto.scrumMasterId && createDto.scrumMasterId !== userId && createDto.scrumMasterId !== createDto.coordinadorId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.PROYECTOS,
+        createDto.scrumMasterId,
+        {
+          titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
+          descripcion: `Se te ha asignado como Scrum Master del proyecto "${proyectoGuardado.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoGuardado.id,
+          proyectoId: proyectoGuardado.id,
+          urlAccion: `/poi/proyectos/${proyectoGuardado.id}`,
+        },
+      );
+    }
+
+    return proyectoGuardado;
   }
 
   async findAll(filters?: {
@@ -110,36 +148,65 @@ export class ProyectoService {
   async update(id: number, updateDto: UpdateProyectoDto, userId?: number): Promise<Proyecto> {
     const proyecto = await this.findOne(id);
 
+    // Capturar valores anteriores para notificaciones
+    const coordinadorAnterior = proyecto.coordinadorId;
+    const scrumMasterAnterior = proyecto.scrumMasterId;
+
     if (updateDto.fechaInicio && updateDto.fechaFin) {
       if (new Date(updateDto.fechaFin) < new Date(updateDto.fechaInicio)) {
         throw new BadRequestException('La fecha de fin debe ser mayor o igual a la fecha de inicio');
       }
     }
 
-    // Limpiar relaciones si se van a cambiar los IDs
-    // Esto es necesario porque TypeORM prioriza las relaciones sobre los campos de ID
-    if (updateDto.coordinadorId !== undefined) {
-      proyecto.coordinador = null;
-    }
-    if (updateDto.scrumMasterId !== undefined) {
-      proyecto.scrumMaster = null;
-    }
-    if (updateDto.patrocinadorId !== undefined) {
-      proyecto.patrocinador = null;
-    }
-    if (updateDto.accionEstrategicaId !== undefined) {
-      proyecto.accionEstrategica = null;
+    // Usar update() del repositorio para evitar problemas con relaciones
+    // TypeORM prioriza las relaciones sobre los campos de ID cuando se usa save()
+    // Por eso usamos update() que trabaja directamente con los campos
+    await this.proyectoRepository.update(id, {
+      ...updateDto,
+      updatedBy: userId,
+    });
+
+    // Recargar el proyecto con las relaciones actualizadas
+    const saved = await this.findOne(id);
+
+    // Notificar al nuevo coordinador si cambió
+    if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.PROYECTOS,
+        updateDto.coordinadorId,
+        {
+          titulo: `Asignado como Coordinador: ${proyecto.codigo}`,
+          descripcion: `Se te ha asignado como Coordinador del proyecto "${proyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyectos/${proyecto.id}`,
+        },
+      );
     }
 
-    Object.assign(proyecto, updateDto, { updatedBy: userId });
+    // Notificar al nuevo Scrum Master si cambió
+    if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && updateDto.scrumMasterId !== userId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.PROYECTOS,
+        updateDto.scrumMasterId,
+        {
+          titulo: `Asignado como Scrum Master: ${proyecto.codigo}`,
+          descripcion: `Se te ha asignado como Scrum Master del proyecto "${proyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyectos/${proyecto.id}`,
+        },
+      );
+    }
 
-    // Guardar y recargar con relaciones
-    const saved = await this.proyectoRepository.save(proyecto);
-    return this.findOne(saved.id);
+    return saved;
   }
 
   async cambiarEstado(id: number, cambiarEstadoDto: CambiarEstadoProyectoDto, userId?: number): Promise<Proyecto> {
     const proyecto = await this.findOne(id);
+    const estadoAnterior = proyecto.estado;
 
     // Validar transiciones de estado permitidas
     const transicionesPermitidas: Record<ProyectoEstado, ProyectoEstado[]> = {
@@ -158,7 +225,39 @@ export class ProyectoService {
 
     proyecto.estado = cambiarEstadoDto.estado;
     proyecto.updatedBy = userId;
-    return this.proyectoRepository.save(proyecto);
+    const proyectoActualizado = await this.proyectoRepository.save(proyecto);
+
+    // Notificar al equipo sobre el cambio de estado
+    const destinatarios: number[] = [];
+    if (proyecto.coordinadorId && proyecto.coordinadorId !== userId) {
+      destinatarios.push(proyecto.coordinadorId);
+    }
+    if (proyecto.scrumMasterId && proyecto.scrumMasterId !== userId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+      destinatarios.push(proyecto.scrumMasterId);
+    }
+
+    if (destinatarios.length > 0) {
+      const mensajeEstado = cambiarEstadoDto.estado === ProyectoEstado.FINALIZADO
+        ? 'ha sido finalizado'
+        : cambiarEstadoDto.estado === ProyectoEstado.CANCELADO
+        ? 'ha sido cancelado'
+        : `ha cambiado a estado ${cambiarEstadoDto.estado}`;
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `Estado de proyecto actualizado: ${proyecto.codigo}`,
+          descripcion: `El proyecto "${proyecto.nombre}" ${mensajeEstado}`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyectos/${proyecto.id}`,
+        },
+      );
+    }
+
+    return proyectoActualizado;
   }
 
   async remove(id: number, userId?: number): Promise<Proyecto> {

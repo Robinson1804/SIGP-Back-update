@@ -13,6 +13,7 @@ import {
 import { EpicaService } from '../services/epica.service';
 import { CreateEpicaDto } from '../dto/create-epica.dto';
 import { UpdateEpicaDto } from '../dto/update-epica.dto';
+import { ReordenarEpicasDto } from '../dto/reordenar-epicas.dto';
 import { EpicaPrioridad } from '../enums/epica.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
@@ -79,5 +80,15 @@ export class ProyectoEpicasController {
   @Get()
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.epicaService.findByProyecto(proyectoId);
+  }
+
+  @Patch('reordenar')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  reordenar(
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+    @Body() reordenarDto: ReordenarEpicasDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.epicaService.reordenarEpicas(proyectoId, reordenarDto, userId);
   }
 }

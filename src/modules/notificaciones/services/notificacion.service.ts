@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notificacion } from '../entities/notificacion.entity';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
 import { ConteoResponseDto } from '../dto/conteo-response.dto';
+import { NotificacionesGateway } from '../gateways/notificaciones.gateway';
 
 interface FindAllFilters {
   leida?: boolean;
@@ -26,6 +27,8 @@ export class NotificacionService {
   constructor(
     @InjectRepository(Notificacion)
     private readonly notificacionRepository: Repository<Notificacion>,
+    @Inject(forwardRef(() => NotificacionesGateway))
+    private readonly gateway: NotificacionesGateway,
   ) {}
 
   async findAll(
@@ -156,7 +159,17 @@ export class NotificacionService {
       urlAccion: data.urlAccion,
     });
 
-    return this.notificacionRepository.save(notificacion);
+    const saved = await this.notificacionRepository.save(notificacion);
+
+    // Emitir via WebSocket si el gateway esta disponible
+    if (this.gateway) {
+      this.gateway.emitToUser(destinatarioId, saved);
+      // Actualizar conteo
+      const conteo = await this.getConteo(destinatarioId);
+      this.gateway.emitCountUpdate(destinatarioId, conteo);
+    }
+
+    return saved;
   }
 
   /**
@@ -180,6 +193,35 @@ export class NotificacionService {
       }),
     );
 
-    return this.notificacionRepository.save(notificaciones);
+    const saved = await this.notificacionRepository.save(notificaciones);
+
+    // Emitir via WebSocket a cada destinatario
+    if (this.gateway) {
+      for (const notificacion of saved) {
+        this.gateway.emitToUser(notificacion.destinatarioId, notificacion);
+        const conteo = await this.getConteo(notificacion.destinatarioId);
+        this.gateway.emitCountUpdate(notificacion.destinatarioId, conteo);
+      }
+    }
+
+    return saved;
+  }
+
+  /**
+   * Emitir evento de tarea actualizada (para tablero Kanban)
+   */
+  emitTaskUpdate(proyectoId: number, event: string, data: any): void {
+    if (this.gateway) {
+      this.gateway.emitTaskUpdate(proyectoId, event, data);
+    }
+  }
+
+  /**
+   * Emitir evento de sprint actualizado
+   */
+  emitSprintUpdate(proyectoId: number, data: any): void {
+    if (this.gateway) {
+      this.gateway.emitSprintUpdate(proyectoId, data);
+    }
   }
 }

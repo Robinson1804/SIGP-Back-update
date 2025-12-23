@@ -6,9 +6,8 @@ import {
   IsArray,
   IsDateString,
   MaxLength,
-  IsMilitaryTime,
 } from 'class-validator';
-import { TipoReunion } from '../enums/acta.enum';
+import { TipoReunion, Modalidad } from '../enums/acta.enum';
 
 export class CreateActaReunionDto {
   @IsInt()
@@ -41,9 +40,33 @@ export class CreateActaReunionDto {
   @IsString()
   horaFin?: string;
 
+  // Nuevos campos
+  @IsOptional()
+  @IsEnum(Modalidad)
+  modalidad?: Modalidad;
+
+  @IsOptional()
+  @IsString()
+  lugarLink?: string;
+
+  @IsOptional()
+  @IsInt()
+  moderadorId?: number;
+
+  @IsOptional()
+  @IsDateString()
+  proximaReunionFecha?: string;
+
   @IsOptional()
   @IsArray()
-  asistentes?: { nombre: string; cargo?: string; firma?: boolean }[];
+  asistentes?: {
+    nombre: string;
+    cargo?: string;
+    organizacion?: string;
+    esExterno?: boolean;
+    esModerador?: boolean;
+    usuarioId?: number;
+  }[];
 
   @IsOptional()
   @IsArray()
@@ -55,19 +78,38 @@ export class CreateActaReunionDto {
 
   @IsOptional()
   @IsArray()
-  temasDesarrollados?: { tema: string; desarrollo: string }[];
+  temasDesarrollados?: {
+    tema: string;
+    notas?: string;
+    conclusiones?: string;
+  }[];
 
   @IsOptional()
   @IsArray()
-  acuerdos?: { numero: number; descripcion: string; responsable?: string; fechaLimite?: string }[];
+  acuerdos?: {
+    descripcion: string;
+    responsables?: string[];
+    responsableIds?: number[];
+    fechaCompromiso?: string;
+    prioridad?: 'Alta' | 'Media' | 'Baja';
+  }[];
 
   @IsOptional()
   @IsArray()
-  proximosPasos?: { descripcion: string; responsable?: string; fecha?: string }[];
+  proximosPasos?: {
+    descripcion: string;
+    responsable?: string;
+    responsableId?: number;
+    fecha?: string;
+  }[];
 
   @IsOptional()
   @IsString()
   observaciones?: string;
+
+  @IsOptional()
+  @IsArray()
+  anexosReferenciados?: { nombre: string; url?: string }[];
 
   @IsOptional()
   @IsString()

@@ -15,3 +15,6 @@ export * from './services';
 
 // Controllers
 export * from './controllers';
+
+// Gateways (WebSocket)
+export * from './gateways';

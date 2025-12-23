@@ -10,6 +10,7 @@ import {
   Index,
 } from 'typeorm';
 import { Ogd } from '../../ogd/entities/ogd.entity';
+import { MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('oegd', { schema: 'planning' })
 export class Oegd {
@@ -30,8 +31,23 @@ export class Oegd {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
-  @Column({ length: 500, nullable: true })
-  indicador: string;
+  @Column({ name: 'indicador_codigo', length: 50, nullable: true })
+  indicadorCodigo: string;
+
+  @Column({ name: 'indicador_nombre', length: 500, nullable: true })
+  indicadorNombre: string;
+
+  @Column({ name: 'unidad_medida', length: 50, nullable: true })
+  unidadMedida: string;
+
+  @Column({ name: 'linea_base_anio', type: 'int', nullable: true })
+  lineaBaseAnio: number;
+
+  @Column({ name: 'linea_base_valor', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  lineaBaseValor: number;
+
+  @Column({ name: 'metas_anuales', type: 'jsonb', nullable: true })
+  metasAnuales: MetaAnual[];
 
   @Index()
   @Column({ default: true })
@@ -50,10 +66,14 @@ export class Oegd {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Ogd, (ogd) => ogd.objetivosEspecificos)
+  @ManyToOne(() => Ogd, (ogd) => ogd.objetivosEspecificos, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'ogd_id' })
   ogd: Ogd;
 
   @OneToMany('AccionEstrategica', 'oegd')
   accionesEstrategicas: any[];
+
+  // Relación Many-to-Many con AEI (via tabla oegd_aei)
+  @OneToMany('OegdAei', 'oegd')
+  oegdAeis: any[];
 }

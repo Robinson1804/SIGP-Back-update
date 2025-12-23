@@ -1,74 +1,78 @@
-import { IsString, IsInt, IsOptional, IsDateString, MaxLength } from 'class-validator';
+import {
+  IsString, IsInt, IsOptional, IsNumber, IsArray, IsDateString, ValidateNested, MaxLength,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { MetaAnualDto } from '../../oei/dto/create-oei.dto';
 
 export class CreateAccionEstrategicaDto {
-  @ApiProperty({
-    description: 'ID del OEGD al que pertenece esta accion estrategica',
-    example: 1,
-  })
+  @ApiProperty({ description: 'ID del OEGD', example: 1 })
   @IsInt()
   oegdId: number;
 
-  @ApiProperty({
-    description: 'Codigo unico de la accion estrategica',
-    example: 'AE-001',
-    maxLength: 20,
-  })
+  @ApiPropertyOptional({ description: 'Código único (se autogenera)', example: 'AE N°1', maxLength: 20 })
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
-  @ApiProperty({
-    description: 'Nombre de la accion estrategica',
-    example: 'Desarrollo del modulo de reportes',
-    maxLength: 300,
-  })
+  @ApiProperty({ description: 'Nombre de la acción estratégica', maxLength: 300 })
   @IsString()
   @MaxLength(300)
   nombre: string;
 
-  @ApiPropertyOptional({
-    description: 'Descripcion detallada de la accion estrategica',
-    example: 'Implementar el modulo de generacion de reportes con graficos y exportacion a PDF/Excel',
-  })
+  @ApiPropertyOptional({ description: 'Descripción' })
   @IsOptional()
   @IsString()
   descripcion?: string;
 
-  @ApiPropertyOptional({
-    description: 'Indicador de cumplimiento de la accion',
-    example: 'Porcentaje de funcionalidades implementadas',
-    maxLength: 500,
-  })
+  @ApiPropertyOptional({ description: 'Código del indicador', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  indicadorCodigo?: string;
+
+  @ApiPropertyOptional({ description: 'Nombre del indicador', maxLength: 500 })
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  indicador?: string;
+  indicadorNombre?: string;
 
-  @ApiPropertyOptional({
-    description: 'Area responsable de la accion',
-    example: 'Division de Sistemas',
-    maxLength: 100,
-  })
+  @ApiPropertyOptional({ description: 'Unidad de medida', maxLength: 50 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  unidadMedida?: string;
+
+  @ApiPropertyOptional({ description: 'Año línea base', example: 2024 })
+  @IsOptional()
+  @IsInt()
+  lineaBaseAnio?: number;
+
+  @ApiPropertyOptional({ description: 'Valor línea base', example: 0 })
+  @IsOptional()
+  @IsNumber()
+  lineaBaseValor?: number;
+
+  @ApiPropertyOptional({ description: 'Metas anuales', type: [MetaAnualDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MetaAnualDto)
+  metasAnuales?: MetaAnualDto[];
+
+  @ApiPropertyOptional({ description: 'Área responsable', maxLength: 100 })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   responsableArea?: string;
 
-  @ApiPropertyOptional({
-    description: 'Fecha de inicio de la accion (formato ISO 8601)',
-    example: '2025-01-15',
-    format: 'date',
-  })
+  @ApiPropertyOptional({ description: 'Fecha de inicio', example: '2025-01-15' })
   @IsOptional()
   @IsDateString()
   fechaInicio?: string;
 
-  @ApiPropertyOptional({
-    description: 'Fecha de fin de la accion (formato ISO 8601)',
-    example: '2025-06-30',
-    format: 'date',
-  })
+  @ApiPropertyOptional({ description: 'Fecha de fin', example: '2025-06-30' })
   @IsOptional()
   @IsDateString()
   fechaFin?: string;

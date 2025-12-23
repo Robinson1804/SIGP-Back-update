@@ -24,10 +24,10 @@ export class Sprint {
   @Column({ name: 'sprint_goal', type: 'text', nullable: true })
   sprintGoal: string;
 
-  @Column({ name: 'fecha_inicio', type: 'date' })
+  @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
   fechaInicio: Date;
 
-  @Column({ name: 'fecha_fin', type: 'date' })
+  @Column({ name: 'fecha_fin', type: 'date', nullable: true })
   fechaFin: Date;
 
   @Column({ name: 'capacidad_equipo', type: 'int', nullable: true })

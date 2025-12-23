@@ -99,6 +99,22 @@ export class MinioService implements OnModuleInit {
   }
 
   /**
+   * Reemplazar endpoint interno de Docker con endpoint público para URLs del browser
+   */
+  private replaceWithPublicEndpoint(url: string): string {
+    const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
+    const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
+
+    // Si son iguales, no hace falta reemplazar
+    if (internalEndpoint === publicEndpoint) {
+      return url;
+    }
+
+    // Reemplazar el endpoint interno con el público
+    return url.replace(`://${internalEndpoint}:`, `://${publicEndpoint}:`);
+  }
+
+  /**
    * Generar URL presignada para subida (PUT)
    */
   async getPresignedPutUrl(
@@ -106,7 +122,8 @@ export class MinioService implements OnModuleInit {
     objectKey: string,
     ttlSeconds: number = this.DEFAULT_PRESIGNED_TTL,
   ): Promise<string> {
-    return this.client.presignedPutObject(bucket, objectKey, ttlSeconds);
+    const url = await this.client.presignedPutObject(bucket, objectKey, ttlSeconds);
+    return this.replaceWithPublicEndpoint(url);
   }
 
   /**
@@ -117,7 +134,8 @@ export class MinioService implements OnModuleInit {
     objectKey: string,
     ttlSeconds: number = this.DEFAULT_PRESIGNED_TTL,
   ): Promise<string> {
-    return this.client.presignedGetObject(bucket, objectKey, ttlSeconds);
+    const url = await this.client.presignedGetObject(bucket, objectKey, ttlSeconds);
+    return this.replaceWithPublicEndpoint(url);
   }
 
   /**
@@ -272,14 +290,16 @@ export class MinioService implements OnModuleInit {
 
   /**
    * Obtener URL pública (solo para buckets públicos)
+   * Usa el endpoint público para acceso desde el browser
    */
   getPublicUrl(bucket: string, objectKey: string): string {
-    const endpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
+    const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
+    const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
     const port = this.configService.get<number>('storage.minio.port', 9000);
     const useSSL = this.configService.get<boolean>('storage.minio.useSSL', false);
     const protocol = useSSL ? 'https' : 'http';
 
-    return `${protocol}://${endpoint}:${port}/${bucket}/${objectKey}`;
+    return `${protocol}://${publicEndpoint}:${port}/${bucket}/${objectKey}`;
   }
 
   /**

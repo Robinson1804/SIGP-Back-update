@@ -1,5 +1,6 @@
 export enum EpicaPrioridad {
-  ALTA = 'Alta',
-  MEDIA = 'Media',
-  BAJA = 'Baja',
+  MUST = 'Must',
+  SHOULD = 'Should',
+  COULD = 'Could',
+  WONT = 'Wont',
 }

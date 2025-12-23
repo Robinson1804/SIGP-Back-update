@@ -85,7 +85,7 @@ export class SubtareaService {
     return this.subtareaRepository.find({
       where: { tareaId, activo: true },
       relations: ['responsable'],
-      order: { prioridad: 'ASC', createdAt: 'DESC' },
+      order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
     });
   }
 
@@ -160,5 +160,55 @@ export class SubtareaService {
       horasReales,
       progreso: subtareas.length > 0 ? Math.round((completadas / subtareas.length) * 100) : 0,
     };
+  }
+
+  /**
+   * Reordena las subtareas de una tarea KANBAN
+   * @param tareaId ID de la tarea padre
+   * @param orden Array de IDs de subtareas en el nuevo orden
+   * @returns Lista de subtareas reordenadas
+   */
+  async reordenar(tareaId: number, orden: number[]): Promise<Subtarea[]> {
+    // Verify tarea exists and is KANBAN type
+    const tarea = await this.tareaRepository.findOne({
+      where: { id: tareaId },
+    });
+
+    if (!tarea) {
+      throw new NotFoundException(`Tarea con ID ${tareaId} no encontrada`);
+    }
+
+    if (tarea.tipo !== TareaTipo.KANBAN) {
+      throw new BadRequestException('Solo las tareas KANBAN pueden reordenar subtareas');
+    }
+
+    // Verify all IDs belong to this tarea
+    const subtareas = await this.subtareaRepository.find({
+      where: { tareaId, activo: true },
+    });
+
+    const subtareaIds = new Set(subtareas.map((s) => s.id));
+
+    for (const id of orden) {
+      if (!subtareaIds.has(id)) {
+        throw new BadRequestException(
+          `La subtarea con ID ${id} no pertenece a la tarea ${tareaId} o no está activa`,
+        );
+      }
+    }
+
+    // Update orden field for each subtarea
+    const updatePromises = orden.map((subtareaId, index) =>
+      this.subtareaRepository.update(subtareaId, { orden: index }),
+    );
+
+    await Promise.all(updatePromises);
+
+    // Return updated subtareas ordered by new orden
+    return this.subtareaRepository.find({
+      where: { tareaId, activo: true },
+      relations: ['responsable'],
+      order: { orden: 'ASC' },
+    });
   }
 }

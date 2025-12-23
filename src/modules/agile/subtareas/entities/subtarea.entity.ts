@@ -71,6 +71,9 @@ export class Subtarea {
   @Column({ default: true })
   activo: boolean;
 
+  @Column({ type: 'int', default: 0 })
+  orden: number;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

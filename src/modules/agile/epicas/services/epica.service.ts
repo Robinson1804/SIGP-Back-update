@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Epica } from '../entities/epica.entity';
 import { CreateEpicaDto } from '../dto/create-epica.dto';
 import { UpdateEpicaDto } from '../dto/update-epica.dto';
+import { ReordenarEpicasDto } from '../dto/reordenar-epicas.dto';
 import { EpicaPrioridad } from '../enums/epica.enum';
 import { EpicaEstadisticasResponseDto } from '../dto/epica-response.dto';
 
@@ -15,18 +16,28 @@ export class EpicaService {
   ) {}
 
   async create(createDto: CreateEpicaDto, userId?: number): Promise<Epica> {
+    // Auto-generate codigo if not provided
+    let codigo = createDto.codigo;
+    if (!codigo) {
+      const count = await this.epicaRepository.count({
+        where: { proyectoId: createDto.proyectoId },
+      });
+      codigo = `EP-${String(count + 1).padStart(3, '0')}`;
+    }
+
     const existing = await this.epicaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo: createDto.codigo },
+      where: { proyectoId: createDto.proyectoId, codigo },
     });
 
     if (existing) {
       throw new ConflictException(
-        `Ya existe una épica con el código ${createDto.codigo} en este proyecto`,
+        `Ya existe una épica con el código ${codigo} en este proyecto`,
       );
     }
 
     const epica = this.epicaRepository.create({
       ...createDto,
+      codigo,
       createdBy: userId,
       updatedBy: userId,
     });
@@ -66,8 +77,34 @@ export class EpicaService {
   async findByProyecto(proyectoId: number): Promise<Epica[]> {
     return this.epicaRepository.find({
       where: { proyectoId, activo: true },
-      order: { prioridad: 'ASC', createdAt: 'DESC' },
+      order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
     });
+  }
+
+  async reordenarEpicas(
+    proyectoId: number,
+    reordenarDto: ReordenarEpicasDto,
+    userId?: number,
+  ): Promise<void> {
+    // Verificar que todas las épicas pertenecen al proyecto
+    const epicaIds = reordenarDto.epicas.map((e) => e.id);
+    const epicas = await this.epicaRepository.find({
+      where: { id: In(epicaIds), proyectoId, activo: true },
+    });
+
+    if (epicas.length !== epicaIds.length) {
+      throw new NotFoundException(
+        'Una o más épicas no pertenecen al proyecto o no existen',
+      );
+    }
+
+    // Actualizar el orden de cada épica
+    for (const item of reordenarDto.epicas) {
+      await this.epicaRepository.update(
+        { id: item.id, proyectoId },
+        { orden: item.orden, updatedBy: userId },
+      );
+    }
   }
 
   async findOne(id: number): Promise<Epica> {

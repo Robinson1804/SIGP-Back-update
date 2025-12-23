@@ -32,17 +32,20 @@ export class Epica {
   color: string;
 
   @Column({
-    type: 'enum',
-    enum: EpicaPrioridad,
-    default: EpicaPrioridad.MEDIA,
+    type: 'varchar',
+    length: 20,
+    nullable: true,
   })
-  prioridad: EpicaPrioridad;
+  prioridad: string;
 
   @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
   fechaInicio: Date;
 
   @Column({ name: 'fecha_fin', type: 'date', nullable: true })
   fechaFin: Date;
+
+  @Column({ type: 'int', nullable: true })
+  orden: number;
 
   @Column({ default: true })
   activo: boolean;

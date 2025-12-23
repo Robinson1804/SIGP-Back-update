@@ -2,17 +2,23 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   Delete,
   Query,
   ParseIntPipe,
   UseGuards,
+  Res,
+  Header,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ActaService } from '../services/acta.service';
+import { ActaPdfService } from '../services/acta-pdf.service';
 import { CreateActaReunionDto } from '../dto/create-acta-reunion.dto';
 import { CreateActaConstitucionDto } from '../dto/create-acta-constitucion.dto';
-import { AprobarActaDto } from '../dto/aprobar-acta.dto';
+import { CreateActaDailyDto } from '../dto/create-acta-daily.dto';
+import { AprobarActaDto, SubirDocumentoFirmadoDto } from '../dto/aprobar-acta.dto';
 import { ActaTipo, ActaEstado } from '../enums/acta.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
@@ -23,7 +29,10 @@ import { Role } from '../../../../common/constants/roles.constant';
 @Controller('actas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ActaController {
-  constructor(private readonly actaService: ActaService) {}
+  constructor(
+    private readonly actaService: ActaService,
+    private readonly actaPdfService: ActaPdfService,
+  ) {}
 
   @Post('reunion')
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
@@ -35,6 +44,12 @@ export class ActaController {
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
   createConstitucion(@Body() createDto: CreateActaConstitucionDto, @CurrentUser('id') userId: number) {
     return this.actaService.createConstitucion(createDto, userId);
+  }
+
+  @Post('daily')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  createDaily(@Body() createDto: CreateActaDailyDto, @CurrentUser('id') userId: number) {
+    return this.actaService.createDaily(createDto, userId);
   }
 
   @Get()
@@ -55,6 +70,72 @@ export class ActaController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.actaService.findOne(id);
+  }
+
+  @Put(':id/reunion')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  updateReunion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: Partial<CreateActaReunionDto>,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.actaService.updateReunion(id, updateDto, userId);
+  }
+
+  @Put(':id/constitucion')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  updateConstitucion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: Partial<CreateActaConstitucionDto>,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.actaService.updateConstitucion(id, updateDto, userId);
+  }
+
+  @Put(':id/daily')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  updateDaily(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: Partial<CreateActaDailyDto>,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.actaService.updateDaily(id, updateDto, userId);
+  }
+
+  @Get(':id/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async downloadPdf(
+    @Param('id', ParseIntPipe) id: number,
+    @Res() res: Response,
+  ) {
+    const { acta, proyecto } = await this.actaService.findOneWithProyecto(id);
+    const pdfBuffer = await this.actaPdfService.generatePdf(acta, proyecto);
+
+    let filename: string;
+    if (acta.tipo === ActaTipo.CONSTITUCION) {
+      filename = `Acta_Constitucion_${acta.codigo}.pdf`;
+    } else if (acta.tipo === ActaTipo.DAILY_MEETING) {
+      filename = `Acta_Daily_Meeting_${acta.codigo}.pdf`;
+    } else {
+      filename = `Acta_Reunion_${acta.codigo}.pdf`;
+    }
+
+    res.set({
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length,
+    });
+
+    res.end(pdfBuffer);
+  }
+
+  @Post(':id/documento-firmado')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  subirDocumentoFirmado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SubirDocumentoFirmadoDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.actaService.subirDocumentoFirmado(id, dto.documentoFirmadoUrl, userId);
   }
 
   @Post(':id/aprobar')

@@ -14,18 +14,29 @@ export class CronogramaService {
   ) {}
 
   async create(createDto: CreateCronogramaDto, userId?: number): Promise<Cronograma> {
+    // Generar codigo automaticamente si no se proporciona
+    const codigo = createDto.codigo || `CRON-${createDto.proyectoId}-${Date.now()}`;
+
     const existing = await this.cronogramaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo: createDto.codigo },
+      where: { proyectoId: createDto.proyectoId, codigo },
     });
 
     if (existing) {
       throw new ConflictException(
-        `Ya existe un cronograma con el código ${createDto.codigo} en este proyecto`,
+        `Ya existe un cronograma con el código ${codigo} en este proyecto`,
       );
     }
 
+    // Generar fechas por defecto (hoy + 1 año)
+    const now = new Date();
+    const oneYearLater = new Date();
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
     const cronograma = this.cronogramaRepository.create({
       ...createDto,
+      codigo,
+      fechaInicio: createDto.fechaInicio || now,
+      fechaFin: createDto.fechaFin || oneYearLater,
       version: createDto.version || 1,
       createdBy: userId,
       updatedBy: userId,
@@ -61,10 +72,20 @@ export class CronogramaService {
   }
 
   async findByProyecto(proyectoId: number): Promise<Cronograma[]> {
-    return this.cronogramaRepository.find({
-      where: { proyectoId, activo: true },
-      order: { version: 'DESC' },
-    });
+    try {
+      return await this.cronogramaRepository.find({
+        where: { proyectoId, activo: true },
+        relations: ['tareas'],
+        order: { version: 'DESC' },
+      });
+    } catch (error) {
+      console.error('Error in findByProyecto:', error);
+      // Fallback sin relaciones si hay error
+      return this.cronogramaRepository.find({
+        where: { proyectoId, activo: true },
+        order: { version: 'DESC' },
+      });
+    }
   }
 
   async findOne(id: number): Promise<Cronograma> {

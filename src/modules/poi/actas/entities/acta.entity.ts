@@ -8,7 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { ActaTipo, ActaEstado, TipoReunion } from '../enums/acta.enum';
+import { ActaTipo, ActaEstado, TipoReunion, Modalidad } from '../enums/acta.enum';
 
 @Entity('actas', { schema: 'poi' })
 export class Acta {
@@ -41,7 +41,7 @@ export class Acta {
   @Column({
     type: 'varchar',
     length: 50,
-    default: ActaEstado.PENDIENTE,
+    default: ActaEstado.BORRADOR,
     enum: ActaEstado,
   })
   estado: ActaEstado;
@@ -89,15 +89,40 @@ export class Acta {
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
+  // Nuevos campos de Acta de Reunión
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    enum: Modalidad,
+  })
+  modalidad: Modalidad;
+
+  @Column({ name: 'lugar_link', type: 'text', nullable: true })
+  lugarLink: string;
+
+  @Column({ name: 'moderador_id', nullable: true })
+  moderadorId: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'moderador_id' })
+  moderador: any;
+
+  @Column({ name: 'proxima_reunion_fecha', type: 'date', nullable: true })
+  proximaReunionFecha: Date;
+
+  @Column({ name: 'anexos_referenciados', type: 'jsonb', nullable: true })
+  anexosReferenciados: any[];
+
   // Campos de Acta de Constitución
   @Column({ name: 'objetivo_smart', type: 'text', nullable: true })
   objetivoSmart: string;
 
-  @Column({ type: 'text', nullable: true })
-  alcance: string;
+  @Column({ type: 'jsonb', nullable: true })
+  alcance: string[];
 
-  @Column({ name: 'fuera_de_alcance', type: 'text', nullable: true })
-  fueraDeAlcance: string;
+  @Column({ name: 'fuera_de_alcance', type: 'jsonb', nullable: true })
+  fueraDeAlcance: string[];
 
   @Column({ type: 'jsonb', nullable: true })
   entregables: any[];
@@ -107,6 +132,59 @@ export class Acta {
 
   @Column({ name: 'presupuesto_estimado', type: 'decimal', precision: 15, scale: 2, nullable: true })
   presupuestoEstimado: number;
+
+  // Nuevos campos de Acta de Constitución
+  @Column({ type: 'text', nullable: true })
+  justificacion: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  supuestos: string[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  restricciones: string[];
+
+  @Column({ name: 'cronograma_hitos', type: 'jsonb', nullable: true })
+  cronogramaHitos: any[];
+
+  @Column({ name: 'equipo_proyecto', type: 'jsonb', nullable: true })
+  equipoProyecto: any[];
+
+  // Campos de Acta de Daily Meeting
+  @Column({ name: 'sprint_id', nullable: true })
+  sprintId: number;
+
+  @Column({ name: 'sprint_nombre', length: 200, nullable: true })
+  sprintNombre: string;
+
+  @Column({ name: 'duracion_minutos', type: 'int', nullable: true })
+  duracionMinutos: number;
+
+  @Column({ name: 'participantes_daily', type: 'jsonb', nullable: true })
+  participantesDaily: {
+    id?: string;
+    personalId?: number;
+    nombre: string;
+    cargo?: string;
+    ayer: string;
+    hoy: string;
+    impedimentos: string;
+  }[];
+
+  @Column({ name: 'impedimentos_generales', type: 'jsonb', nullable: true })
+  impedimentosGenerales: string[];
+
+  @Column({ name: 'notas_adicionales', type: 'text', nullable: true })
+  notasAdicionales: string;
+
+  // Documento firmado
+  @Column({ name: 'documento_firmado_url', type: 'text', nullable: true })
+  documentoFirmadoUrl: string;
+
+  @Column({ name: 'documento_firmado_fecha', type: 'timestamp with time zone', nullable: true })
+  documentoFirmadoFecha: Date;
+
+  @Column({ name: 'comentario_rechazo', type: 'text', nullable: true })
+  comentarioRechazo: string | null;
 
   // Aprobación
   @Column({ name: 'aprobado_por', nullable: true })

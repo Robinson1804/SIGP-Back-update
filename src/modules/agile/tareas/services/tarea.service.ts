@@ -3,10 +3,13 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { Tarea, EvidenciaTarea } from '../entities';
+import { Subtarea } from '../../subtareas/entities/subtarea.entity';
 import { CreateTareaDto } from '../dto/create-tarea.dto';
 import { UpdateTareaDto } from '../dto/update-tarea.dto';
 import { CambiarEstadoTareaDto } from '../dto/cambiar-estado-tarea.dto';
@@ -15,6 +18,16 @@ import { CreateEvidenciaTareaDto } from '../dto/create-evidencia-tarea.dto';
 import { TareaTipo, TareaEstado, TareaPrioridad } from '../enums/tarea.enum';
 import { HistorialCambioService } from '../../common/services/historial-cambio.service';
 import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/historial-cambio.enum';
+import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
+import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+
+// Configuración de WIP limits por defecto por columna
+const DEFAULT_WIP_LIMITS: Record<TareaEstado, number | null> = {
+  [TareaEstado.POR_HACER]: null, // Sin límite
+  [TareaEstado.EN_PROGRESO]: 5,  // Máximo 5 tareas en progreso
+  [TareaEstado.EN_REVISION]: 3,  // Máximo 3 tareas en revisión
+  [TareaEstado.FINALIZADO]: null, // Sin límite
+};
 
 @Injectable()
 export class TareaService {
@@ -23,7 +36,11 @@ export class TareaService {
     private readonly tareaRepository: Repository<Tarea>,
     @InjectRepository(EvidenciaTarea)
     private readonly evidenciaRepository: Repository<EvidenciaTarea>,
+    @InjectRepository(Subtarea)
+    private readonly subtareaRepository: Repository<Subtarea>,
     private readonly historialCambioService: HistorialCambioService,
+    @Inject(forwardRef(() => NotificacionService))
+    private readonly notificacionService: NotificacionService,
   ) {}
 
   async create(createDto: CreateTareaDto, userId?: number): Promise<Tarea> {
@@ -61,6 +78,21 @@ export class TareaService {
         tareaGuardada.id,
         userId,
         { codigo: tareaGuardada.codigo, nombre: tareaGuardada.nombre },
+      );
+    }
+
+    // Notificar al asignado si se le asigna la tarea
+    if (createDto.asignadoA && createDto.asignadoA !== userId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        createDto.asignadoA,
+        {
+          titulo: `Nueva tarea asignada: ${tareaGuardada.codigo}`,
+          descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
+          entidadTipo: 'Tarea',
+          entidadId: tareaGuardada.id,
+          urlAccion: `/poi/tareas/${tareaGuardada.id}`,
+        },
       );
     }
 
@@ -175,6 +207,21 @@ export class TareaService {
       );
     }
 
+    // Notificar si se cambia el asignado
+    if (updateDto.asignadoA && updateDto.asignadoA !== valoresAnteriores.asignadoA && updateDto.asignadoA !== userId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        updateDto.asignadoA,
+        {
+          titulo: `Tarea asignada: ${tarea.codigo}`,
+          descripcion: `Se te ha asignado la tarea "${tarea.nombre}"`,
+          entidadTipo: 'Tarea',
+          entidadId: tarea.id,
+          urlAccion: `/poi/tareas/${tarea.id}`,
+        },
+      );
+    }
+
     return tareaActualizada;
   }
 
@@ -196,6 +243,19 @@ export class TareaService {
       throw new BadRequestException(
         'Se requiere evidencia para finalizar una tarea SCRUM',
       );
+    }
+
+    // Validar WIP limit antes de mover (solo para tareas KANBAN)
+    if (tarea.tipo === TareaTipo.KANBAN && estadoAnterior !== cambiarEstadoDto.estado) {
+      await this.validateWipLimit(tarea.actividadId, cambiarEstadoDto.estado, id);
+    }
+
+    // Validar subtareas pendientes al finalizar tarea KANBAN
+    if (
+      cambiarEstadoDto.estado === TareaEstado.FINALIZADO &&
+      tarea.tipo === TareaTipo.KANBAN
+    ) {
+      await this.validateSubtareasPendientes(id);
     }
 
     tarea.estado = cambiarEstadoDto.estado;
@@ -220,6 +280,36 @@ export class TareaService {
         cambiarEstadoDto.estado,
         userId,
       );
+    }
+
+    // Notificar al asignado cuando la tarea cambia de estado
+    if (estadoAnterior !== cambiarEstadoDto.estado && tarea.asignadoA && tarea.asignadoA !== userId) {
+      const mensajeEstado = cambiarEstadoDto.estado === TareaEstado.FINALIZADO
+        ? 'ha sido completada'
+        : `ha sido movida a ${cambiarEstadoDto.estado}`;
+
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        tarea.asignadoA,
+        {
+          titulo: `Tarea actualizada: ${tarea.codigo}`,
+          descripcion: `La tarea "${tarea.nombre}" ${mensajeEstado}`,
+          entidadTipo: 'Tarea',
+          entidadId: tarea.id,
+          urlAccion: `/poi/tareas/${tarea.id}`,
+        },
+      );
+    }
+
+    // Emitir evento WebSocket para actualizar tableros
+    const proyectoId = tarea.historiaUsuario?.proyecto?.id || tarea.actividad?.id;
+    if (proyectoId) {
+      this.notificacionService.emitTaskUpdate(proyectoId, 'task_status_changed', {
+        tareaId: tarea.id,
+        codigo: tarea.codigo,
+        estadoAnterior,
+        estadoNuevo: cambiarEstadoDto.estado,
+      });
     }
 
     return tareaActualizada;
@@ -261,6 +351,17 @@ export class TareaService {
 
   async mover(id: number, estado: TareaEstado, userId?: number): Promise<Tarea> {
     const tarea = await this.findOne(id);
+    const estadoAnterior = tarea.estado;
+
+    // Validar WIP limit antes de mover (solo para tareas KANBAN)
+    if (tarea.tipo === TareaTipo.KANBAN && estadoAnterior !== estado) {
+      await this.validateWipLimit(tarea.actividadId, estado, id);
+    }
+
+    // Validar subtareas pendientes al finalizar tarea KANBAN
+    if (estado === TareaEstado.FINALIZADO && tarea.tipo === TareaTipo.KANBAN) {
+      await this.validateSubtareasPendientes(id);
+    }
 
     tarea.estado = estado;
     tarea.updatedBy = userId;
@@ -358,5 +459,103 @@ export class TareaService {
       campoModificado: 'evidencia',
       valorAnterior: evidencia.nombre,
     });
+  }
+
+  // ================================================================
+  // Métodos de validación Kanban
+  // ================================================================
+
+  /**
+   * Valida que no se exceda el WIP limit de una columna antes de mover una tarea
+   */
+  private async validateWipLimit(
+    actividadId: number,
+    nuevoEstado: TareaEstado,
+    tareaId: number,
+  ): Promise<void> {
+    const wipLimit = this.getWipLimit(nuevoEstado);
+
+    if (wipLimit === null) {
+      return; // Sin límite para esta columna
+    }
+
+    // Contar tareas activas en el estado destino (excluyendo la tarea que se mueve)
+    const tareasEnColumna = await this.tareaRepository.count({
+      where: {
+        actividadId,
+        estado: nuevoEstado,
+        activo: true,
+        id: Not(tareaId),
+      },
+    });
+
+    if (tareasEnColumna >= wipLimit) {
+      throw new ConflictException(
+        `Límite WIP alcanzado en columna "${nuevoEstado}". Máximo ${wipLimit} tareas permitidas.`,
+      );
+    }
+  }
+
+  /**
+   * Obtiene el WIP limit para un estado específico
+   */
+  private getWipLimit(estado: TareaEstado): number | null {
+    return DEFAULT_WIP_LIMITS[estado] ?? null;
+  }
+
+  /**
+   * Cuenta las tareas en un estado específico para una actividad
+   */
+  async countByEstado(actividadId: number, estado: TareaEstado): Promise<number> {
+    return this.tareaRepository.count({
+      where: {
+        actividadId,
+        estado,
+        activo: true,
+      },
+    });
+  }
+
+  /**
+   * Valida que todas las subtareas de una tarea KANBAN estén finalizadas
+   * antes de permitir finalizar la tarea padre
+   */
+  private async validateSubtareasPendientes(tareaId: number): Promise<void> {
+    const pendientes = await this.subtareaRepository.count({
+      where: {
+        tareaId,
+        estado: Not(TareaEstado.FINALIZADO),
+        activo: true,
+      },
+    });
+
+    if (pendientes > 0) {
+      throw new BadRequestException(
+        `No se puede finalizar la tarea. Hay ${pendientes} subtarea(s) pendiente(s) de completar.`,
+      );
+    }
+  }
+
+  /**
+   * Obtiene información de WIP limits para un tablero
+   */
+  async getWipLimitsInfo(actividadId: number): Promise<{
+    estado: TareaEstado;
+    limite: number | null;
+    actual: number;
+  }[]> {
+    const estados = Object.values(TareaEstado);
+    const result: { estado: TareaEstado; limite: number | null; actual: number }[] = [];
+
+    for (const estado of estados) {
+      const actual = await this.countByEstado(actividadId, estado);
+      result.push({
+        estado,
+        limite: this.getWipLimit(estado),
+        actual,
+      });
+    }
+
+    return result;
   }
 }

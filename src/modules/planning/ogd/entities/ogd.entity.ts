@@ -31,14 +31,20 @@ export class Ogd {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
-  @Column({ length: 500, nullable: true })
-  indicador: string;
+  @Column({ name: 'indicador_codigo', length: 50, nullable: true })
+  indicadorCodigo: string;
 
-  @Column({ name: 'linea_base', type: 'decimal', precision: 15, scale: 2, nullable: true })
-  lineaBase: number;
+  @Column({ name: 'indicador_nombre', length: 500, nullable: true })
+  indicadorNombre: string;
 
   @Column({ name: 'unidad_medida', length: 50, nullable: true })
   unidadMedida: string;
+
+  @Column({ name: 'linea_base_anio', type: 'int', nullable: true })
+  lineaBaseAnio: number;
+
+  @Column({ name: 'linea_base_valor', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  lineaBaseValor: number;
 
   @Column({ name: 'metas_anuales', type: 'jsonb', nullable: true })
   metasAnuales: MetaAnual[];
@@ -60,10 +66,14 @@ export class Ogd {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Pgd, (pgd) => pgd.objetivosGobiernoDigital)
+  @ManyToOne(() => Pgd, (pgd) => pgd.objetivosGobiernoDigital, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'pgd_id' })
   pgd: Pgd;
 
   @OneToMany('Oegd', 'ogd')
   objetivosEspecificos: any[];
+
+  // Relación Many-to-Many con OEI (via tabla ogd_oei)
+  @OneToMany('OgdOei', 'ogd')
+  ogdOeis: any[];
 }

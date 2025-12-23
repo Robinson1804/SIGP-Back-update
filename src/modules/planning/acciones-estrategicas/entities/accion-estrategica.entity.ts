@@ -9,6 +9,7 @@ import {
   Index,
 } from 'typeorm';
 import { Oegd } from '../../oegd/entities/oegd.entity';
+import { MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('acciones_estrategicas', { schema: 'planning' })
 export class AccionEstrategica {
@@ -29,8 +30,23 @@ export class AccionEstrategica {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
-  @Column({ length: 500, nullable: true })
-  indicador: string;
+  @Column({ name: 'indicador_codigo', length: 50, nullable: true })
+  indicadorCodigo: string;
+
+  @Column({ name: 'indicador_nombre', length: 500, nullable: true })
+  indicadorNombre: string;
+
+  @Column({ name: 'unidad_medida', length: 50, nullable: true })
+  unidadMedida: string;
+
+  @Column({ name: 'linea_base_anio', type: 'int', nullable: true })
+  lineaBaseAnio: number;
+
+  @Column({ name: 'linea_base_valor', type: 'decimal', precision: 15, scale: 2, nullable: true })
+  lineaBaseValor: number;
+
+  @Column({ name: 'metas_anuales', type: 'jsonb', nullable: true })
+  metasAnuales: MetaAnual[];
 
   @Column({ name: 'responsable_area', length: 100, nullable: true })
   responsableArea: string;
@@ -58,7 +74,7 @@ export class AccionEstrategica {
   updatedAt: Date;
 
   // Relations
-  @ManyToOne(() => Oegd, (oegd) => oegd.accionesEstrategicas)
+  @ManyToOne(() => Oegd, (oegd) => oegd.accionesEstrategicas, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'oegd_id' })
   oegd: Oegd;
 }

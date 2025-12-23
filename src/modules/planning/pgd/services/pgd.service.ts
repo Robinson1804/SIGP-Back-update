@@ -13,13 +13,35 @@ export class PgdService {
     private readonly pgdRepository: Repository<Pgd>,
   ) {}
 
+  /**
+   * Genera automáticamente el nombre del PGD
+   * Formato: "PGD XXXX - XXXX"
+   */
+  private generateNombre(anioInicio: number, anioFin: number): string {
+    return `PGD ${anioInicio} - ${anioFin}`;
+  }
+
+  /**
+   * Genera automáticamente la descripción del PGD
+   * Formato: "Plan de Gobierno Digital XXXX-XXXX"
+   */
+  private generateDescripcion(anioInicio: number, anioFin: number): string {
+    return `Plan de Gobierno Digital ${anioInicio}-${anioFin}`;
+  }
+
   async create(createPgdDto: CreatePgdDto, userId?: number): Promise<Pgd> {
     if (createPgdDto.anioFin <= createPgdDto.anioInicio) {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
     }
 
+    // Auto-generar nombre y descripción si no se proporcionan
+    const nombre = createPgdDto.nombre || this.generateNombre(createPgdDto.anioInicio, createPgdDto.anioFin);
+    const descripcion = createPgdDto.descripcion || this.generateDescripcion(createPgdDto.anioInicio, createPgdDto.anioFin);
+
     const pgd = this.pgdRepository.create({
       ...createPgdDto,
+      nombre,
+      descripcion,
       estado: createPgdDto.estado || PgdEstado.BORRADOR,
       createdBy: userId,
       updatedBy: userId,
@@ -79,14 +101,21 @@ export class PgdService {
   async update(id: number, updatePgdDto: UpdatePgdDto, userId?: number): Promise<Pgd> {
     const pgd = await this.findOne(id);
 
-    if (updatePgdDto.anioFin && updatePgdDto.anioInicio) {
-      if (updatePgdDto.anioFin <= updatePgdDto.anioInicio) {
-        throw new ConflictException('El año de fin debe ser mayor al año de inicio');
-      }
-    } else if (updatePgdDto.anioFin && updatePgdDto.anioFin <= pgd.anioInicio) {
+    const anioInicio = updatePgdDto.anioInicio ?? pgd.anioInicio;
+    const anioFin = updatePgdDto.anioFin ?? pgd.anioFin;
+
+    if (anioFin <= anioInicio) {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
-    } else if (updatePgdDto.anioInicio && pgd.anioFin <= updatePgdDto.anioInicio) {
-      throw new ConflictException('El año de inicio debe ser menor al año de fin');
+    }
+
+    // Si cambian los años, regenerar nombre y descripción
+    if (updatePgdDto.anioInicio !== undefined || updatePgdDto.anioFin !== undefined) {
+      if (!updatePgdDto.nombre) {
+        updatePgdDto.nombre = this.generateNombre(anioInicio, anioFin);
+      }
+      if (!updatePgdDto.descripcion) {
+        updatePgdDto.descripcion = this.generateDescripcion(anioInicio, anioFin);
+      }
     }
 
     Object.assign(pgd, updatePgdDto, { updatedBy: userId });
@@ -112,5 +141,14 @@ export class PgdService {
     pgd.estado = PgdEstado.VIGENTE;
     pgd.updatedBy = userId;
     return this.pgdRepository.save(pgd);
+  }
+
+  /**
+   * Eliminar PGD y todo su contenido (CASCADE)
+   * Los proyectos y actividades se desvinculan (SET NULL)
+   */
+  async hardDelete(id: number): Promise<void> {
+    const pgd = await this.findOne(id);
+    await this.pgdRepository.remove(pgd);
   }
 }

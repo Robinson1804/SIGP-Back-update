@@ -13,9 +13,10 @@ export class CreateEpicaDto {
   @IsInt()
   proyectoId: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)

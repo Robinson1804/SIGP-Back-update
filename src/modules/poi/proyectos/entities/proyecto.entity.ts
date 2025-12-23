@@ -78,6 +78,10 @@ export class Proyecto {
   @JoinColumn({ name: 'patrocinador_id' })
   patrocinador: any;
 
+  // Área Responsable del Proyecto (ej: OTIN, OGD, etc.)
+  @Column({ name: 'area_responsable', length: 100, nullable: true })
+  areaResponsable: string;
+
   // Financiero
   @Column({ length: 100, nullable: true })
   coordinacion: string;
@@ -90,6 +94,26 @@ export class Proyecto {
 
   @Column({ type: 'integer', array: true, nullable: true })
   anios: number[];
+
+  // Costos estimados por año [{anio: number, monto: number}]
+  @Column({ name: 'costos_anuales', type: 'jsonb', nullable: true })
+  costosAnuales: { anio: number; monto: number }[];
+
+  // Alcance del proyecto (lista de items)
+  @Column({ type: 'text', array: true, nullable: true })
+  alcances: string[];
+
+  // Problemática identificada
+  @Column({ type: 'text', nullable: true })
+  problematica: string;
+
+  // Beneficiarios del proyecto
+  @Column({ type: 'text', nullable: true })
+  beneficiarios: string;
+
+  // Beneficios del proyecto (lista de items)
+  @Column({ type: 'text', array: true, nullable: true })
+  beneficios: string[];
 
   // Fechas
   @Column({ name: 'fecha_inicio', type: 'date', nullable: true })

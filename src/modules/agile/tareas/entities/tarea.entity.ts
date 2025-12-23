@@ -5,12 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 import { TareaTipo, TareaEstado, TareaPrioridad } from '../enums/tarea.enum';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
+import { TareaAsignado } from './tarea-asignado.entity';
 
 @Entity({ schema: 'agile', name: 'tareas' })
 export class Tarea {
@@ -79,6 +81,13 @@ export class Tarea {
   @Column({ name: 'fecha_fin', type: 'date', nullable: true })
   fechaFin: Date;
 
+  // Campos para métricas Kanban precisas (Lead Time / Cycle Time)
+  @Column({ name: 'fecha_inicio_progreso', type: 'timestamp with time zone', nullable: true })
+  fechaInicioProgreso: Date;
+
+  @Column({ name: 'fecha_completado', type: 'timestamp with time zone', nullable: true })
+  fechaCompletado: Date;
+
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
@@ -113,4 +122,7 @@ export class Tarea {
   @ManyToOne(() => Usuario, { nullable: true })
   @JoinColumn({ name: 'validada_por' })
   validador: Usuario;
+
+  @OneToMany(() => TareaAsignado, (ta) => ta.tarea)
+  asignados: TareaAsignado[];
 }

@@ -72,6 +72,15 @@ export class TareaCronograma {
   @Column({ type: 'text', nullable: true })
   notas: string;
 
+  @Column({ length: 50, nullable: true })
+  fase: string;
+
+  @Column({ name: 'es_hito', default: false })
+  esHito: boolean;
+
+  @Column({ length: 20, nullable: true })
+  color: string;
+
   @Column({ default: true })
   activo: boolean;
 

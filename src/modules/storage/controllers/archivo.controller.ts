@@ -16,6 +16,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -35,6 +36,7 @@ import { Usuario } from '../../auth/entities/usuario.entity';
 
 import { ArchivoService } from '../services/archivo.service';
 import { ArchivoValidationService } from '../services/archivo-validation.service';
+import { MinioService } from '../services/minio.service';
 
 import {
   FilterArchivosDto,
@@ -53,6 +55,7 @@ export class ArchivoController {
   constructor(
     private readonly archivoService: ArchivoService,
     private readonly validationService: ArchivoValidationService,
+    private readonly minioService: MinioService,
   ) {}
 
   // =========================================================================
@@ -119,6 +122,35 @@ export class ArchivoController {
       downloadUrl,
       expiresIn: 3600, // 1 hora
     };
+  }
+
+  @Get(':id/download')
+  @ApiOperation({
+    summary: 'Descargar archivo directamente',
+    description: 'Descarga el archivo a través del backend (proxy). Útil cuando presigned URLs no son accesibles.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID del archivo' })
+  @ApiResponse({ status: 200, description: 'Archivo descargado' })
+  @ApiResponse({ status: 404, description: 'Archivo no encontrado' })
+  async download(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: any,
+  ): Promise<void> {
+    // Obtener entidad completa del archivo (incluye objectKey y bucket)
+    const archivo = await this.archivoService.findEntityById(id);
+
+    // Obtener el archivo como buffer desde MinIO
+    const buffer = await this.minioService.getObjectAsBuffer(archivo.bucket, archivo.objectKey);
+
+    // Configurar headers de respuesta
+    res.set({
+      'Content-Type': archivo.mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(archivo.nombreOriginal)}"`,
+      'Content-Length': buffer.length,
+    });
+
+    // Enviar el archivo
+    res.end(buffer);
   }
 
   @Get(':id/versiones')

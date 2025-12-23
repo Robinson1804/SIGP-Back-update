@@ -1,11 +1,16 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsBoolean } from 'class-validator';
 import { ActaEstado } from '../enums/acta.enum';
 
 export class AprobarActaDto {
-  @IsEnum(ActaEstado)
-  estado: ActaEstado;
+  @IsBoolean()
+  aprobado: boolean;
 
   @IsOptional()
   @IsString()
-  observacion?: string;
+  comentario?: string;
+}
+
+export class SubirDocumentoFirmadoDto {
+  @IsString()
+  documentoFirmadoUrl: string;
 }

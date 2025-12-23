@@ -18,7 +18,7 @@ import { AsignarHuDto } from '../dto/asignar-hu.dto';
 import { AgregarDependenciaDto } from '../dto/agregar-dependencia.dto';
 import { ReordenarBacklogDto } from '../dto/reordenar-backlog.dto';
 import { VincularRequerimientoDto } from '../dto/vincular-requerimiento.dto';
-import { HuPrioridad, HuEstado } from '../enums/historia-usuario.enum';
+import { HuPrioridad, HuEstado, CriterioEstado } from '../enums/historia-usuario.enum';
 import { HistorialCambioService } from '../../common/services/historial-cambio.service';
 import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/historial-cambio.enum';
 
@@ -249,6 +249,29 @@ export class HistoriaUsuarioService {
   ): Promise<HistoriaUsuario> {
     const hu = await this.findOne(id);
     const estadoAnterior = hu.estado;
+
+    // Validación: No se puede marcar como Terminada sin todos los CA cumplidos
+    if (cambiarEstadoDto.estado === HuEstado.TERMINADA) {
+      const criterios = await this.criterioRepository.find({
+        where: { historiaUsuarioId: id, activo: true },
+      });
+
+      if (criterios.length === 0) {
+        throw new BadRequestException(
+          'No se puede marcar como Terminada: la Historia de Usuario no tiene criterios de aceptación definidos',
+        );
+      }
+
+      const criteriosNoCumplidos = criterios.filter(
+        (c) => c.estado !== CriterioEstado.CUMPLIDO,
+      );
+
+      if (criteriosNoCumplidos.length > 0) {
+        throw new BadRequestException(
+          `No se puede marcar como Terminada: existen ${criteriosNoCumplidos.length} criterio(s) de aceptación sin cumplir`,
+        );
+      }
+    }
 
     hu.estado = cambiarEstadoDto.estado;
     hu.updatedBy = userId;

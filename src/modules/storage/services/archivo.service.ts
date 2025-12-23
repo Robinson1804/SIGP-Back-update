@@ -278,6 +278,22 @@ export class ArchivoService {
   }
 
   /**
+   * Obtener entidad archivo por ID (para uso interno, incluye objectKey)
+   */
+  async findEntityById(archivoId: string): Promise<Archivo> {
+    const archivo = await this.archivoRepository.findOne({
+      where: { id: archivoId },
+      relations: ['creador'],
+    });
+
+    if (!archivo) {
+      throw new NotFoundException(`Archivo no encontrado: ${archivoId}`);
+    }
+
+    return archivo;
+  }
+
+  /**
    * Listar archivos con filtros
    */
   async findAll(filters: FilterArchivosDto): Promise<ArchivoListResponseDto> {

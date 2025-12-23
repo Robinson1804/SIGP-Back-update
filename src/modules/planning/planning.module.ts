@@ -7,6 +7,9 @@ import { Oei } from './oei/entities/oei.entity';
 import { Ogd } from './ogd/entities/ogd.entity';
 import { Oegd } from './oegd/entities/oegd.entity';
 import { AccionEstrategica } from './acciones-estrategicas/entities/accion-estrategica.entity';
+import { Aei } from './aei/entities/aei.entity';
+import { OgdOei } from './entities/ogd-oei.entity';
+import { OegdAei } from './entities/oegd-aei.entity';
 
 // Services
 import { PgdService } from './pgd/services/pgd.service';
@@ -14,6 +17,7 @@ import { OeiService } from './oei/services/oei.service';
 import { OgdService } from './ogd/services/ogd.service';
 import { OegdService } from './oegd/services/oegd.service';
 import { AccionEstrategicaService } from './acciones-estrategicas/services/accion-estrategica.service';
+import { AeiService } from './aei/services/aei.service';
 
 // Controllers
 import { PgdController } from './pgd/controllers/pgd.controller';
@@ -24,10 +28,20 @@ import {
   AccionEstrategicaController,
   OegdAccionEstrategicaController,
 } from './acciones-estrategicas/controllers/accion-estrategica.controller';
+import { AeiController, OeiAeiController } from './aei/controllers/aei.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Pgd, Oei, Ogd, Oegd, AccionEstrategica]),
+    TypeOrmModule.forFeature([
+      Pgd,
+      Oei,
+      Ogd,
+      Oegd,
+      AccionEstrategica,
+      Aei,
+      OgdOei,
+      OegdAei,
+    ]),
   ],
   controllers: [
     PgdController,
@@ -39,6 +53,8 @@ import {
     OgdOegdController,
     AccionEstrategicaController,
     OegdAccionEstrategicaController,
+    AeiController,
+    OeiAeiController,
   ],
   providers: [
     PgdService,
@@ -46,6 +62,7 @@ import {
     OgdService,
     OegdService,
     AccionEstrategicaService,
+    AeiService,
   ],
   exports: [
     PgdService,
@@ -53,6 +70,7 @@ import {
     OgdService,
     OegdService,
     AccionEstrategicaService,
+    AeiService,
   ],
 })
 export class PlanningModule {}

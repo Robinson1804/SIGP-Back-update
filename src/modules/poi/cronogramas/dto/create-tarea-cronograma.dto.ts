@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsArray,
   IsEnum,
+  IsBoolean,
   MaxLength,
 } from 'class-validator';
 import { TareaPrioridad } from '../enums/cronograma.enum';
@@ -55,4 +56,18 @@ export class CreateTareaCronogramaDto {
   @IsOptional()
   @IsString()
   notas?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  fase?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esHito?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  color?: string;
 }

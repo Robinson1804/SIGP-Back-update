@@ -102,4 +102,9 @@ export class ProyectoSprintsController {
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.sprintService.findByProyecto(proyectoId);
   }
+
+  @Get('velocidad')
+  getVelocidad(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
+    return this.sprintService.getVelocidadProyecto(proyectoId);
+  }
 }

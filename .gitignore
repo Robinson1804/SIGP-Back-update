@@ -2,8 +2,8 @@
 /dist
 /node_modules
 /build
-/docs
-.claude
+#/docs
+#.claude
 
 # Logs
 logs

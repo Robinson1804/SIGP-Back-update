@@ -3,15 +3,15 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PgdEstado } from '../entities/pgd.entity';
 
 export class CreatePgdDto {
-  @ApiProperty({
-    description: 'Nombre del Plan General de Desarrollo',
-    example: 'Plan de Desarrollo Institucional 2025-2028',
+  @ApiPropertyOptional({
+    description: 'Nombre del PGD (se auto-genera si no se proporciona: "PGD XXXX - XXXX")',
+    example: 'PGD 2025 - 2028',
     maxLength: 200,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  nombre: string;
+  nombre?: string;
 
   @ApiPropertyOptional({
     description: 'Descripcion detallada del PGD',

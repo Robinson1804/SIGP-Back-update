@@ -3,6 +3,8 @@ import {
   Post,
   Get,
   Put,
+  Patch,
+  Delete,
   Body,
   UseGuards,
   HttpCode,
@@ -24,6 +26,7 @@ import { RegisterDto } from '../dto/register.dto';
 import { RefreshTokenDto } from '../dto/refresh-token.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
+import { UpdateProfileDto, UpdateAvatarDto, ProfileResponseDto } from '../dto/update-profile.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -97,9 +100,47 @@ export class AuthController {
   @Get('profile')
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Get current user profile' })
-  @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
-  async getProfile(@CurrentUser('id') userId: number) {
+  @ApiResponse({ status: 200, description: 'Profile retrieved successfully', type: ProfileResponseDto })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getProfile(@CurrentUser('id') userId: number): Promise<ProfileResponseDto | null> {
     return this.authService.getProfile(userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Update current user profile' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully', type: ProfileResponseDto })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  async updateProfile(
+    @CurrentUser('id') userId: number,
+    @Body() updateProfileDto: UpdateProfileDto,
+  ): Promise<ProfileResponseDto> {
+    return this.authService.updateProfile(userId, updateProfileDto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile/avatar')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Update user avatar URL',
+    description: 'Updates the avatar URL after uploading the image to MinIO. Use /upload/request-url first to upload the image.',
+  })
+  @ApiResponse({ status: 200, description: 'Avatar updated successfully', type: ProfileResponseDto })
+  async updateAvatar(
+    @CurrentUser('id') userId: number,
+    @Body() updateAvatarDto: UpdateAvatarDto,
+  ): Promise<ProfileResponseDto> {
+    return this.authService.updateAvatar(userId, updateAvatarDto.avatarUrl);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('profile/avatar')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Remove user avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar removed successfully', type: ProfileResponseDto })
+  async removeAvatar(@CurrentUser('id') userId: number): Promise<ProfileResponseDto> {
+    return this.authService.removeAvatar(userId);
   }
 
   @UseGuards(JwtAuthGuard)

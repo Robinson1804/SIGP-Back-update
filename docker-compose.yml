@@ -112,6 +112,7 @@ services:
       REDIS_KEY_PREFIX: 'sigp:'
       # MinIO
       MINIO_ENDPOINT: minio
+      MINIO_PUBLIC_ENDPOINT: localhost
       MINIO_PORT: 9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin

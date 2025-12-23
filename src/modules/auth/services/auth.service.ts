@@ -15,6 +15,7 @@ import { LoginDto } from '../dto/login.dto';
 import { RegisterDto } from '../dto/register.dto';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
+import { UpdateProfileDto, ProfileResponseDto } from '../dto/update-profile.dto';
 
 @Injectable()
 export class AuthService {
@@ -220,7 +221,112 @@ export class AuthService {
     );
   }
 
-  async getProfile(userId: number): Promise<Usuario | null> {
-    return this.usuarioRepository.findOne({ where: { id: userId } });
+  async getProfile(userId: number): Promise<ProfileResponseDto | null> {
+    const usuario = await this.usuarioRepository.findOne({ where: { id: userId } });
+    if (!usuario) return null;
+
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      rol: usuario.rol,
+      avatarUrl: usuario.avatarUrl,
+      telefono: usuario.telefono,
+      ultimoAcceso: usuario.ultimoAcceso,
+      createdAt: usuario.createdAt,
+    };
+  }
+
+  async updateProfile(
+    userId: number,
+    updateProfileDto: UpdateProfileDto,
+  ): Promise<ProfileResponseDto> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!usuario) {
+      throw new BadRequestException('User not found');
+    }
+
+    // Solo actualizar campos proporcionados
+    if (updateProfileDto.nombre !== undefined) {
+      usuario.nombre = updateProfileDto.nombre;
+    }
+    if (updateProfileDto.apellido !== undefined) {
+      usuario.apellido = updateProfileDto.apellido;
+    }
+    if (updateProfileDto.telefono !== undefined) {
+      usuario.telefono = updateProfileDto.telefono;
+    }
+
+    await this.usuarioRepository.save(usuario);
+
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      rol: usuario.rol,
+      avatarUrl: usuario.avatarUrl,
+      telefono: usuario.telefono,
+      ultimoAcceso: usuario.ultimoAcceso,
+      createdAt: usuario.createdAt,
+    };
+  }
+
+  async updateAvatar(userId: number, avatarUrl: string): Promise<ProfileResponseDto> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!usuario) {
+      throw new BadRequestException('User not found');
+    }
+
+    usuario.avatarUrl = avatarUrl;
+    await this.usuarioRepository.save(usuario);
+
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      rol: usuario.rol,
+      avatarUrl: usuario.avatarUrl,
+      telefono: usuario.telefono,
+      ultimoAcceso: usuario.ultimoAcceso,
+      createdAt: usuario.createdAt,
+    };
+  }
+
+  async removeAvatar(userId: number): Promise<ProfileResponseDto> {
+    const usuario = await this.usuarioRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!usuario) {
+      throw new BadRequestException('User not found');
+    }
+
+    usuario.avatarUrl = null as any;
+    await this.usuarioRepository.save(usuario);
+
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      username: usuario.username,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      rol: usuario.rol,
+      avatarUrl: usuario.avatarUrl,
+      telefono: usuario.telefono,
+      ultimoAcceso: usuario.ultimoAcceso,
+      createdAt: usuario.createdAt,
+    };
   }
 }

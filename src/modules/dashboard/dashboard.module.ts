@@ -18,6 +18,7 @@ import { DashboardGeneralService } from './services/dashboard-general.service';
 import { DashboardProyectoService } from './services/dashboard-proyecto.service';
 import { DashboardActividadService } from './services/dashboard-actividad.service';
 import { DashboardOeiService } from './services/dashboard-oei.service';
+import { DashboardGerencialService } from './services/dashboard-gerencial.service';
 
 // Controllers
 import { DashboardController } from './controllers/dashboard.controller';
@@ -47,12 +48,14 @@ import { DashboardController } from './controllers/dashboard.controller';
     DashboardProyectoService,
     DashboardActividadService,
     DashboardOeiService,
+    DashboardGerencialService,
   ],
   exports: [
     DashboardGeneralService,
     DashboardProyectoService,
     DashboardActividadService,
     DashboardOeiService,
+    DashboardGerencialService,
   ],
 })
 export class DashboardModule {}

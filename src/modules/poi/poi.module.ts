@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { NotificacionesModule } from '../notificaciones';
 
 // Entities
 import { Proyecto } from './proyectos/entities/proyecto.entity';
@@ -8,7 +9,7 @@ import { Subproyecto } from './subproyectos/entities/subproyecto.entity';
 import { Documento } from './documentos/entities/documento.entity';
 import { Acta } from './actas/entities/acta.entity';
 import { Requerimiento } from './requerimientos/entities/requerimiento.entity';
-import { Cronograma, TareaCronograma } from './cronogramas/entities';
+import { Cronograma, TareaCronograma, DependenciaCronograma } from './cronogramas/entities';
 import { InformeSprint } from './informes-sprint/entities/informe-sprint.entity';
 import { InformeActividad } from './informes-actividad/entities/informe-actividad.entity';
 
@@ -18,8 +19,9 @@ import { ActividadService } from './actividades/services/actividad.service';
 import { SubproyectoService } from './subproyectos/services/subproyecto.service';
 import { DocumentoService } from './documentos/services/documento.service';
 import { ActaService } from './actas/services/acta.service';
+import { ActaPdfService } from './actas/services/acta-pdf.service';
 import { RequerimientoService } from './requerimientos/services/requerimiento.service';
-import { CronogramaService, TareaCronogramaService } from './cronogramas/services';
+import { CronogramaService, TareaCronogramaService, DependenciaCronogramaService, RutaCriticaService, ExportacionCronogramaService } from './cronogramas/services';
 import { InformeSprintService } from './informes-sprint/services/informe-sprint.service';
 import { InformeActividadService } from './informes-actividad/services/informe-actividad.service';
 
@@ -49,8 +51,11 @@ import {
 import {
   CronogramaController,
   ProyectoCronogramasController,
+  ProyectoCronogramaController,
   TareaCronogramaController,
   CronogramaTareasController,
+  CronogramaDependenciasController,
+  TareaDependenciasController,
 } from './cronogramas/controllers/cronograma.controller';
 import {
   InformeSprintController,
@@ -63,6 +68,7 @@ import {
 
 @Module({
   imports: [
+    forwardRef(() => NotificacionesModule),
     TypeOrmModule.forFeature([
       Proyecto,
       Actividad,
@@ -72,6 +78,7 @@ import {
       Requerimiento,
       Cronograma,
       TareaCronograma,
+      DependenciaCronograma,
       InformeSprint,
       InformeActividad,
     ]),
@@ -98,8 +105,11 @@ import {
     // Cronogramas
     CronogramaController,
     ProyectoCronogramasController,
+    ProyectoCronogramaController,
     TareaCronogramaController,
     CronogramaTareasController,
+    CronogramaDependenciasController,
+    TareaDependenciasController,
     // Informes Sprint
     InformeSprintController,
     ProyectoInformesSprintController,
@@ -113,9 +123,13 @@ import {
     SubproyectoService,
     DocumentoService,
     ActaService,
+    ActaPdfService,
     RequerimientoService,
     CronogramaService,
     TareaCronogramaService,
+    DependenciaCronogramaService,
+    RutaCriticaService,
+    ExportacionCronogramaService,
     InformeSprintService,
     InformeActividadService,
   ],
@@ -125,9 +139,13 @@ import {
     SubproyectoService,
     DocumentoService,
     ActaService,
+    ActaPdfService,
     RequerimientoService,
     CronogramaService,
     TareaCronogramaService,
+    DependenciaCronogramaService,
+    RutaCriticaService,
+    ExportacionCronogramaService,
     InformeSprintService,
     InformeActividadService,
   ],
