@@ -1,6 +1,6 @@
 export enum Modalidad {
-  PLANILLA = 'Planilla',
+  NOMBRADO = 'Nombrado',
   CAS = 'CAS',
-  LOCADOR = 'Locador',
+  ORDEN_DE_SERVICIO = 'Orden de Servicio',
   PRACTICANTE = 'Practicante',
 }

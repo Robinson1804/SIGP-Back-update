@@ -17,7 +17,7 @@ export class TareaTableroDto {
   };
   horasEstimadas: number;
   horasReales: number;
-  evidenciaUrl: string;
+  // evidenciaUrl eliminado - usar endpoint GET /tareas/:id/evidencias
   validada: boolean;
 }
 
@@ -25,19 +25,15 @@ export class HistoriaUsuarioTableroDto {
   id: number;
   codigo: string;
   titulo: string;
-  rol: string;
-  quiero: string;
-  para: string;
-  prioridad: HuPrioridad;
-  estimacion: HuEstimacion;
-  storyPoints: number;
+  rol: string | null;
+  quiero: string | null;
+  para: string | null;
+  prioridad: HuPrioridad | null;
+  estimacion: HuEstimacion | null;
+  storyPoints: number | null;
   estado: HuEstado;
-  asignadoA: number | null;
-  asignado?: {
-    id: number;
-    nombre: string;
-    avatar?: string;
-  };
+  // asignadoA ahora es un array de IDs de responsables
+  asignadoA: number[];
   tareas: TareaTableroDto[];
   tareasCompletadas: number;
   tareasTotal: number;
@@ -58,8 +54,8 @@ export class TableroScrumResponseDto {
     nombre: string;
     sprintGoal: string;
     estado: SprintEstado;
-    fechaInicio: Date;
-    fechaFin: Date;
+    fechaInicio: string | null;
+    fechaFin: string | null;
     capacidadEquipo: number;
   };
   columnas: ColumnaTableroScrumDto[];

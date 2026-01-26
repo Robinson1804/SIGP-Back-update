@@ -18,10 +18,10 @@ export class AdminUserSeed implements Seeder {
     try {
       await queryRunner.connect();
 
-      // Check if admin already exists
+      // Check if admin already exists (by email or username)
       const existingAdmin = await queryRunner.query(
-        `SELECT id FROM public.usuarios WHERE email = $1`,
-        ['admin@sigp.gob.pe'],
+        `SELECT id FROM public.usuarios WHERE email = $1 OR username = $2`,
+        ['admin@sigp.gob.pe', 'admin'],
       );
 
       if (existingAdmin.length > 0) {
@@ -37,21 +37,25 @@ export class AdminUserSeed implements Seeder {
         `
         INSERT INTO public.usuarios (
           email,
+          username,
           password_hash,
           nombre,
           apellido,
           rol,
+          roles_adicionales,
           activo,
           created_at,
           updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
         `,
         [
           'admin@sigp.gob.pe',
+          'admin',
           passwordHash,
           'Administrador',
           'Sistema',
           'ADMIN',
+          '[]',
           true,
         ],
       );

@@ -55,7 +55,7 @@ export class Actividad {
   @JoinColumn({ name: 'accion_estrategica_id' })
   accionEstrategica: any;
 
-  // Responsable
+  // Responsables
   @Index()
   @Column({ name: 'coordinador_id', nullable: true })
   coordinadorId: number;
@@ -63,6 +63,15 @@ export class Actividad {
   @ManyToOne('Usuario', { nullable: true })
   @JoinColumn({ name: 'coordinador_id' })
   coordinador: any;
+
+  // Gestor (equivalente a Scrum Master para Kanban)
+  @Index()
+  @Column({ name: 'gestor_id', nullable: true })
+  gestorId: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'gestor_id' })
+  gestor: any;
 
   // Financiero
   @Column({ length: 100, nullable: true })

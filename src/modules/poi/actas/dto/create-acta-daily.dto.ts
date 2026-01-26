@@ -62,6 +62,10 @@ export class CreateActaDailyDto {
   sprintId?: number;
 
   @IsOptional()
+  @IsInt()
+  moderadorId?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(200)
   sprintNombre?: string;

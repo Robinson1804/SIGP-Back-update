@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString, IsNumber, Min, MaxLength } from 'class-validator';
+import { IsEnum, IsOptional, IsNumber, Min } from 'class-validator';
 import { TareaEstado } from '../enums/tarea.enum';
 
 export class CambiarEstadoTareaDto {
@@ -10,8 +10,5 @@ export class CambiarEstadoTareaDto {
   @Min(0)
   horasReales?: number;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  evidenciaUrl?: string;
+  // evidenciaUrl eliminado - usar endpoint POST /tareas/:id/evidencias
 }

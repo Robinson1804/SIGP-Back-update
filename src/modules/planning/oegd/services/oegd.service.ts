@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Oegd } from '../entities/oegd.entity';
 import { OegdAei } from '../../entities/oegd-aei.entity';
+import { Aei } from '../../aei/entities/aei.entity';
+import { Ogd } from '../../ogd/entities/ogd.entity';
 import { CreateOegdDto } from '../dto/create-oegd.dto';
 import { UpdateOegdDto } from '../dto/update-oegd.dto';
 
@@ -13,27 +15,102 @@ export class OegdService {
     private readonly oegdRepository: Repository<Oegd>,
     @InjectRepository(OegdAei)
     private readonly oegdAeiRepository: Repository<OegdAei>,
+    @InjectRepository(Aei)
+    private readonly aeiRepository: Repository<Aei>,
+    @InjectRepository(Ogd)
+    private readonly ogdRepository: Repository<Ogd>,
   ) {}
 
   /**
-   * Genera el siguiente código OEGD para un OGD dado
-   * Formato: "OEGD N°X"
+   * Valida que todos los AEIs seleccionados pertenezcan al mismo OEI
    */
-  private async generateCodigo(ogdId: number): Promise<string> {
-    const count = await this.oegdRepository.count({ where: { ogdId } });
-    return `OEGD N°${count + 1}`;
+  private async validateAeisSameOei(aeiIds: number[]): Promise<void> {
+    if (!aeiIds || aeiIds.length === 0) return;
+
+    const aeis = await this.aeiRepository.find({
+      where: { id: In(aeiIds) },
+      select: ['id', 'oeiId'],
+    });
+
+    if (aeis.length !== aeiIds.length) {
+      throw new BadRequestException('Algunos AEIs no fueron encontrados');
+    }
+
+    const uniqueOeiIds = [...new Set(aeis.map(aei => aei.oeiId))];
+    if (uniqueOeiIds.length > 1) {
+      throw new BadRequestException(
+        'Todos los AEIs seleccionados deben pertenecer al mismo OEI. No se pueden mezclar AEIs de diferentes OEIs.'
+      );
+    }
+  }
+
+  /**
+   * Genera el siguiente código OEGD para un OGD dado
+   * Formato: "OEGD N°X.Y" (ej: OEGD N°1.1, OEGD N°1.2 para OGD N°1)
+   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   */
+  private async generateCodigo(ogdId: number, ogd: Ogd): Promise<string> {
+    // Extraer el número del código OGD (ej: "1" de "OGD N°1")
+    const ogdNumMatch = ogd.codigo.match(/OGD\s*N°(\d+)/i) || ogd.codigo.match(/OGD-(\d+)/);
+    const ogdNum = ogdNumMatch ? parseInt(ogdNumMatch[1], 10) : ogdId;
+
+    // Buscar el máximo número secuencial para este OGD
+    const oegds = await this.oegdRepository.find({
+      where: { ogdId },
+      select: ['codigo'],
+    });
+
+    let maxSeq = 0;
+    const pattern = new RegExp(`OEGD\\s*N°${ogdNum}\\.(\\d+)`, 'i');
+    for (const oegd of oegds) {
+      const match = oegd.codigo.match(pattern);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+
+    return `OEGD N°${ogdNum}.${maxSeq + 1}`;
+  }
+
+  /**
+   * Obtiene el siguiente código OEGD disponible para un OGD
+   * Este método es público para ser llamado desde el controlador
+   */
+  async getNextCodigo(ogdId: number): Promise<string> {
+    const ogd = await this.ogdRepository.findOne({
+      where: { id: ogdId },
+    });
+    if (!ogd) {
+      throw new NotFoundException(`OGD con ID ${ogdId} no encontrado`);
+    }
+    return this.generateCodigo(ogdId, ogd);
   }
 
   async create(createOegdDto: CreateOegdDto, userId?: number): Promise<Oegd> {
-    // Generar código si no se proporciona
-    const codigo = createOegdDto.codigo || await this.generateCodigo(createOegdDto.ogdId);
+    // Validar que todos los AEIs pertenezcan al mismo OEI
+    if (createOegdDto.aeiIds && createOegdDto.aeiIds.length > 0) {
+      await this.validateAeisSameOei(createOegdDto.aeiIds);
+    }
 
+    // Obtener OGD para generar el código correcto
+    const ogd = await this.ogdRepository.findOne({
+      where: { id: createOegdDto.ogdId },
+    });
+    if (!ogd) {
+      throw new NotFoundException(`OGD con ID ${createOegdDto.ogdId} no encontrado`);
+    }
+
+    // Generar código si no se proporciona
+    const codigo = createOegdDto.codigo || await this.generateCodigo(createOegdDto.ogdId, ogd);
+
+    // Validar que el código sea único DENTRO del mismo OGD (no globalmente)
     const existing = await this.oegdRepository.findOne({
-      where: { codigo },
+      where: { codigo, ogdId: createOegdDto.ogdId },
     });
 
     if (existing) {
-      throw new ConflictException(`Ya existe un OEGD con el código ${codigo}`);
+      throw new ConflictException(`Ya existe un OEGD con el código ${codigo} en este OGD`);
     }
 
     // Extraer aeiIds para manejar la relación M:N
@@ -56,7 +133,7 @@ export class OegdService {
     return this.findOne(savedOegd.id);
   }
 
-  async findAll(ogdId?: number, activo?: boolean): Promise<Oegd[]> {
+  async findAll(ogdId?: number, activo?: boolean, pgdId?: number): Promise<Oegd[]> {
     const queryBuilder = this.oegdRepository
       .createQueryBuilder('oegd')
       .leftJoinAndSelect('oegd.ogd', 'ogd')
@@ -66,6 +143,11 @@ export class OegdService {
 
     if (ogdId) {
       queryBuilder.andWhere('oegd.ogdId = :ogdId', { ogdId });
+    }
+
+    // Filtrar por PGD a través de la cadena: OEGD -> OGD -> PGD
+    if (pgdId) {
+      queryBuilder.andWhere('ogd.pgdId = :pgdId', { pgdId });
     }
 
     if (activo !== undefined) {
@@ -99,12 +181,18 @@ export class OegdService {
   async update(id: number, updateOegdDto: UpdateOegdDto, userId?: number): Promise<Oegd> {
     const oegd = await this.findOne(id);
 
+    // Validar que todos los AEIs pertenezcan al mismo OEI
+    if (updateOegdDto.aeiIds && updateOegdDto.aeiIds.length > 0) {
+      await this.validateAeisSameOei(updateOegdDto.aeiIds);
+    }
+
+    // Validar que el código sea único DENTRO del mismo OGD (no globalmente)
     if (updateOegdDto.codigo && updateOegdDto.codigo !== oegd.codigo) {
       const existing = await this.oegdRepository.findOne({
-        where: { codigo: updateOegdDto.codigo },
+        where: { codigo: updateOegdDto.codigo, ogdId: oegd.ogdId },
       });
       if (existing) {
-        throw new ConflictException(`Ya existe un OEGD con el código ${updateOegdDto.codigo}`);
+        throw new ConflictException(`Ya existe un OEGD con el código ${updateOegdDto.codigo} en este OGD`);
       }
     }
 

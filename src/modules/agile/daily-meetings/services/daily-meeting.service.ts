@@ -12,6 +12,8 @@ import { CreateDailyMeetingDto, CreateParticipanteDto } from '../dto/create-dail
 import { UpdateDailyMeetingDto } from '../dto/update-daily-meeting.dto';
 import { UpdateParticipanteDto } from '../dto/update-participante.dto';
 import { DailyMeetingTipo } from '../enums/daily-meeting.enum';
+import { Impedimento } from '../../impedimentos/entities/impedimento.entity';
+import { ImpedimentoEstado, ImpedimentoPrioridad } from '../../impedimentos/enums/impedimento.enum';
 
 @Injectable()
 export class DailyMeetingService {
@@ -20,6 +22,8 @@ export class DailyMeetingService {
     private readonly dailyMeetingRepository: Repository<DailyMeeting>,
     @InjectRepository(DailyParticipante)
     private readonly participanteRepository: Repository<DailyParticipante>,
+    @InjectRepository(Impedimento)
+    private readonly impedimentoRepository: Repository<Impedimento>,
   ) {}
 
   async create(createDto: CreateDailyMeetingDto, userId?: number): Promise<DailyMeeting> {
@@ -49,10 +53,39 @@ export class DailyMeetingService {
           dailyMeetingId: savedDaily.id,
         }),
       );
-      await this.participanteRepository.save(participantesEntities);
+      const savedParticipantes = await this.participanteRepository.save(participantesEntities);
+
+      // Crear impedimentos en la tabla de impedimentos para los que reportaron
+      for (const participante of savedParticipantes) {
+        if (participante.impedimentos && participante.impedimentos.trim()) {
+          await this.crearImpedimentoDesdeDaily(savedDaily, participante);
+        }
+      }
     }
 
     return this.findOne(savedDaily.id);
+  }
+
+  /**
+   * Crea un registro en la tabla impedimentos cuando se reporta desde un daily meeting
+   */
+  private async crearImpedimentoDesdeDaily(
+    daily: DailyMeeting,
+    participante: DailyParticipante,
+  ): Promise<Impedimento> {
+    const impedimento = this.impedimentoRepository.create({
+      descripcion: participante.impedimentos,
+      proyectoId: daily.proyectoId,
+      sprintId: daily.sprintId,
+      actividadId: daily.actividadId,
+      dailyMeetingId: daily.id,
+      reportadoPorId: participante.usuarioId,
+      prioridad: ImpedimentoPrioridad.MEDIA,
+      estado: ImpedimentoEstado.ABIERTO,
+      fechaReporte: daily.fecha,
+    });
+
+    return this.impedimentoRepository.save(impedimento);
   }
 
   async findAll(filters?: {
@@ -178,15 +211,26 @@ export class DailyMeetingService {
   ): Promise<DailyParticipante> {
     const participante = await this.participanteRepository.findOne({
       where: { id: participanteId },
+      relations: ['dailyMeeting'],
     });
 
     if (!participante) {
       throw new NotFoundException(`Participante con ID ${participanteId} no encontrado`);
     }
 
-    Object.assign(participante, updateDto);
+    const impedimentoAnterior = participante.impedimentos;
+    const nuevoImpedimento = updateDto.impedimentos;
 
-    return this.participanteRepository.save(participante);
+    Object.assign(participante, updateDto);
+    const savedParticipante = await this.participanteRepository.save(participante);
+
+    // Si se agregó o cambió el impedimento, crear en la tabla de impedimentos
+    if (nuevoImpedimento && nuevoImpedimento.trim() && nuevoImpedimento !== impedimentoAnterior) {
+      const daily = participante.dailyMeeting || await this.findOne(participante.dailyMeetingId);
+      await this.crearImpedimentoDesdeDaily(daily, savedParticipante);
+    }
+
+    return savedParticipante;
   }
 
   async removeParticipante(participanteId: number): Promise<void> {
@@ -226,10 +270,11 @@ export class DailyMeetingService {
     };
   }
 
-  async remove(id: number, userId?: number): Promise<DailyMeeting> {
+  async remove(id: number, userId?: number): Promise<void> {
     const daily = await this.findOne(id);
-    daily.activo = false;
-    daily.updatedBy = userId ?? null;
-    return this.dailyMeetingRepository.save(daily);
+
+    // Eliminar definitivamente el registro (hard delete)
+    // Los participantes se eliminan automáticamente por cascade
+    await this.dailyMeetingRepository.remove(daily);
   }
 }

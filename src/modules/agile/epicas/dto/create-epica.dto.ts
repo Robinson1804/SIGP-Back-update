@@ -3,7 +3,6 @@ import {
   IsOptional,
   IsInt,
   IsEnum,
-  IsDateString,
   MaxLength,
   Matches,
 } from 'class-validator';
@@ -34,12 +33,4 @@ export class CreateEpicaDto {
   @IsOptional()
   @IsEnum(EpicaPrioridad)
   prioridad?: EpicaPrioridad;
-
-  @IsOptional()
-  @IsDateString()
-  fechaInicio?: string;
-
-  @IsOptional()
-  @IsDateString()
-  fechaFin?: string;
 }

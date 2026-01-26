@@ -37,6 +37,7 @@ export class AsignacionController {
     @Query('tipoAsignacion') tipoAsignacion?: TipoAsignacion,
     @Query('proyectoId') proyectoId?: string,
     @Query('actividadId') actividadId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('activo') activo?: string,
   ) {
     return this.asignacionService.findAll({
@@ -44,6 +45,7 @@ export class AsignacionController {
       tipoAsignacion,
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
       actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
     });
   }
@@ -95,5 +97,16 @@ export class ActividadAsignacionesController {
   @Get()
   findByActividad(@Param('actividadId', ParseIntPipe) actividadId: number) {
     return this.asignacionService.findByActividad(actividadId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/asignaciones')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoAsignacionesController {
+  constructor(private readonly asignacionService: AsignacionService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.asignacionService.findBySubproyecto(subproyectoId);
   }
 }

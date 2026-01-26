@@ -10,6 +10,7 @@ import {
   Index,
 } from 'typeorm';
 import { ProyectoEstado, Clasificacion } from '../enums/proyecto-estado.enum';
+import { DateOnlyTransformer } from '../../../../common/transformers/date.transformer';
 
 @Entity('proyectos', { schema: 'poi' })
 export class Proyecto {
@@ -116,11 +117,11 @@ export class Proyecto {
   beneficios: string[];
 
   // Fechas
-  @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
-  fechaInicio: Date;
+  @Column({ name: 'fecha_inicio', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaInicio: string | null;
 
-  @Column({ name: 'fecha_fin', type: 'date', nullable: true })
-  fechaFin: Date;
+  @Column({ name: 'fecha_fin', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaFin: string | null;
 
   // Metodología (siempre Scrum para proyectos)
   @Column({ name: 'metodo_gestion', length: 20, default: 'Scrum' })

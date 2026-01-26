@@ -9,6 +9,8 @@ import {
   MaxLength,
   ArrayMinSize,
   ValidateNested,
+  IsNotEmpty,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProyectoEstado, Clasificacion } from '../enums/proyecto-estado.enum';
@@ -23,9 +25,11 @@ export class CostoAnualDto {
 }
 
 export class CreateProyectoDto {
+  // Codigo es autogenerado, no se envía desde el frontend
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)
@@ -111,14 +115,16 @@ export class CreateProyectoDto {
   beneficios?: string[];
 
   @IsOptional()
+  @ValidateIf((o) => o.fechaInicio !== null)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'fechaInicio debe tener formato YYYY-MM-DD',
   })
-  fechaInicio?: string;
+  fechaInicio?: string | null;
 
   @IsOptional()
+  @ValidateIf((o) => o.fechaFin !== null)
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'fechaFin debe tener formato YYYY-MM-DD',
   })
-  fechaFin?: string;
+  fechaFin?: string | null;
 }

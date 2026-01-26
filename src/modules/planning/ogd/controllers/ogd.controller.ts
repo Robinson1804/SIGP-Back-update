@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OgdService } from '../services/ogd.service';
 import { CreateOgdDto } from '../dto/create-ogd.dto';
 import { UpdateOgdDto } from '../dto/update-ogd.dto';
@@ -19,6 +20,8 @@ import { Roles } from '../../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { Role } from '../../../../common/constants/roles.constant';
 
+@ApiTags('OGD - Objetivos de Gobierno Digital')
+@ApiBearerAuth()
 @Controller('ogd')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OgdController {
@@ -26,8 +29,16 @@ export class OgdController {
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Crear un nuevo OGD' })
   create(@Body() createOgdDto: CreateOgdDto, @CurrentUser('id') userId: number) {
     return this.ogdService.create(createOgdDto, userId);
+  }
+
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Obtener el siguiente código OGD disponible para un PGD' })
+  getNextCodigo(@Query('pgdId', ParseIntPipe) pgdId: number) {
+    return this.ogdService.getNextCodigo(pgdId);
   }
 
   @Get()

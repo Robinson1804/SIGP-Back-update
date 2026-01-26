@@ -53,6 +53,15 @@ export class CreateDocumentoDto {
   archivoTamano?: number;
 
   @IsOptional()
+  @IsString()
+  archivoId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tipoArchivo?: string;
+
+  @IsOptional()
   @IsBoolean()
   esObligatorio?: boolean;
 }

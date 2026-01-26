@@ -15,6 +15,8 @@ import { Sprint } from '../../sprints/entities/sprint.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { CriterioAceptacion } from './criterio-aceptacion.entity';
 import { HuDependencia } from './hu-dependencia.entity';
+import { Requerimiento } from '../../../poi/requerimientos/entities/requerimiento.entity';
+import { DateOnlyTransformer } from '../../../../common/transformers/date.transformer';
 
 @Entity({ schema: 'agile', name: 'historias_usuario' })
 export class HistoriaUsuario {
@@ -25,7 +27,7 @@ export class HistoriaUsuario {
   proyectoId: number;
 
   @Column({ name: 'epica_id', nullable: true })
-  epicaId: number;
+  epicaId: number | null;
 
   @Column({ name: 'sprint_id', nullable: true })
   sprintId: number | null;
@@ -37,46 +39,66 @@ export class HistoriaUsuario {
   titulo: string;
 
   @Column({ type: 'text', nullable: true })
-  rol: string;
+  rol: string | null;
 
   @Column({ type: 'text', nullable: true })
-  quiero: string;
+  quiero: string | null;
 
   @Column({ type: 'text', nullable: true })
-  para: string;
+  para: string | null;
 
   @Column({
     type: 'enum',
     enum: HuPrioridad,
-    default: HuPrioridad.SHOULD,
+    nullable: true,
+    default: HuPrioridad.MEDIA,
   })
-  prioridad: HuPrioridad;
+  prioridad: HuPrioridad | null;
 
   @Column({
     type: 'enum',
     enum: HuEstimacion,
     nullable: true,
   })
-  estimacion: HuEstimacion;
+  estimacion: HuEstimacion | null;
 
   @Column({ name: 'story_points', type: 'int', nullable: true })
-  storyPoints: number;
+  storyPoints: number | null;
 
   @Column({
     type: 'enum',
     enum: HuEstado,
-    default: HuEstado.PENDIENTE,
+    default: HuEstado.POR_HACER,
   })
   estado: HuEstado;
 
-  @Column({ name: 'asignado_a', nullable: true })
-  asignadoA: number | null;
+  // Campo asignado_a ahora almacena múltiples IDs como array separado por comas
+  @Column({ name: 'asignado_a', type: 'simple-array', nullable: true })
+  asignadoA: number[];
 
   @Column({ name: 'orden_backlog', type: 'int', nullable: true })
-  ordenBacklog: number;
+  ordenBacklog: number | null;
 
-  @Column({ type: 'text', nullable: true })
-  notas: string;
+  @Column({ name: 'requerimiento_id', nullable: true })
+  requerimientoId: number | null;
+
+  @Column({ name: 'fecha_inicio', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaInicio: string | null;
+
+  @Column({ name: 'fecha_fin', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaFin: string | null;
+
+  @Column({ name: 'imagen_url', type: 'text', nullable: true })
+  imagenUrl: string | null;
+
+  /**
+   * URL del documento PDF generado con las evidencias de todas las tareas.
+   * Se genera automáticamente cuando todas las tareas de la HU tienen
+   * evidencias adjuntas y están en estado "Finalizado".
+   * Al generarse, la HU pasa a estado "En revisión".
+   */
+  @Column({ name: 'documento_evidencias_url', type: 'text', nullable: true })
+  documentoEvidenciasUrl: string | null;
 
   @Column({ default: true })
   activo: boolean;
@@ -106,9 +128,16 @@ export class HistoriaUsuario {
   @JoinColumn({ name: 'sprint_id' })
   sprint: Sprint;
 
+  // Nota: La relación asignado fue removida porque asignado_a ahora es un array de IDs
+  // Para obtener los datos del personal, se debe hacer una consulta separada
+
   @ManyToOne(() => Usuario, { nullable: true })
-  @JoinColumn({ name: 'asignado_a' })
-  asignado: Usuario;
+  @JoinColumn({ name: 'created_by' })
+  creador: Usuario;
+
+  @ManyToOne(() => Requerimiento, { nullable: true })
+  @JoinColumn({ name: 'requerimiento_id' })
+  requerimiento: Requerimiento;
 
   @OneToMany(() => CriterioAceptacion, (criterio) => criterio.historiaUsuario)
   criteriosAceptacion: CriterioAceptacion[];

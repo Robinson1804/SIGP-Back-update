@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Pgd, PgdEstado } from '../entities/pgd.entity';
@@ -32,6 +32,32 @@ export class PgdService {
   async create(createPgdDto: CreatePgdDto, userId?: number): Promise<Pgd> {
     if (createPgdDto.anioFin <= createPgdDto.anioInicio) {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
+    }
+
+    // Validar que el PGD tenga exactamente 4 años
+    if (createPgdDto.anioFin - createPgdDto.anioInicio !== 3) {
+      throw new BadRequestException('El PGD debe tener exactamente 4 años (ejemplo: 2025-2028)');
+    }
+
+    // Validar que no exista solapamiento con otros PGDs
+    // Un PGD no puede contener años que ya estén en otro PGD
+    const overlappingPgd = await this.pgdRepository
+      .createQueryBuilder('pgd')
+      .where(
+        // Detectar cualquier superposición de rangos
+        // Nuevo inicio <= existente fin AND existente inicio <= nuevo fin
+        'pgd.anioInicio <= :anioFin AND pgd.anioFin >= :anioInicio',
+        {
+          anioInicio: createPgdDto.anioInicio,
+          anioFin: createPgdDto.anioFin,
+        },
+      )
+      .getOne();
+
+    if (overlappingPgd) {
+      throw new ConflictException(
+        `El rango ${createPgdDto.anioInicio}-${createPgdDto.anioFin} se superpone con el PGD existente ${overlappingPgd.anioInicio}-${overlappingPgd.anioFin}. Los años de un PGD no pueden estar contenidos en otro PGD.`,
+      );
     }
 
     // Auto-generar nombre y descripción si no se proporcionan
@@ -106,6 +132,30 @@ export class PgdService {
 
     if (anioFin <= anioInicio) {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
+    }
+
+    // Validar que el PGD tenga exactamente 4 años
+    if (anioFin - anioInicio !== 3) {
+      throw new BadRequestException('El PGD debe tener exactamente 4 años (ejemplo: 2025-2028)');
+    }
+
+    // Validar que no exista solapamiento con otros PGDs (excluyendo el actual)
+    if (updatePgdDto.anioInicio !== undefined || updatePgdDto.anioFin !== undefined) {
+      const overlappingPgd = await this.pgdRepository
+        .createQueryBuilder('pgd')
+        .where(
+          // Detectar cualquier superposición de rangos
+          'pgd.anioInicio <= :anioFin AND pgd.anioFin >= :anioInicio',
+          { anioInicio, anioFin },
+        )
+        .andWhere('pgd.id != :id', { id })
+        .getOne();
+
+      if (overlappingPgd) {
+        throw new ConflictException(
+          `El rango ${anioInicio}-${anioFin} se superpone con el PGD existente ${overlappingPgd.anioInicio}-${overlappingPgd.anioFin}. Los años de un PGD no pueden estar contenidos en otro PGD.`,
+        );
+      }
     }
 
     // Si cambian los años, regenerar nombre y descripción

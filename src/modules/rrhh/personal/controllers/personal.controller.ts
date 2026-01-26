@@ -54,6 +54,29 @@ export class PersonalController {
     return Object.values(Modalidad);
   }
 
+  @Get('next-code')
+  getNextCode() {
+    return this.personalService.getNextCode();
+  }
+
+  /**
+   * GET /personal/desarrolladores
+   * Obtener personal con rol DESARROLLADOR (para asignar como responsables en Proyectos)
+   */
+  @Get('desarrolladores')
+  getDesarrolladores() {
+    return this.personalService.findDesarrolladores();
+  }
+
+  /**
+   * GET /personal/implementadores
+   * Obtener personal con rol IMPLEMENTADOR (para asignar como responsables en Actividades)
+   */
+  @Get('implementadores')
+  getImplementadores() {
+    return this.personalService.findImplementadores();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.personalService.findOne(id);

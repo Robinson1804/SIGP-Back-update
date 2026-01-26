@@ -31,18 +31,26 @@ export class ActividadController {
     return this.actividadService.create(createDto, userId);
   }
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  getNextCodigo() {
+    return this.actividadService.getNextCodigo();
+  }
+
   @Get()
   findAll(
     @Query('estado') estado?: ActividadEstado,
     @Query('coordinadorId') coordinadorId?: string,
     @Query('accionEstrategicaId') accionEstrategicaId?: string,
     @Query('activo') activo?: string,
+    @Query('pgdId') pgdId?: string,
   ) {
     return this.actividadService.findAll({
       estado,
       coordinadorId: coordinadorId ? parseInt(coordinadorId, 10) : undefined,
       accionEstrategicaId: accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
+      pgdId: pgdId ? parseInt(pgdId, 10) : undefined,
     });
   }
 

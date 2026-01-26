@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { SprintEstado } from '../enums/sprint.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { DateOnlyTransformer } from '../../../../common/transformers/date.transformer';
 
 @Entity({ schema: 'agile', name: 'sprints' })
 export class Sprint {
@@ -24,11 +25,11 @@ export class Sprint {
   @Column({ name: 'sprint_goal', type: 'text', nullable: true })
   sprintGoal: string;
 
-  @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
-  fechaInicio: Date;
+  @Column({ name: 'fecha_inicio', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaInicio: string | null;
 
-  @Column({ name: 'fecha_fin', type: 'date', nullable: true })
-  fechaFin: Date;
+  @Column({ name: 'fecha_fin', type: 'date', nullable: true, transformer: DateOnlyTransformer })
+  fechaFin: string | null;
 
   @Column({ name: 'capacidad_equipo', type: 'int', nullable: true })
   capacidadEquipo: number;
@@ -36,7 +37,7 @@ export class Sprint {
   @Column({
     type: 'enum',
     enum: SprintEstado,
-    default: SprintEstado.PLANIFICADO,
+    default: SprintEstado.POR_HACER,
   })
   estado: SprintEstado;
 

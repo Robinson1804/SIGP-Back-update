@@ -2,16 +2,13 @@ import {
   HuPrioridad,
   HuEstimacion,
   HuEstado,
-  CriterioEstado,
   TipoDependencia,
 } from '../enums/historia-usuario.enum';
 
 export class CriterioAceptacionResponseDto {
   id: number;
-  given: string;
-  when: string;
-  then: string;
-  estado: CriterioEstado;
+  descripcion: string;
+  completado: boolean;
   orden: number | null;
 }
 
@@ -44,7 +41,6 @@ export class HistoriaUsuarioResponseDto {
   estado: HuEstado;
   asignadoA: number | null;
   ordenBacklog: number | null;
-  notas: string | null;
   activo: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +64,11 @@ export class HistoriaUsuarioDetailResponseDto extends HistoriaUsuarioResponseDto
     estado: string;
   };
   asignado?: {
+    id: number;
+    nombres: string;
+    apellidoPaterno: string;
+  };
+  creador?: {
     id: number;
     nombres: string;
     apellidoPaterno: string;

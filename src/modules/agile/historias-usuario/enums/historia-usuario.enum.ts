@@ -1,8 +1,7 @@
 export enum HuPrioridad {
-  MUST = 'Must',
-  SHOULD = 'Should',
-  COULD = 'Could',
-  WONT = 'Wont',
+  ALTA = 'Alta',
+  MEDIA = 'Media',
+  BAJA = 'Baja',
 }
 
 export enum HuEstimacion {
@@ -15,13 +14,10 @@ export enum HuEstimacion {
 }
 
 export enum HuEstado {
-  PENDIENTE = 'Pendiente',
-  EN_ANALISIS = 'En analisis',
-  LISTA = 'Lista',
-  EN_DESARROLLO = 'En desarrollo',
-  EN_PRUEBAS = 'En pruebas',
+  POR_HACER = 'Por hacer',
+  EN_PROGRESO = 'En progreso',
   EN_REVISION = 'En revision',
-  TERMINADA = 'Terminada',
+  FINALIZADO = 'Finalizado',
 }
 
 export enum CriterioEstado {

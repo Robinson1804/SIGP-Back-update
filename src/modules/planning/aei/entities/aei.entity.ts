@@ -12,6 +12,7 @@ import {
 import { Oei, MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('aei', { schema: 'planning' })
+@Index(['oeiId', 'codigo'], { unique: true }) // Código único dentro del mismo OEI
 export class Aei {
   @PrimaryGeneratedColumn()
   id: number;
@@ -21,7 +22,7 @@ export class Aei {
   oeiId: number;
 
   @Index()
-  @Column({ length: 20, unique: true })
+  @Column({ length: 50 }) // Removido unique: true, ahora es composite con oeiId
   codigo: string;
 
   @Column({ length: 300 })

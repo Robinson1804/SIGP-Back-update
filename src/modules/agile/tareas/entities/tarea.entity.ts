@@ -63,8 +63,17 @@ export class Tarea {
   @Column({ name: 'horas_reales', type: 'decimal', precision: 5, scale: 2, nullable: true })
   horasReales: number;
 
-  @Column({ name: 'evidencia_url', length: 500, nullable: true })
-  evidenciaUrl: string;
+  // Campo evidencia_url eliminado - usar tabla evidencias_tarea en su lugar
+
+  /**
+   * URL del documento PDF generado con las evidencias de todas las subtareas.
+   * Solo aplica para tareas KANBAN.
+   * Se genera automáticamente cuando todas las subtareas de la tarea tienen
+   * evidencias adjuntas y están en estado "Finalizado".
+   * Al generarse, la tarea pasa a estado "En revisión".
+   */
+  @Column({ name: 'documento_evidencias_url', type: 'text', nullable: true })
+  documentoEvidenciasUrl: string | null;
 
   @Column({ default: false })
   validada: boolean;
@@ -125,4 +134,8 @@ export class Tarea {
 
   @OneToMany(() => TareaAsignado, (ta) => ta.tarea)
   asignados: TareaAsignado[];
+
+  @ManyToOne(() => Usuario, { nullable: true })
+  @JoinColumn({ name: 'created_by' })
+  creator: Usuario;
 }

@@ -79,7 +79,7 @@ export class DashboardProyectoService {
 
   private async getSprintActual(proyectoId: number) {
     const sprint = await this.sprintRepository.findOne({
-      where: { proyectoId, estado: SprintEstado.ACTIVO, activo: true },
+      where: { proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
     });
 
     if (!sprint) {
@@ -91,7 +91,7 @@ export class DashboardProyectoService {
       .createQueryBuilder('hu')
       .select('COALESCE(SUM(hu.storyPoints), 0)', 'totalSP')
       .addSelect(
-        "COALESCE(SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.storyPoints ELSE 0 END), 0)",
+        "COALESCE(SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.storyPoints ELSE 0 END), 0)",
         'completadosSP',
       )
       .where('hu.sprintId = :sprintId', { sprintId: sprint.id })
@@ -118,7 +118,7 @@ export class DashboardProyectoService {
 
   async getBurndown(proyectoId: number): Promise<BurndownPointDto[]> {
     const sprint = await this.sprintRepository.findOne({
-      where: { proyectoId, estado: SprintEstado.ACTIVO, activo: true },
+      where: { proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
     });
 
     if (!sprint) {
@@ -135,8 +135,8 @@ export class DashboardProyectoService {
 
     const totalSP = parseInt(stats?.totalSP || '0', 10);
 
-    const fechaInicio = new Date(sprint.fechaInicio);
-    const fechaFin = new Date(sprint.fechaFin);
+    const fechaInicio = sprint.fechaInicio ? new Date(sprint.fechaInicio) : new Date();
+    const fechaFin = sprint.fechaFin ? new Date(sprint.fechaFin) : new Date();
     const hoy = new Date();
     const diasTotales = Math.ceil(
       (fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24),
@@ -159,7 +159,7 @@ export class DashboardProyectoService {
           .createQueryBuilder('hu')
           .select('COALESCE(SUM(hu.storyPoints), 0)', 'sp')
           .where('hu.sprintId = :sprintId', { sprintId: sprint.id })
-          .andWhere("hu.estado = 'Terminada'")
+          .andWhere("hu.estado = 'Finalizado'")
           .andWhere('hu.activo = true')
           .andWhere('hu.updatedAt <= :fecha', { fecha })
           .getRawOne();
@@ -179,7 +179,7 @@ export class DashboardProyectoService {
 
   async getVelocidad(proyectoId: number): Promise<VelocidadSprintDto[]> {
     const sprints = await this.sprintRepository.find({
-      where: { proyectoId, estado: SprintEstado.COMPLETADO, activo: true },
+      where: { proyectoId, estado: SprintEstado.FINALIZADO, activo: true },
       order: { fechaFin: 'ASC' },
       take: 10,
     });
@@ -190,7 +190,7 @@ export class DashboardProyectoService {
       const stats = await this.historiaUsuarioRepository
         .createQueryBuilder('hu')
         .select(
-          "COALESCE(SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.storyPoints ELSE 0 END), 0)",
+          "COALESCE(SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.storyPoints ELSE 0 END), 0)",
           'sp',
         )
         .where('hu.sprintId = :sprintId', { sprintId: sprint.id })
@@ -265,7 +265,7 @@ export class DashboardProyectoService {
     const stats = await this.historiaUsuarioRepository
       .createQueryBuilder('hu')
       .select('COUNT(*)', 'total')
-      .addSelect("SUM(CASE WHEN hu.estado = 'Terminada' THEN 1 ELSE 0 END)", 'completadas')
+      .addSelect("SUM(CASE WHEN hu.estado = 'Finalizado' THEN 1 ELSE 0 END)", 'completadas')
       .where('hu.proyectoId = :proyectoId', { proyectoId })
       .andWhere('hu.activo = true')
       .getRawOne();

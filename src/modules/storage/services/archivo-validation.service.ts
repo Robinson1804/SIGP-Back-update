@@ -24,17 +24,19 @@ export class ArchivoValidationService implements OnModuleInit {
   // Configuración por defecto (fallback)
   private readonly defaultFormatos: Record<ArchivoCategoria, FormatoConfig> = {
     [ArchivoCategoria.DOCUMENTO]: {
-      extensions: ['pdf', 'docx', 'xlsx', 'pptx'],
+      extensions: ['pdf', 'docx', 'xlsx', 'pptx', 'png', 'jpg', 'jpeg'],
       mimeTypes: [
         'application/pdf',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'image/png',
+        'image/jpeg',
       ],
       maxSize: 50 * 1024 * 1024, // 50MB
     },
     [ArchivoCategoria.EVIDENCIA]: {
-      extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'],
+      extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip', 'docx', 'doc'],
       mimeTypes: [
         'image/jpeg',
         'image/png',
@@ -42,6 +44,8 @@ export class ArchivoValidationService implements OnModuleInit {
         'image/webp',
         'application/pdf',
         'application/zip',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/msword',
       ],
       maxSize: 25 * 1024 * 1024, // 25MB
     },

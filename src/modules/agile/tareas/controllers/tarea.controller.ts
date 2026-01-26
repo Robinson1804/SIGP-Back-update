@@ -22,11 +22,16 @@ import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { Role } from '../../../../common/constants/roles.constant';
+import { HistorialCambioService } from '../../common/services/historial-cambio.service';
+import { HistorialEntidadTipo } from '../../common/enums/historial-cambio.enum';
 
 @Controller('tareas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TareaController {
-  constructor(private readonly tareaService: TareaService) {}
+  constructor(
+    private readonly tareaService: TareaService,
+    private readonly historialCambioService: HistorialCambioService,
+  ) {}
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
@@ -61,13 +66,14 @@ export class TareaController {
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR, Role.IMPLEMENTADOR)
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateTareaDto,
     @CurrentUser('id') userId: number,
+    @CurrentUser('role') userRole: string,
   ) {
-    return this.tareaService.update(id, updateDto, userId);
+    return this.tareaService.update(id, updateDto, userId, userRole);
   }
 
   @Patch(':id/estado')
@@ -102,8 +108,12 @@ export class TareaController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.tareaService.remove(id, userId);
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId: number,
+    @CurrentUser('role') userRole: string,
+  ) {
+    return this.tareaService.remove(id, userId, userRole);
   }
 
   // ================================================================
@@ -133,6 +143,18 @@ export class TareaController {
     @CurrentUser('id') userId: number,
   ) {
     return this.tareaService.eliminarEvidencia(id, evidenciaId, userId);
+  }
+
+  // ================================================================
+  // Endpoint de Historial
+  // ================================================================
+
+  @Get(':id/historial')
+  obtenerHistorial(@Param('id', ParseIntPipe) id: number) {
+    return this.historialCambioService.findByEntidad(
+      HistorialEntidadTipo.TAREA,
+      id,
+    );
   }
 }
 

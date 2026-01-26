@@ -7,16 +7,20 @@ import {
   IsEnum,
   IsBoolean,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
-import { TareaPrioridad } from '../enums/cronograma.enum';
+import { Type } from 'class-transformer';
+import { TareaPrioridad, AsignadoA } from '../enums/cronograma.enum';
 
 export class CreateTareaCronogramaDto {
+  @Type(() => Number)
   @IsInt()
   cronogramaId: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)
@@ -37,14 +41,17 @@ export class CreateTareaCronogramaDto {
   prioridad?: TareaPrioridad;
 
   @IsOptional()
-  @IsInt()
-  responsableId?: number;
+  @IsEnum(AsignadoA)
+  asignadoA?: AsignadoA;
 
   @IsOptional()
+  @ValidateIf((o) => o.tareaPadreId !== null)
+  @Type(() => Number)
   @IsInt()
-  tareaPadreId?: number;
+  tareaPadreId?: number | null;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   orden?: number;
 

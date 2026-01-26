@@ -7,6 +7,7 @@ import { Usuario } from './entities/usuario.entity';
 import { Sesion } from './entities/sesion.entity';
 import { AuditoriaLog } from './entities/auditoria-log.entity';
 import { Configuracion } from './entities/configuracion.entity';
+import { Personal } from '../rrhh/personal/entities/personal.entity';
 import { AuthService } from './services/auth.service';
 import { UsuariosService } from './services/usuarios.service';
 import { AuthController } from './controllers/auth.controller';
@@ -16,7 +17,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Usuario, Sesion, AuditoriaLog, Configuracion]),
+    TypeOrmModule.forFeature([Usuario, Sesion, AuditoriaLog, Configuracion, Personal]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

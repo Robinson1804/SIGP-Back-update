@@ -13,6 +13,7 @@ import { Pgd } from '../../pgd/entities/pgd.entity';
 import { MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('ogd', { schema: 'planning' })
+@Index(['pgdId', 'codigo'], { unique: true }) // Código único dentro del mismo PGD
 export class Ogd {
   @PrimaryGeneratedColumn()
   id: number;
@@ -22,7 +23,7 @@ export class Ogd {
   pgdId: number;
 
   @Index()
-  @Column({ length: 20, unique: true })
+  @Column({ length: 50 }) // Removido unique: true, ahora es composite con pgdId
   codigo: string;
 
   @Column({ length: 300 })

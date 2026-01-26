@@ -3,12 +3,15 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  ManyToMany,
   OneToMany,
   JoinColumn,
+  JoinTable,
   CreateDateColumn,
   UpdateDateColumn,
   Index,
 } from 'typeorm';
+import { Personal } from '../../personal/entities/personal.entity';
 
 @Entity({ schema: 'rrhh', name: 'divisiones' })
 export class Division {
@@ -43,6 +46,25 @@ export class Division {
   @ManyToOne('Personal', { nullable: true })
   @JoinColumn({ name: 'jefe_id' })
   jefe: any;
+
+  // Coordinador de la división (referencia a Personal)
+  @Index()
+  @Column({ name: 'coordinador_id', nullable: true })
+  coordinadorId: number;
+
+  @ManyToOne(() => Personal, { nullable: true })
+  @JoinColumn({ name: 'coordinador_id' })
+  coordinador: Personal;
+
+  // Scrum Masters asignados (Many-to-Many con Personal)
+  @ManyToMany(() => Personal)
+  @JoinTable({
+    name: 'division_scrum_masters',
+    schema: 'rrhh',
+    joinColumn: { name: 'division_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'personal_id', referencedColumnName: 'id' },
+  })
+  scrumMasters: Personal[];
 
   // Relación inversa con Personal
   @OneToMany('Personal', 'division')

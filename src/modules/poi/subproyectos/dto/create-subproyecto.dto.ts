@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsDateString,
   MaxLength,
+  IsArray,
 } from 'class-validator';
 
 export class CreateSubproyectoDto {
@@ -26,6 +27,18 @@ export class CreateSubproyectoDto {
   @IsOptional()
   @IsNumber()
   monto?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  anios?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  areasFinancieras?: string[];
+
+  // responsables se manejan via tabla rrhh.asignaciones (tipoAsignacion='Subproyecto')
 
   @IsOptional()
   @IsInt()

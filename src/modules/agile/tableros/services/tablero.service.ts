@@ -21,13 +21,9 @@ import {
 @Injectable()
 export class TableroService {
   private readonly columnasScrum: { estado: HuEstado; nombre: string }[] = [
-    { estado: HuEstado.PENDIENTE, nombre: 'Pendiente' },
-    { estado: HuEstado.EN_ANALISIS, nombre: 'En Análisis' },
-    { estado: HuEstado.LISTA, nombre: 'Lista' },
-    { estado: HuEstado.EN_DESARROLLO, nombre: 'En Desarrollo' },
-    { estado: HuEstado.EN_PRUEBAS, nombre: 'En Pruebas' },
-    { estado: HuEstado.EN_REVISION, nombre: 'En Revisión' },
-    { estado: HuEstado.TERMINADA, nombre: 'Terminada' },
+    { estado: HuEstado.POR_HACER, nombre: 'Por hacer' },
+    { estado: HuEstado.EN_PROGRESO, nombre: 'En progreso' },
+    { estado: HuEstado.FINALIZADO, nombre: 'Finalizado' },
   ];
 
   private readonly columnasKanban: { estado: TareaEstado; nombre: string }[] = [
@@ -101,13 +97,8 @@ export class TableroService {
           estimacion: h.estimacion,
           storyPoints: h.storyPoints,
           estado: h.estado,
-          asignadoA: h.asignadoA,
-          asignado: h.asignado
-            ? {
-                id: h.asignado.id,
-                nombre: h.asignado.nombre,
-              }
-            : undefined,
+          // asignadoA ahora es un array de IDs de responsables
+          asignadoA: h.asignadoA || [],
           tareas: tareasHistoria.map((t) => ({
             id: t.id,
             codigo: t.codigo,
@@ -124,7 +115,7 @@ export class TableroService {
               : undefined,
             horasEstimadas: t.horasEstimadas,
             horasReales: t.horasReales,
-            evidenciaUrl: t.evidenciaUrl,
+            // evidenciaUrl eliminado - usar endpoint GET /tareas/:id/evidencias
             validada: t.validada,
           })),
           tareasCompletadas,
@@ -151,14 +142,14 @@ export class TableroService {
     // Calculate statistics
     const totalHistorias = historias.length;
     const historiasCompletadas = historias.filter(
-      (h) => h.estado === HuEstado.TERMINADA,
+      (h) => h.estado === HuEstado.FINALIZADO,
     ).length;
     const totalStoryPoints = historias.reduce(
       (sum, h) => sum + (h.storyPoints || 0),
       0,
     );
     const storyPointsCompletados = historias
-      .filter((h) => h.estado === HuEstado.TERMINADA)
+      .filter((h) => h.estado === HuEstado.FINALIZADO)
       .reduce((sum, h) => sum + (h.storyPoints || 0), 0);
 
     return {
@@ -236,7 +227,7 @@ export class TableroService {
             : undefined,
           horasEstimadas: t.horasEstimadas,
           horasReales: t.horasReales,
-          evidenciaUrl: t.evidenciaUrl,
+          // evidenciaUrl eliminado - usar endpoint GET /tareas/:id/evidencias
           subtareas: subtareasTarea.map((st) => ({
             id: st.id,
             codigo: st.codigo,

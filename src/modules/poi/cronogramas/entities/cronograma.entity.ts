@@ -46,6 +46,22 @@ export class Cronograma {
   })
   estado: CronogramaEstado;
 
+  // Campos para aprobación dual (PMO + PATROCINADOR)
+  @Column({ name: 'aprobado_por_pmo', default: false })
+  aprobadoPorPmo: boolean;
+
+  @Column({ name: 'aprobado_por_patrocinador', default: false })
+  aprobadoPorPatrocinador: boolean;
+
+  @Column({ name: 'fecha_aprobacion_pmo', type: 'timestamp', nullable: true })
+  fechaAprobacionPmo: Date | null;
+
+  @Column({ name: 'fecha_aprobacion_patrocinador', type: 'timestamp', nullable: true })
+  fechaAprobacionPatrocinador: Date | null;
+
+  @Column({ name: 'comentario_rechazo', type: 'text', nullable: true })
+  comentarioRechazo: string | null;
+
   @Column({ default: true })
   activo: boolean;
 

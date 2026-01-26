@@ -6,7 +6,7 @@ export enum ActaTipo {
 
 export enum ActaEstado {
   BORRADOR = 'Borrador',
-  PENDIENTE = 'Pendiente',
+  EN_REVISION = 'En revisión',
   APROBADO = 'Aprobado',
   RECHAZADO = 'Rechazado',
 }

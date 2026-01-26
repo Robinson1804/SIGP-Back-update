@@ -75,10 +75,17 @@ export class EpicaService {
   }
 
   async findByProyecto(proyectoId: number): Promise<Epica[]> {
-    return this.epicaRepository.find({
+    const epicas = await this.epicaRepository.find({
       where: { proyectoId, activo: true },
+      relations: ['historiasUsuario'],
       order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
     });
+
+    // Filtrar solo las HUs activas en cada épica
+    return epicas.map((epica) => ({
+      ...epica,
+      historiasUsuario: epica.historiasUsuario?.filter((hu) => hu.activo) || [],
+    }));
   }
 
   async reordenarEpicas(
@@ -135,6 +142,45 @@ export class EpicaService {
     return this.epicaRepository.save(epica);
   }
 
+  /**
+   * Recalcula y actualiza el estado de una épica basándose en sus HUs.
+   * - Si no tiene HUs o todas están "Por hacer": "Por hacer"
+   * - Si al menos una HU está "En progreso": "En progreso"
+   * - Si todas las HUs están "Finalizado": "Finalizado"
+   */
+  async recalcularEstado(epicaId: number, userId?: number): Promise<Epica | null> {
+    const epica = await this.epicaRepository.findOne({
+      where: { id: epicaId, activo: true },
+      relations: ['historiasUsuario'],
+    });
+
+    if (!epica) return null;
+
+    const husActivas = epica.historiasUsuario?.filter((hu) => hu.activo) || [];
+
+    let nuevoEstado = 'Por hacer';
+
+    if (husActivas.length > 0) {
+      const todasFinalizadas = husActivas.every((hu) => hu.estado === 'Finalizado');
+      const algunaEnProgreso = husActivas.some((hu) => hu.estado === 'En progreso');
+
+      if (todasFinalizadas) {
+        nuevoEstado = 'Finalizado';
+      } else if (algunaEnProgreso) {
+        nuevoEstado = 'En progreso';
+      }
+    }
+
+    // Solo actualizar si el estado cambió
+    if (epica.estado !== nuevoEstado) {
+      epica.estado = nuevoEstado;
+      epica.updatedBy = userId;
+      return this.epicaRepository.save(epica);
+    }
+
+    return epica;
+  }
+
   async getEstadisticas(id: number): Promise<EpicaEstadisticasResponseDto> {
     const epica = await this.findOne(id);
 
@@ -142,18 +188,18 @@ export class EpicaService {
     const stats = await this.epicaRepository.manager
       .createQueryBuilder()
       .select('COUNT(*)', 'totalHUs')
-      .addSelect("SUM(CASE WHEN hu.estado = 'Terminada' THEN 1 ELSE 0 END)", 'husCompletadas')
+      .addSelect("SUM(CASE WHEN hu.estado = 'Finalizado' THEN 1 ELSE 0 END)", 'husCompletadas')
       .addSelect(
-        "SUM(CASE WHEN hu.estado IN ('En desarrollo', 'En pruebas', 'En revision') THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN hu.estado = 'En progreso' THEN 1 ELSE 0 END)",
         'husEnProgreso',
       )
       .addSelect(
-        "SUM(CASE WHEN hu.estado IN ('Pendiente', 'En analisis', 'Lista') THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN hu.estado = 'Por hacer' THEN 1 ELSE 0 END)",
         'husPendientes',
       )
       .addSelect('COALESCE(SUM(hu.story_points), 0)', 'totalStoryPoints')
       .addSelect(
-        "COALESCE(SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.story_points ELSE 0 END), 0)",
+        "COALESCE(SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.story_points ELSE 0 END), 0)",
         'storyPointsCompletados',
       )
       .from('agile.historias_usuario', 'hu')

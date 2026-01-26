@@ -10,6 +10,7 @@ import {
   ValidateNested,
   ValidateIf,
   IsUrl,
+  IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DailyMeetingTipo } from '../enums/daily-meeting.enum';
@@ -18,6 +19,10 @@ export class CreateParticipanteDto {
   @IsInt()
   @IsNotEmpty()
   usuarioId: number;
+
+  @IsBoolean()
+  @IsOptional()
+  asistio?: boolean;
 
   @IsString()
   @IsOptional()

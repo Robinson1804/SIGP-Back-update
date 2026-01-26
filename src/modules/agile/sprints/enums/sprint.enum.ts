@@ -1,5 +1,5 @@
 export enum SprintEstado {
-  PLANIFICADO = 'Planificado',
-  ACTIVO = 'Activo',
-  COMPLETADO = 'Completado',
+  POR_HACER = 'Por hacer',
+  EN_PROGRESO = 'En progreso',
+  FINALIZADO = 'Finalizado',
 }

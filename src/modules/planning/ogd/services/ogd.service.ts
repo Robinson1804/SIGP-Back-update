@@ -17,23 +17,73 @@ export class OgdService {
 
   /**
    * Genera el siguiente código OGD para un PGD dado
-   * Formato: "OGD N°X"
+   * Formato: "OGD N°X" (ej: OGD N°1, OGD N°2)
+   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
    */
   private async generateCodigo(pgdId: number): Promise<string> {
-    const count = await this.ogdRepository.count({ where: { pgdId } });
-    return `OGD N°${count + 1}`;
+    const ogds = await this.ogdRepository.find({
+      where: { pgdId },
+      select: ['codigo'],
+    });
+
+    let maxNum = 0;
+    for (const ogd of ogds) {
+      const match = ogd.codigo.match(/OGD\s*N°(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+
+    return `OGD N°${maxNum + 1}`;
+  }
+
+  /**
+   * Obtiene el siguiente código OGD disponible para un PGD
+   * Este método es público para ser llamado desde el controlador
+   */
+  async getNextCodigo(pgdId: number): Promise<string> {
+    return this.generateCodigo(pgdId);
+  }
+
+  /**
+   * Genera el código del indicador automáticamente
+   * Formato: "IND-OGD-X" (ej: IND-OGD-1, IND-OGD-2)
+   */
+  private async generateIndicadorCodigo(pgdId: number): Promise<string> {
+    const ogds = await this.ogdRepository.find({
+      where: { pgdId },
+      select: ['indicadorCodigo'],
+    });
+
+    let maxNum = 0;
+    for (const ogd of ogds) {
+      if (ogd.indicadorCodigo) {
+        const match = ogd.indicadorCodigo.match(/IND-OGD-(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    }
+
+    return `IND-OGD-${maxNum + 1}`;
   }
 
   async create(createOgdDto: CreateOgdDto, userId?: number): Promise<Ogd> {
     // Generar código si no se proporciona
     const codigo = createOgdDto.codigo || await this.generateCodigo(createOgdDto.pgdId);
 
+    // Generar código del indicador si no se proporciona
+    const indicadorCodigo = createOgdDto.indicadorCodigo || await this.generateIndicadorCodigo(createOgdDto.pgdId);
+
+    // Validar que el código sea único DENTRO del mismo PGD (no globalmente)
     const existing = await this.ogdRepository.findOne({
-      where: { codigo },
+      where: { codigo, pgdId: createOgdDto.pgdId },
     });
 
     if (existing) {
-      throw new ConflictException(`Ya existe un OGD con el código ${codigo}`);
+      throw new ConflictException(`Ya existe un OGD con el código ${codigo} en este PGD`);
     }
 
     // Extraer oeiIds para manejar la relación M:N
@@ -42,6 +92,7 @@ export class OgdService {
     const ogd = this.ogdRepository.create({
       ...ogdData,
       codigo,
+      indicadorCodigo,
       createdBy: userId,
       updatedBy: userId,
     });
@@ -99,12 +150,13 @@ export class OgdService {
   async update(id: number, updateOgdDto: UpdateOgdDto, userId?: number): Promise<Ogd> {
     const ogd = await this.findOne(id);
 
+    // Validar que el código sea único DENTRO del mismo PGD (no globalmente)
     if (updateOgdDto.codigo && updateOgdDto.codigo !== ogd.codigo) {
       const existing = await this.ogdRepository.findOne({
-        where: { codigo: updateOgdDto.codigo },
+        where: { codigo: updateOgdDto.codigo, pgdId: ogd.pgdId },
       });
       if (existing) {
-        throw new ConflictException(`Ya existe un OGD con el código ${updateOgdDto.codigo}`);
+        throw new ConflictException(`Ya existe un OGD con el código ${updateOgdDto.codigo} en este PGD`);
       }
     }
 

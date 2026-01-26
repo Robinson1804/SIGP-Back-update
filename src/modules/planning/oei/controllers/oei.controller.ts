@@ -30,6 +30,12 @@ export class OeiController {
     return this.oeiService.create(createOeiDto, userId);
   }
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO)
+  getNextCodigo(@Query('pgdId', ParseIntPipe) pgdId: number) {
+    return this.oeiService.getNextCodigo(pgdId);
+  }
+
   @Get()
   findAll(
     @Query('pgdId') pgdId?: string,

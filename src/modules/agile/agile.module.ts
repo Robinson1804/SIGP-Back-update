@@ -1,6 +1,11 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificacionesModule } from '../notificaciones';
+import { StorageModule } from '../storage/storage.module';
+import { Personal } from '../rrhh/personal/entities/personal.entity';
+import { Proyecto } from '../poi/proyectos/entities/proyecto.entity';
+import { Archivo } from '../storage/entities/archivo.entity';
+import { Usuario } from '../auth/entities/usuario.entity';
 
 // Epicas
 import { Epica } from './epicas/entities/epica.entity';
@@ -19,6 +24,7 @@ import { HuDependencia } from './historias-usuario/entities/hu-dependencia.entit
 import { HuRequerimiento } from './historias-usuario/entities/hu-requerimiento.entity';
 import { HistoriaUsuarioService } from './historias-usuario/services/historia-usuario.service';
 import { CriterioAceptacionService } from './historias-usuario/services/criterio-aceptacion.service';
+import { HuEvidenciaPdfService } from './historias-usuario/services/hu-evidencia-pdf.service';
 import {
   HistoriaUsuarioController,
   ProyectoHistoriasUsuarioController,
@@ -41,6 +47,7 @@ import {
 
 // Subtareas
 import { Subtarea } from './subtareas/entities/subtarea.entity';
+import { EvidenciaSubtarea } from './subtareas/entities/evidencia-subtarea.entity';
 import { SubtareaService } from './subtareas/services/subtarea.service';
 import { SubtareaController, TareaSubtareasController } from './subtareas/controllers/subtarea.controller';
 
@@ -54,6 +61,11 @@ import {
   ActividadDailyMeetingsController,
   SprintDailyMeetingsController,
 } from './daily-meetings/controllers/daily-meeting.controller';
+
+// Impedimentos
+import { Impedimento } from './impedimentos/entities/impedimento.entity';
+import { ImpedimentoService } from './impedimentos/services/impedimento.service';
+import { ImpedimentoController } from './impedimentos/controllers/impedimento.controller';
 
 // Tableros
 import { TableroService } from './tableros/services/tablero.service';
@@ -86,6 +98,7 @@ import {
 @Module({
   imports: [
     forwardRef(() => NotificacionesModule),
+    forwardRef(() => StorageModule),
     TypeOrmModule.forFeature([
       // Epicas
       Epica,
@@ -102,12 +115,23 @@ import {
       EvidenciaTarea,
       // Subtareas
       Subtarea,
+      EvidenciaSubtarea,
       // Daily Meetings
       DailyMeeting,
       DailyParticipante,
+      // Impedimentos
+      Impedimento,
       // Common (transversal)
       Comentario,
       HistorialCambio,
+      // RRHH (para relación asignado en HU)
+      Personal,
+      // POI (para relación proyecto)
+      Proyecto,
+      // Storage (para obtener archivos de evidencias)
+      Archivo,
+      // Auth (para obtener nombres de usuarios en historial)
+      Usuario,
     ]),
   ],
   controllers: [
@@ -137,6 +161,8 @@ import {
     ProyectoDailyMeetingsController,
     ActividadDailyMeetingsController,
     SprintDailyMeetingsController,
+    // Impedimentos
+    ImpedimentoController,
     // Tableros
     SprintTableroController,
     ActividadTableroController,
@@ -162,12 +188,15 @@ import {
     // Historias de Usuario
     HistoriaUsuarioService,
     CriterioAceptacionService,
+    HuEvidenciaPdfService,
     // Tareas
     TareaService,
     // Subtareas
     SubtareaService,
     // Daily Meetings
     DailyMeetingService,
+    // Impedimentos
+    ImpedimentoService,
     // Tableros
     TableroService,
     // Comentarios
@@ -180,9 +209,11 @@ import {
     SprintService,
     HistoriaUsuarioService,
     CriterioAceptacionService,
+    HuEvidenciaPdfService,
     TareaService,
     SubtareaService,
     DailyMeetingService,
+    ImpedimentoService,
     TableroService,
     ComentarioService,
     HistorialCambioService,

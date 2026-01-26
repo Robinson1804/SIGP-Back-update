@@ -3,8 +3,8 @@ export class ProyectoInfoDto {
   codigo: string;
   nombre: string;
   estado: string;
-  fechaInicio: Date;
-  fechaFin: Date;
+  fechaInicio: string | null;
+  fechaFin: string | null;
   progreso: number;
   salud: 'verde' | 'amarillo' | 'rojo';
 }
@@ -12,8 +12,8 @@ export class ProyectoInfoDto {
 export class SprintActualDto {
   id: number;
   nombre: string;
-  fechaInicio: Date;
-  fechaFin: Date;
+  fechaInicio: string | null;
+  fechaFin: string | null;
   progreso: number;
   puntosComprometidos: number;
   puntosCompletados: number;

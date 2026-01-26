@@ -7,9 +7,8 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { TareaEstado, TareaPrioridad } from '../enums/cronograma.enum';
+import { TareaEstado, TareaPrioridad, AsignadoA } from '../enums/cronograma.enum';
 import { Cronograma } from './cronograma.entity';
-import { Usuario } from '../../../auth/entities/usuario.entity';
 
 @Entity({ schema: 'poi', name: 'tareas_cronograma' })
 export class TareaCronograma {
@@ -43,7 +42,7 @@ export class TareaCronograma {
   @Column({
     type: 'enum',
     enum: TareaEstado,
-    default: TareaEstado.PENDIENTE,
+    default: TareaEstado.POR_HACER,
   })
   estado: TareaEstado;
 
@@ -57,11 +56,16 @@ export class TareaCronograma {
   @Column({ name: 'porcentaje_avance', type: 'decimal', precision: 5, scale: 2, default: 0 })
   porcentajeAvance: number;
 
-  @Column({ name: 'responsable_id', nullable: true })
-  responsableId: number;
+  @Column({
+    name: 'asignado_a',
+    type: 'enum',
+    enum: AsignadoA,
+    nullable: true,
+  })
+  asignadoA: AsignadoA;
 
   @Column({ name: 'tarea_padre_id', nullable: true })
-  tareaPadreId: number;
+  tareaPadreId: number | null;
 
   @Column({ type: 'int', nullable: true })
   orden: number;
@@ -100,10 +104,6 @@ export class TareaCronograma {
   @ManyToOne(() => Cronograma, (cronograma) => cronograma.tareas, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'cronograma_id' })
   cronograma: Cronograma;
-
-  @ManyToOne(() => Usuario)
-  @JoinColumn({ name: 'responsable_id' })
-  responsable: Usuario;
 
   @ManyToOne(() => TareaCronograma)
   @JoinColumn({ name: 'tarea_padre_id' })

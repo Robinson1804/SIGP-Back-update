@@ -174,19 +174,19 @@ export class DashboardGerencialService {
     });
 
     const activos = sprints.filter(
-      (s) => s.estado === SprintEstado.ACTIVO,
+      (s) => s.estado === SprintEstado.EN_PROGRESO,
     ).length;
     const planificados = sprints.filter(
-      (s) => s.estado === SprintEstado.PLANIFICADO,
+      (s) => s.estado === SprintEstado.POR_HACER,
     ).length;
     const completados = sprints.filter(
-      (s) => s.estado === SprintEstado.COMPLETADO,
+      (s) => s.estado === SprintEstado.FINALIZADO,
     ).length;
 
     // Comparar con sprints activos el mes anterior (simplificado)
     const activosAnterior = sprints.filter(
       (s) =>
-        s.estado === SprintEstado.ACTIVO &&
+        s.estado === SprintEstado.EN_PROGRESO &&
         new Date(s.createdAt) <= finMesAnterior,
     ).length;
 
@@ -290,7 +290,7 @@ export class DashboardGerencialService {
         where: {
           proyectoId: proyecto.id,
           activo: true,
-          estado: SprintEstado.ACTIVO,
+          estado: SprintEstado.EN_PROGRESO,
         },
         select: ['id', 'nombre'],
       });
@@ -300,7 +300,7 @@ export class DashboardGerencialService {
         .createQueryBuilder('hu')
         .select('SUM(hu.storyPoints)', 'total')
         .addSelect(
-          "SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.storyPoints ELSE 0 END)",
+          "SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.storyPoints ELSE 0 END)",
           'completados',
         )
         .innerJoin('hu.sprint', 'sprint')
@@ -325,7 +325,7 @@ export class DashboardGerencialService {
           select: ['fechaFin'],
         });
         if (sprint?.fechaFin) {
-          proximaFecha = sprint.fechaFin.toISOString().split('T')[0];
+          proximaFecha = sprint.fechaFin;
         }
       }
 
@@ -505,7 +505,7 @@ export class DashboardGerencialService {
         .createQueryBuilder('hu')
         .select('SUM(hu.storyPoints)', 'total')
         .addSelect(
-          "SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.storyPoints ELSE 0 END)",
+          "SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.storyPoints ELSE 0 END)",
           'completados',
         )
         .where('hu.sprintId = :sprintId', { sprintId: sprint.id })
@@ -524,9 +524,9 @@ export class DashboardGerencialService {
         proyectoId: sprint.proyectoId,
         proyectoNombre: sprint.proyecto?.nombre || '',
         proyectoCodigo: sprint.proyecto?.codigo || `PRY-${sprint.proyectoId}`,
-        fechaInicio: sprint.fechaInicio.toISOString().split('T')[0],
-        fechaFin: sprint.fechaFin.toISOString().split('T')[0],
-        estado: sprint.estado as 'Planificado' | 'Activo' | 'Completado',
+        fechaInicio: sprint.fechaInicio || '',
+        fechaFin: sprint.fechaFin || '',
+        estado: sprint.estado as 'Por hacer' | 'En progreso' | 'Finalizado',
         progreso,
         storyPointsCompletados,
         storyPointsTotal,
@@ -655,7 +655,7 @@ export class DashboardGerencialService {
         .getMany();
 
       for (const hu of husRecientes) {
-        const esCompletada = hu.estado === 'Terminada';
+        const esCompletada = hu.estado === 'Finalizado';
         eventos.push({
           id: hu.id + 100000, // Offset to avoid ID collision
           tipo: esCompletada ? 'hu_completada' : 'hu_movida',
@@ -680,7 +680,7 @@ export class DashboardGerencialService {
     });
 
     for (const sprint of sprintsRecientes) {
-      if (sprint.estado === SprintEstado.ACTIVO) {
+      if (sprint.estado === SprintEstado.EN_PROGRESO) {
         eventos.push({
           id: sprint.id + 200000,
           tipo: 'sprint_iniciado',
@@ -692,7 +692,7 @@ export class DashboardGerencialService {
           entidadTipo: 'Sprint',
           entidadId: sprint.id,
         });
-      } else if (sprint.estado === SprintEstado.COMPLETADO) {
+      } else if (sprint.estado === SprintEstado.FINALIZADO) {
         eventos.push({
           id: sprint.id + 300000,
           tipo: 'sprint_completado',
@@ -708,7 +708,11 @@ export class DashboardGerencialService {
     }
 
     // Ordenar por timestamp descendente y limitar
-    eventos.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    eventos.sort((a, b) => {
+      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return timeB - timeA;
+    });
     const eventosLimitados = eventos.slice(0, limit);
 
     return {
@@ -781,7 +785,7 @@ export class DashboardGerencialService {
           .createQueryBuilder('hu')
           .select('SUM(hu.storyPoints)', 'total')
           .addSelect(
-            "SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.storyPoints ELSE 0 END)",
+            "SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.storyPoints ELSE 0 END)",
             'completados',
           )
           .innerJoin('hu.tareas', 't')

@@ -16,6 +16,7 @@ import { AdminUserSeed } from './01-admin-user.seed';
 import { ConfiguracionesSeed } from './02-configuraciones.seed';
 import { DivisionesSeed } from './03-divisiones.seed';
 import { TestUsersSeed } from './04-test-users.seed';
+import { OTINDivisionesStaffSeed } from './05-otin-divisiones-staff.seed';
 
 // Register seeders (order matters!)
 const seeders: Seeder[] = [
@@ -23,6 +24,7 @@ const seeders: Seeder[] = [
   new ConfiguracionesSeed(),
   new DivisionesSeed(),
   new TestUsersSeed(),
+  new OTINDivisionesStaffSeed(),
 ].sort((a, b) => a.order - b.order);
 
 async function runSeeders(): Promise<void> {

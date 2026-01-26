@@ -10,9 +10,9 @@ import {
   Index,
 } from 'typeorm';
 import { Ogd } from '../../ogd/entities/ogd.entity';
-import { MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('oegd', { schema: 'planning' })
+@Index(['ogdId', 'codigo'], { unique: true }) // Código único dentro del mismo OGD
 export class Oegd {
   @PrimaryGeneratedColumn()
   id: number;
@@ -22,7 +22,7 @@ export class Oegd {
   ogdId: number;
 
   @Index()
-  @Column({ length: 20, unique: true })
+  @Column({ length: 50 }) // Removido unique: true, ahora es composite con ogdId
   codigo: string;
 
   @Column({ length: 300 })
@@ -30,24 +30,6 @@ export class Oegd {
 
   @Column({ type: 'text', nullable: true })
   descripcion: string;
-
-  @Column({ name: 'indicador_codigo', length: 50, nullable: true })
-  indicadorCodigo: string;
-
-  @Column({ name: 'indicador_nombre', length: 500, nullable: true })
-  indicadorNombre: string;
-
-  @Column({ name: 'unidad_medida', length: 50, nullable: true })
-  unidadMedida: string;
-
-  @Column({ name: 'linea_base_anio', type: 'int', nullable: true })
-  lineaBaseAnio: number;
-
-  @Column({ name: 'linea_base_valor', type: 'decimal', precision: 15, scale: 2, nullable: true })
-  lineaBaseValor: number;
-
-  @Column({ name: 'metas_anuales', type: 'jsonb', nullable: true })
-  metasAnuales: MetaAnual[];
 
   @Index()
   @Column({ default: true })

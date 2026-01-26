@@ -6,7 +6,6 @@ import {
   IsEnum,
   MaxLength,
   IsDateString,
-  IsUrl,
 } from 'class-validator';
 import { TareaEstado, TareaPrioridad } from '../../tareas/enums/tarea.enum';
 
@@ -45,11 +44,6 @@ export class UpdateSubtareaDto {
   @IsOptional()
   horasReales?: number;
 
-  @IsUrl()
-  @IsOptional()
-  @MaxLength(500)
-  evidenciaUrl?: string;
-
   @IsDateString()
   @IsOptional()
   fechaInicio?: string;
@@ -57,4 +51,8 @@ export class UpdateSubtareaDto {
   @IsDateString()
   @IsOptional()
   fechaFin?: string;
+
+  @IsString()
+  @IsOptional()
+  evidenciaUrl?: string;
 }

@@ -1,5 +1,4 @@
-import { IsString, IsInt, IsOptional, IsNotEmpty, IsEnum } from 'class-validator';
-import { CriterioEstado } from '../enums/historia-usuario.enum';
+import { IsString, IsInt, IsOptional, IsNotEmpty, IsBoolean } from 'class-validator';
 
 export class CreateCriterioAceptacionDto {
   @IsInt()
@@ -8,19 +7,11 @@ export class CreateCriterioAceptacionDto {
 
   @IsString()
   @IsNotEmpty()
-  given: string;
-
-  @IsString()
-  @IsNotEmpty()
-  when: string;
-
-  @IsString()
-  @IsNotEmpty()
-  then: string;
+  descripcion: string;
 
   @IsOptional()
-  @IsEnum(CriterioEstado)
-  estado?: CriterioEstado;
+  @IsBoolean()
+  completado?: boolean;
 
   @IsOptional()
   @IsInt()

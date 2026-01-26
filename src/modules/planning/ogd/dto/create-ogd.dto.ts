@@ -1,5 +1,5 @@
 import {
-  IsString, IsInt, IsOptional, IsNumber, IsArray, ValidateNested, MaxLength,
+  IsString, IsInt, IsOptional, IsNumber, IsArray, ValidateNested, MaxLength, IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -26,33 +26,33 @@ export class CreateOgdDto {
   @IsString()
   descripcion?: string;
 
-  @ApiPropertyOptional({ description: 'Código del indicador', maxLength: 50 })
+  @ApiPropertyOptional({ description: 'Código del indicador (autogenerado si no se proporciona)', maxLength: 50 })
   @IsOptional()
   @IsString()
   @MaxLength(50)
   indicadorCodigo?: string;
 
-  @ApiPropertyOptional({ description: 'Nombre del indicador', maxLength: 500 })
-  @IsOptional()
+  @ApiProperty({ description: 'Nombre del indicador', maxLength: 500 })
+  @IsNotEmpty({ message: 'El nombre del indicador es obligatorio' })
   @IsString()
   @MaxLength(500)
-  indicadorNombre?: string;
+  indicadorNombre: string;
 
-  @ApiPropertyOptional({ description: 'Unidad de medida', maxLength: 50 })
-  @IsOptional()
+  @ApiProperty({ description: 'Unidad de medida', maxLength: 50 })
+  @IsNotEmpty({ message: 'La unidad de medida es obligatoria' })
   @IsString()
   @MaxLength(50)
-  unidadMedida?: string;
+  unidadMedida: string;
 
-  @ApiPropertyOptional({ description: 'Año línea base', example: 2024 })
-  @IsOptional()
+  @ApiProperty({ description: 'Año línea base', example: 2024 })
+  @IsNotEmpty({ message: 'El año de la línea base es obligatorio' })
   @IsInt()
-  lineaBaseAnio?: number;
+  lineaBaseAnio: number;
 
-  @ApiPropertyOptional({ description: 'Valor línea base', example: 60 })
-  @IsOptional()
+  @ApiProperty({ description: 'Valor línea base', example: 60 })
+  @IsNotEmpty({ message: 'El valor de la línea base es obligatorio' })
   @IsNumber()
-  lineaBaseValor?: number;
+  lineaBaseValor: number;
 
   @ApiPropertyOptional({ description: 'Metas anuales', type: [MetaAnualDto] })
   @IsOptional()

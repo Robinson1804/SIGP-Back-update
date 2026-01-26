@@ -204,7 +204,24 @@ export class ArchivoService {
 
       this.logger.log(`Archivo confirmado: ${dto.archivoId}`);
 
-      return this.toResponseDto(archivo);
+      // Generar URL de descarga presignada para incluir en la respuesta
+      const downloadUrl = await this.minioService.getPresignedGetUrl(
+        archivo.bucket,
+        archivo.objectKey,
+        this.PRESIGNED_URL_TTL,
+      );
+
+      // Guardar en cache para uso futuro
+      const cacheKey = `file:url:${archivo.id}`;
+      await this.redis.setex(cacheKey, this.REDIS_URL_CACHE_TTL, downloadUrl);
+
+      // Actualizar cache en BD
+      await this.archivoRepository.update(archivo.id, {
+        urlDescargaCache: downloadUrl,
+        urlDescargaExpira: new Date(Date.now() + this.PRESIGNED_URL_TTL * 1000),
+      });
+
+      return this.toResponseDto(archivo, downloadUrl);
     } catch (error) {
       this.logger.error(`Error confirmando archivo ${dto.archivoId}:`, error);
       throw new BadRequestException(
@@ -690,7 +707,7 @@ export class ArchivoService {
     }
   }
 
-  private toResponseDto(archivo: Archivo): ArchivoResponseDto {
+  private toResponseDto(archivo: Archivo, downloadUrl?: string): ArchivoResponseDto {
     return {
       id: archivo.id,
       entidadTipo: archivo.entidadTipo,
@@ -705,6 +722,7 @@ export class ArchivoService {
       version: archivo.version,
       esVersionActual: archivo.esVersionActual,
       esPublico: archivo.esPublico,
+      downloadUrl: downloadUrl,
       metadata: archivo.metadata,
       createdAt: archivo.createdAt,
       creador: archivo.creador

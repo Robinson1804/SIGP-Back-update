@@ -1,16 +1,14 @@
 import {
-  IsString, IsInt, IsOptional, IsNumber, IsArray, ValidateNested, MaxLength,
+  IsString, IsInt, IsOptional, IsArray, MaxLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { MetaAnualDto } from '../../oei/dto/create-oei.dto';
 
 export class CreateOegdDto {
   @ApiProperty({ description: 'ID del OGD', example: 1 })
   @IsInt()
   ogdId: number;
 
-  @ApiPropertyOptional({ description: 'Código único (se autogenera)', example: 'OEGD N°1', maxLength: 20 })
+  @ApiPropertyOptional({ description: 'Código único (se autogenera)', example: 'OEGD-001', maxLength: 20 })
   @IsOptional()
   @IsString()
   @MaxLength(20)
@@ -25,41 +23,6 @@ export class CreateOegdDto {
   @IsOptional()
   @IsString()
   descripcion?: string;
-
-  @ApiPropertyOptional({ description: 'Código del indicador', maxLength: 50 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  indicadorCodigo?: string;
-
-  @ApiPropertyOptional({ description: 'Nombre del indicador', maxLength: 500 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  indicadorNombre?: string;
-
-  @ApiPropertyOptional({ description: 'Unidad de medida', maxLength: 50 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  unidadMedida?: string;
-
-  @ApiPropertyOptional({ description: 'Año línea base', example: 2024 })
-  @IsOptional()
-  @IsInt()
-  lineaBaseAnio?: number;
-
-  @ApiPropertyOptional({ description: 'Valor línea base', example: 0 })
-  @IsOptional()
-  @IsNumber()
-  lineaBaseValor?: number;
-
-  @ApiPropertyOptional({ description: 'Metas anuales', type: [MetaAnualDto] })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => MetaAnualDto)
-  metasAnuales?: MetaAnualDto[];
 
   @ApiPropertyOptional({ description: 'IDs de AEIs relacionadas', type: [Number] })
   @IsOptional()

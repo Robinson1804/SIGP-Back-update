@@ -34,6 +34,13 @@ export class AeiController {
     return this.aeiService.create(createAeiDto, userId);
   }
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Obtener el siguiente código AEI disponible para un OEI' })
+  getNextCodigo(@Query('oeiId', ParseIntPipe) oeiId: number) {
+    return this.aeiService.getNextCodigo(oeiId);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Listar todas las AEIs' })
   findAll(

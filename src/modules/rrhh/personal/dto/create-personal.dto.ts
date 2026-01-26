@@ -23,9 +23,9 @@ export class CreatePersonalDto {
   divisionId?: number;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(20)
-  codigoEmpleado: string;
+  codigoEmpleado?: string;
 
   @IsString()
   @IsOptional()

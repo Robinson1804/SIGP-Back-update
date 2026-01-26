@@ -13,7 +13,7 @@ export class TareaResponseDto {
   asignadoA: number | null;
   horasEstimadas: number | null;
   horasReales: number | null;
-  evidenciaUrl: string | null;
+  // evidenciaUrl eliminado - usar endpoint GET /tareas/:id/evidencias
   validada: boolean;
   validadaPor: number | null;
   fechaValidacion: Date | null;

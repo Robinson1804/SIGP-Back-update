@@ -31,7 +31,7 @@ export class TareaKanbanTableroDto {
   };
   horasEstimadas: number;
   horasReales: number;
-  evidenciaUrl: string;
+  // evidenciaUrl eliminado - usar endpoint GET /tareas/:id/evidencias
   subtareas: SubtareaTableroDto[];
   subtareasCompletadas: number;
   subtareasTotal: number;

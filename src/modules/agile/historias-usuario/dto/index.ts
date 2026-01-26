@@ -10,3 +10,4 @@ export * from './historia-usuario-response.dto';
 export * from './create-criterio-aceptacion.dto';
 export * from './update-criterio-aceptacion.dto';
 export * from './reordenar-criterios.dto';
+export * from './validar-hu.dto';

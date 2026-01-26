@@ -1,4 +1,4 @@
-import { CronogramaEstado, TareaEstado, TareaPrioridad } from '../enums/cronograma.enum';
+import { CronogramaEstado, TareaEstado, TareaPrioridad, AsignadoA } from '../enums/cronograma.enum';
 
 export class CronogramaResponseDto {
   id: number;
@@ -37,7 +37,7 @@ export class TareaCronogramaResponseDto {
   estado: TareaEstado;
   prioridad: TareaPrioridad;
   porcentajeAvance: number;
-  responsableId: number | null;
+  asignadoA: AsignadoA | null;
   tareaPadreId: number | null;
   orden: number | null;
   dependencias: number[] | null;
@@ -48,11 +48,6 @@ export class TareaCronogramaResponseDto {
 }
 
 export class TareaCronogramaDetailResponseDto extends TareaCronogramaResponseDto {
-  responsable?: {
-    id: number;
-    nombres: string;
-    apellidoPaterno: string;
-  };
   tareaPadre?: {
     id: number;
     codigo: string;

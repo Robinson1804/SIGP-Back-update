@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { EpicaPrioridad } from '../enums/epica.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 
 @Entity({ schema: 'agile', name: 'epicas' })
 export class Epica {
@@ -38,11 +39,12 @@ export class Epica {
   })
   prioridad: string;
 
-  @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
-  fechaInicio: Date;
-
-  @Column({ name: 'fecha_fin', type: 'date', nullable: true })
-  fechaFin: Date;
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'Por hacer',
+  })
+  estado: string;
 
   @Column({ type: 'int', nullable: true })
   orden: number;
@@ -67,5 +69,6 @@ export class Epica {
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: Proyecto;
 
-  // HistoriaUsuario relation will be added after HistoriaUsuario entity is created
+  @OneToMany(() => HistoriaUsuario, (hu) => hu.epica)
+  historiasUsuario: HistoriaUsuario[];
 }

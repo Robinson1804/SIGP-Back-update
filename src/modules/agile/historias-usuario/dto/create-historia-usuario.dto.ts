@@ -4,23 +4,24 @@ import {
   IsInt,
   IsEnum,
   IsArray,
+  IsBoolean,
   MaxLength,
   ValidateNested,
   Min,
   Max,
+  IsDateString,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { HuPrioridad, HuEstimacion } from '../enums/historia-usuario.enum';
+import { HuPrioridad, HuEstimacion, HuEstado } from '../enums/historia-usuario.enum';
 
 class CriterioAceptacionDto {
   @IsString()
-  given: string;
+  descripcion: string;
 
-  @IsString()
-  when: string;
-
-  @IsString()
-  then: string;
+  @IsOptional()
+  @IsBoolean()
+  completado?: boolean;
 
   @IsOptional()
   @IsInt()
@@ -32,12 +33,14 @@ export class CreateHistoriaUsuarioDto {
   proyectoId: number;
 
   @IsOptional()
+  @ValidateIf((o) => o.epicaId !== null)
   @IsInt()
-  epicaId?: number;
+  epicaId?: number | null;
 
   @IsOptional()
+  @ValidateIf((o) => o.sprintId !== null)
   @IsInt()
-  sprintId?: number;
+  sprintId?: number | null;
 
   @IsString()
   @MaxLength(20)
@@ -48,42 +51,73 @@ export class CreateHistoriaUsuarioDto {
   titulo: string;
 
   @IsOptional()
-  @IsString()
-  rol?: string;
+  @IsEnum(HuEstado)
+  estado?: HuEstado;
 
   @IsOptional()
+  @ValidateIf((o) => o.rol !== null)
   @IsString()
-  quiero?: string;
+  rol?: string | null;
 
   @IsOptional()
+  @ValidateIf((o) => o.quiero !== null)
   @IsString()
-  para?: string;
+  quiero?: string | null;
 
   @IsOptional()
+  @ValidateIf((o) => o.para !== null)
+  @IsString()
+  para?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.prioridad !== null)
   @IsEnum(HuPrioridad)
-  prioridad?: HuPrioridad;
+  prioridad?: HuPrioridad | null;
 
   @IsOptional()
   @IsEnum(HuEstimacion)
   estimacion?: HuEstimacion;
 
   @IsOptional()
+  @ValidateIf((o) => o.storyPoints !== null)
   @IsInt()
   @Min(1)
   @Max(100)
-  storyPoints?: number;
+  storyPoints?: number | null;
 
+  // asignadoA ahora es un array de IDs de responsables
   @IsOptional()
-  @IsInt()
-  asignadoA?: number;
+  @IsArray()
+  @IsInt({ each: true })
+  asignadoA?: number[];
+
+  // Campo de compatibilidad (deprecated, usar asignadoA)
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  responsables?: number[];
 
   @IsOptional()
   @IsInt()
   ordenBacklog?: number;
 
   @IsOptional()
+  @IsInt()
+  requerimientoId?: number;
+
+  @IsOptional()
+  @ValidateIf((o) => o.fechaInicio !== null)
+  @IsDateString()
+  fechaInicio?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.fechaFin !== null)
+  @IsDateString()
+  fechaFin?: string | null;
+
+  @IsOptional()
   @IsString()
-  notas?: string;
+  imagenUrl?: string;
 
   @IsOptional()
   @IsArray()

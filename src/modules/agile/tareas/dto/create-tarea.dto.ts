@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsDateString,
   IsNumber,
+  IsArray,
   MaxLength,
   Min,
   ValidateIf,
@@ -40,8 +41,19 @@ export class CreateTareaDto {
   prioridad?: TareaPrioridad;
 
   @IsOptional()
+  @ValidateIf((o, value) => value !== null)
   @IsInt()
-  asignadoA?: number;
+  asignadoA?: number | null;
+
+  /**
+   * Array de IDs de usuarios a asignar a la tarea.
+   * Estos se guardan en la tabla tarea_asignados.
+   * Máximo 5 responsables.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  asignadosIds?: number[];
 
   @IsOptional()
   @IsNumber()

@@ -13,8 +13,7 @@ import {
 import { RequerimientoService } from '../services/requerimiento.service';
 import { CreateRequerimientoDto } from '../dto/create-requerimiento.dto';
 import { UpdateRequerimientoDto } from '../dto/update-requerimiento.dto';
-import { AprobarRequerimientoDto } from '../dto/aprobar-requerimiento.dto';
-import { RequerimientoTipo, RequerimientoPrioridad, RequerimientoEstado } from '../enums/requerimiento.enum';
+import { RequerimientoTipo, RequerimientoPrioridad } from '../enums/requerimiento.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
@@ -37,14 +36,12 @@ export class RequerimientoController {
     @Query('proyectoId') proyectoId?: string,
     @Query('tipo') tipo?: RequerimientoTipo,
     @Query('prioridad') prioridad?: RequerimientoPrioridad,
-    @Query('estado') estado?: RequerimientoEstado,
     @Query('activo') activo?: string,
   ) {
     return this.requerimientoService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
       tipo,
       prioridad,
-      estado,
       activo: activo !== undefined ? activo === 'true' : undefined,
     });
   }
@@ -62,16 +59,6 @@ export class RequerimientoController {
     @CurrentUser('id') userId: number,
   ) {
     return this.requerimientoService.update(id, updateDto, userId);
-  }
-
-  @Post(':id/aprobar')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
-  aprobar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() aprobarDto: AprobarRequerimientoDto,
-    @CurrentUser('id') userId: number,
-  ) {
-    return this.requerimientoService.aprobar(id, aprobarDto, userId);
   }
 
   @Delete(':id')

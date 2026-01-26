@@ -20,6 +20,7 @@ interface NotificarData {
   entidadId?: number;
   proyectoId?: number;
   urlAccion?: string;
+  observacion?: string; // Observación/comentario de PMO o PATROCINADOR
 }
 
 @Injectable()
@@ -34,11 +35,12 @@ export class NotificacionService {
   async findAll(
     usuarioId: number,
     filters: FindAllFilters = {},
-  ): Promise<{ data: Notificacion[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     const { leida, tipo, page = 1, limit = 20 } = filters;
 
     const queryBuilder = this.notificacionRepository
       .createQueryBuilder('n')
+      .leftJoinAndSelect('n.proyecto', 'proyecto')
       .where('n.destinatarioId = :usuarioId', { usuarioId });
 
     if (leida !== undefined) {
@@ -54,7 +56,21 @@ export class NotificacionService {
       .skip((page - 1) * limit)
       .take(limit);
 
-    const [data, total] = await queryBuilder.getManyAndCount();
+    const [notificaciones, total] = await queryBuilder.getManyAndCount();
+
+    // Enriquecer notificaciones con datos actuales del proyecto
+    const data = notificaciones.map((n) => {
+      const result: any = { ...n };
+      // Si hay proyecto asociado, agregar nombre y código actual
+      if (n.proyecto) {
+        result.entidadNombre = n.proyecto.nombre;
+        result.proyectoCodigo = n.proyecto.codigo;
+        result.proyectoNombre = n.proyecto.nombre;
+      }
+      // Limpiar el objeto proyecto para no enviar datos innecesarios
+      delete result.proyecto;
+      return result;
+    });
 
     return { data, total, page, limit };
   }
@@ -81,6 +97,7 @@ export class NotificacionService {
       Proyectos: 0,
       Sprints: 0,
       Retrasos: 0,
+      Validaciones: 0,
       Aprobaciones: 0,
       Tareas: 0,
       Documentos: 0,
@@ -157,6 +174,7 @@ export class NotificacionService {
       entidadId: data.entidadId,
       proyectoId: data.proyectoId,
       urlAccion: data.urlAccion,
+      observacion: data.observacion,
     });
 
     const saved = await this.notificacionRepository.save(notificacion);

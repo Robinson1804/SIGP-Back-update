@@ -36,7 +36,7 @@ export class TareaExportacionDto {
   porcentajeAvance: number;
   estado: string;
   prioridad: string;
-  responsable: string;
+  asignadoA: string;
   dependencias: string;
   esHito: boolean;
 }

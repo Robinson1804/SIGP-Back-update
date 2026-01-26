@@ -18,6 +18,7 @@ export interface MetaAnual {
 }
 
 @Entity('oei', { schema: 'planning' })
+@Index(['pgdId', 'codigo'], { unique: true }) // Código único dentro del mismo PGD
 export class Oei {
   @PrimaryGeneratedColumn()
   id: number;
@@ -27,7 +28,7 @@ export class Oei {
   pgdId: number;
 
   @Index()
-  @Column({ length: 20, unique: true })
+  @Column({ length: 50 }) // Removido unique: true, ahora es composite con pgdId
   codigo: string;
 
   @Column({ length: 300 })

@@ -46,6 +46,7 @@ export class SprintService {
       fechaInicio: createDto.fechaInicio,
       fechaFin: createDto.fechaFin,
       capacidadEquipo: createDto.velocidadPlanificada || createDto.capacidadEquipo,
+      estado: createDto.estado || SprintEstado.POR_HACER,
       createdBy: userId,
       updatedBy: userId,
     });
@@ -114,7 +115,7 @@ export class SprintService {
   async update(id: number, updateDto: UpdateSprintDto, userId?: number): Promise<Sprint> {
     const sprint = await this.findOne(id);
 
-    if (sprint.estado === SprintEstado.COMPLETADO) {
+    if (sprint.estado === SprintEstado.FINALIZADO) {
       throw new BadRequestException('No se puede modificar un sprint completado');
     }
 
@@ -148,15 +149,15 @@ export class SprintService {
     const sprint = await this.findOne(id);
     const estadoAnterior = sprint.estado;
 
-    if (sprint.estado !== SprintEstado.PLANIFICADO) {
-      throw new BadRequestException('Solo se puede iniciar un sprint en estado Planificado');
+    if (sprint.estado !== SprintEstado.POR_HACER) {
+      throw new BadRequestException('Solo se puede iniciar un sprint en estado "Por hacer"');
     }
 
     // Check if there's already an active sprint for this project
     const activeSprint = await this.sprintRepository.findOne({
       where: {
         proyectoId: sprint.proyectoId,
-        estado: SprintEstado.ACTIVO,
+        estado: SprintEstado.EN_PROGRESO,
         activo: true,
       },
     });
@@ -167,7 +168,7 @@ export class SprintService {
       );
     }
 
-    sprint.estado = SprintEstado.ACTIVO;
+    sprint.estado = SprintEstado.EN_PROGRESO;
     sprint.fechaInicioReal = new Date();
     sprint.updatedBy = userId;
 
@@ -181,7 +182,7 @@ export class SprintService {
         accion: HistorialAccion.INICIO,
         campoModificado: 'estado',
         valorAnterior: estadoAnterior,
-        valorNuevo: SprintEstado.ACTIVO,
+        valorNuevo: SprintEstado.EN_PROGRESO,
         usuarioId: userId,
       });
     }
@@ -203,8 +204,8 @@ export class SprintService {
     const sprint = await this.findOne(id);
     const estadoAnterior = sprint.estado;
 
-    if (sprint.estado !== SprintEstado.ACTIVO) {
-      throw new BadRequestException('Solo se puede cerrar un sprint activo');
+    if (sprint.estado !== SprintEstado.EN_PROGRESO) {
+      throw new BadRequestException('Solo se puede cerrar un sprint "En progreso"');
     }
 
     // Manejar HUs no completadas
@@ -212,7 +213,7 @@ export class SprintService {
       where: {
         sprintId: id,
         activo: true,
-        estado: Not(HuEstado.TERMINADA),
+        estado: Not(HuEstado.FINALIZADO),
       },
     });
 
@@ -222,7 +223,7 @@ export class SprintService {
         const siguienteSprint = await this.sprintRepository.findOne({
           where: {
             proyectoId: sprint.proyectoId,
-            estado: SprintEstado.PLANIFICADO,
+            estado: SprintEstado.POR_HACER,
             activo: true,
           },
           order: { fechaInicio: 'ASC' },
@@ -250,7 +251,7 @@ export class SprintService {
       }
     }
 
-    sprint.estado = SprintEstado.COMPLETADO;
+    sprint.estado = SprintEstado.FINALIZADO;
     sprint.fechaFinReal = new Date();
     sprint.updatedBy = userId;
 
@@ -268,7 +269,7 @@ export class SprintService {
         accion: HistorialAccion.CIERRE,
         campoModificado: 'estado',
         valorAnterior: estadoAnterior,
-        valorNuevo: SprintEstado.COMPLETADO,
+        valorNuevo: SprintEstado.FINALIZADO,
         usuarioId: userId,
       });
     }
@@ -282,6 +283,9 @@ export class SprintService {
       sprintId: sprint.id,
       nombre: sprint.nombre,
     });
+
+    // Verificar si todos los sprints del proyecto están finalizados
+    await this.verificarSprintsCompletados(sprint.proyectoId);
 
     return sprintCerrado;
   }
@@ -325,19 +329,90 @@ export class SprintService {
     );
   }
 
-  async remove(id: number, userId?: number): Promise<Sprint> {
-    const sprint = await this.findOne(id);
+  /**
+   * Verifica si todos los sprints del proyecto están finalizados
+   * y envía una notificación al equipo preguntando si desea finalizar el proyecto
+   */
+  private async verificarSprintsCompletados(proyectoId: number): Promise<void> {
+    // Contar sprints no finalizados (Por hacer o En progreso)
+    const sprintsNoFinalizados = await this.sprintRepository.count({
+      where: {
+        proyectoId,
+        estado: In([SprintEstado.POR_HACER, SprintEstado.EN_PROGRESO]),
+        activo: true,
+      },
+    });
 
-    if (sprint.estado === SprintEstado.ACTIVO) {
-      throw new BadRequestException('No se puede eliminar un sprint activo');
+    // Si hay sprints pendientes, no hacer nada
+    if (sprintsNoFinalizados > 0) {
+      return;
     }
 
-    sprint.activo = false;
-    sprint.updatedBy = userId;
+    // Contar total de sprints finalizados para confirmar que hay al menos uno
+    const sprintsFinalizados = await this.sprintRepository.count({
+      where: {
+        proyectoId,
+        estado: SprintEstado.FINALIZADO,
+        activo: true,
+      },
+    });
 
-    const sprintEliminado = await this.sprintRepository.save(sprint);
+    // Si no hay sprints finalizados, no tiene sentido notificar
+    if (sprintsFinalizados === 0) {
+      return;
+    }
 
-    // Registrar eliminacion en historial
+    // Obtener el proyecto para la notificación
+    const proyecto = await this.sprintRepository.manager
+      .createQueryBuilder()
+      .select(['p.id', 'p.codigo', 'p.nombre', 'p.coordinador_id', 'p.scrum_master_id', 'p.estado'])
+      .from('poi.proyectos', 'p')
+      .where('p.id = :proyectoId', { proyectoId })
+      .getRawOne();
+
+    if (!proyecto || proyecto.p_estado === 'Finalizado') {
+      return; // El proyecto ya está finalizado
+    }
+
+    // Notificar al Coordinador y Scrum Master
+    const destinatarios: number[] = [];
+    if (proyecto.p_coordinador_id) destinatarios.push(proyecto.p_coordinador_id);
+    if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
+      destinatarios.push(proyecto.p_scrum_master_id);
+    }
+
+    if (destinatarios.length === 0) {
+      return;
+    }
+
+    await this.notificacionService.notificarMultiples(
+      TipoNotificacion.PROYECTOS,
+      destinatarios,
+      {
+        titulo: `¿Finalizar proyecto ${proyecto.p_codigo}?`,
+        descripcion: `Todos los sprints del proyecto "${proyecto.p_nombre}" han sido completados. ¿Desea marcar el proyecto como Finalizado?`,
+        entidadTipo: 'Proyecto',
+        entidadId: proyectoId,
+        proyectoId: proyectoId,
+        urlAccion: `/poi/proyectos/${proyectoId}`,
+      },
+    );
+  }
+
+  async remove(id: number, userId?: number): Promise<void> {
+    const sprint = await this.findOne(id);
+
+    if (sprint.estado === SprintEstado.EN_PROGRESO) {
+      throw new BadRequestException('No se puede eliminar un sprint "En progreso"');
+    }
+
+    // Desvincular las historias de usuario del sprint antes de eliminar
+    await this.huRepository.update(
+      { sprintId: id },
+      { sprintId: null },
+    );
+
+    // Registrar eliminacion en historial antes de borrar
     if (userId) {
       await this.historialCambioService.registrarEliminacion(
         HistorialEntidadTipo.SPRINT,
@@ -346,7 +421,8 @@ export class SprintService {
       );
     }
 
-    return sprintEliminado;
+    // Eliminar definitivamente de la base de datos
+    await this.sprintRepository.remove(sprint);
   }
 
   async getBurndown(id: number): Promise<BurndownResponseDto> {
@@ -364,8 +440,8 @@ export class SprintService {
     const totalStoryPoints = parseInt(spResult?.totalSP || '0', 10);
 
     // Calculate days
-    const fechaInicio = new Date(sprint.fechaInicio);
-    const fechaFin = new Date(sprint.fechaFin);
+    const fechaInicio = sprint.fechaInicio ? new Date(sprint.fechaInicio) : new Date();
+    const fechaFin = sprint.fechaFin ? new Date(sprint.fechaFin) : new Date();
     const diasTotales = Math.ceil(
       (fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -398,8 +474,8 @@ export class SprintService {
     const sprint = await this.findOne(id);
 
     // Calculate days
-    const fechaInicio = new Date(sprint.fechaInicio);
-    const fechaFin = new Date(sprint.fechaFin);
+    const fechaInicio = sprint.fechaInicio ? new Date(sprint.fechaInicio) : new Date();
+    const fechaFin = sprint.fechaFin ? new Date(sprint.fechaFin) : new Date();
     const hoy = new Date();
 
     const diasTotales = Math.ceil(
@@ -415,26 +491,26 @@ export class SprintService {
     const stats = await this.sprintRepository.manager
       .createQueryBuilder()
       .select('COUNT(*)', 'totalHUs')
-      .addSelect("SUM(CASE WHEN hu.estado = 'Terminada' THEN 1 ELSE 0 END)", 'husCompletadas')
+      .addSelect("SUM(CASE WHEN hu.estado = 'Finalizado' THEN 1 ELSE 0 END)", 'husCompletadas')
       .addSelect(
-        "SUM(CASE WHEN hu.estado IN ('En desarrollo', 'En pruebas', 'En revision') THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN hu.estado = 'En progreso' THEN 1 ELSE 0 END)",
         'husEnProgreso',
       )
       .addSelect(
-        "SUM(CASE WHEN hu.estado IN ('Pendiente', 'En analisis', 'Lista') THEN 1 ELSE 0 END)",
+        "SUM(CASE WHEN hu.estado = 'Por hacer' THEN 1 ELSE 0 END)",
         'husPendientes',
       )
       .addSelect('COALESCE(SUM(hu.story_points), 0)', 'totalSP')
       .addSelect(
-        "COALESCE(SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.story_points ELSE 0 END), 0)",
+        "COALESCE(SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.story_points ELSE 0 END), 0)",
         'spCompletados',
       )
       .addSelect(
-        "COALESCE(SUM(CASE WHEN hu.estado IN ('En desarrollo', 'En pruebas', 'En revision') THEN hu.story_points ELSE 0 END), 0)",
+        "COALESCE(SUM(CASE WHEN hu.estado = 'En progreso' THEN hu.story_points ELSE 0 END), 0)",
         'spEnProgreso',
       )
       .addSelect(
-        "COALESCE(SUM(CASE WHEN hu.estado IN ('Pendiente', 'En analisis', 'Lista') THEN hu.story_points ELSE 0 END), 0)",
+        "COALESCE(SUM(CASE WHEN hu.estado = 'Por hacer' THEN hu.story_points ELSE 0 END), 0)",
         'spPendientes',
       )
       .from('agile.historias_usuario', 'hu')
@@ -481,7 +557,7 @@ export class SprintService {
     const sprintsCompletados = await this.sprintRepository.find({
       where: {
         proyectoId,
-        estado: SprintEstado.COMPLETADO,
+        estado: SprintEstado.FINALIZADO,
         activo: true,
       },
       order: { fechaFinReal: 'DESC' },
@@ -509,7 +585,7 @@ export class SprintService {
     for (const sprint of sprintsCompletados) {
       const stats = await this.sprintRepository.manager
         .createQueryBuilder()
-        .select("COALESCE(SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.story_points ELSE 0 END), 0)", 'spCompletados')
+        .select("COALESCE(SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.story_points ELSE 0 END), 0)", 'spCompletados')
         .from('agile.historias_usuario', 'hu')
         .where('hu.sprint_id = :sprintId', { sprintId: sprint.id })
         .andWhere('hu.activo = true')

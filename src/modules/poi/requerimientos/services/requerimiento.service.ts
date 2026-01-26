@@ -4,8 +4,7 @@ import { Repository } from 'typeorm';
 import { Requerimiento } from '../entities/requerimiento.entity';
 import { CreateRequerimientoDto } from '../dto/create-requerimiento.dto';
 import { UpdateRequerimientoDto } from '../dto/update-requerimiento.dto';
-import { AprobarRequerimientoDto } from '../dto/aprobar-requerimiento.dto';
-import { RequerimientoEstado, RequerimientoPrioridad, RequerimientoTipo } from '../enums/requerimiento.enum';
+import { RequerimientoPrioridad, RequerimientoTipo } from '../enums/requerimiento.enum';
 
 @Injectable()
 export class RequerimientoService {
@@ -38,7 +37,6 @@ export class RequerimientoService {
     proyectoId?: number;
     tipo?: RequerimientoTipo;
     prioridad?: RequerimientoPrioridad;
-    estado?: RequerimientoEstado;
     activo?: boolean;
   }): Promise<Requerimiento[]> {
     const queryBuilder = this.requerimientoRepository
@@ -62,10 +60,6 @@ export class RequerimientoService {
       });
     }
 
-    if (filters?.estado) {
-      queryBuilder.andWhere('requerimiento.estado = :estado', { estado: filters.estado });
-    }
-
     if (filters?.activo !== undefined) {
       queryBuilder.andWhere('requerimiento.activo = :activo', { activo: filters.activo });
     }
@@ -83,7 +77,7 @@ export class RequerimientoService {
   async findOne(id: number): Promise<Requerimiento> {
     const requerimiento = await this.requerimientoRepository.findOne({
       where: { id },
-      relations: ['proyecto', 'solicitante', 'aprobador'],
+      relations: ['proyecto'],
     });
 
     if (!requerimiento) {
@@ -101,25 +95,6 @@ export class RequerimientoService {
     const requerimiento = await this.findOne(id);
 
     Object.assign(requerimiento, updateDto, { updatedBy: userId });
-
-    return this.requerimientoRepository.save(requerimiento);
-  }
-
-  async aprobar(
-    id: number,
-    aprobarDto: AprobarRequerimientoDto,
-    userId: number,
-  ): Promise<Requerimiento> {
-    const requerimiento = await this.findOne(id);
-
-    requerimiento.estado = aprobarDto.estado;
-    requerimiento.aprobadoPor = userId;
-    requerimiento.fechaAprobacion = new Date();
-    requerimiento.updatedBy = userId;
-
-    if (aprobarDto.observacion) {
-      requerimiento.observaciones = aprobarDto.observacion;
-    }
 
     return this.requerimientoRepository.save(requerimiento);
   }

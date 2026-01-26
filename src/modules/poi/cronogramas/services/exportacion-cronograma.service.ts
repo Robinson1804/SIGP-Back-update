@@ -16,7 +16,7 @@ interface TareaExportacion {
   porcentajeAvance: number;
   estado: string;
   prioridad: string;
-  responsable: string;
+  asignadoA: string;
   dependencias: string;
   esHito: boolean;
 }
@@ -65,7 +65,6 @@ export class ExportacionCronogramaService {
 
     const tareas = await this.tareaRepository.find({
       where: { cronogramaId, activo: true },
-      relations: ['responsable'],
       order: { orden: 'ASC', fechaInicio: 'ASC' },
     });
 
@@ -98,7 +97,7 @@ export class ExportacionCronogramaService {
       porcentajeAvance: Number(tarea.porcentajeAvance) || 0,
       estado: tarea.estado,
       prioridad: tarea.prioridad,
-      responsable: tarea.responsable?.nombre || 'Sin asignar',
+      asignadoA: tarea.asignadoA || 'Sin asignar',
       dependencias: dependenciasMap.get(tarea.id)?.join(', ') || '',
       esHito: false,
     }));
@@ -159,7 +158,7 @@ export class ExportacionCronogramaService {
       'Avance (%)',
       'Estado',
       'Prioridad',
-      'Responsable',
+      'Asignado A',
       'Dependencias',
       'Es Hito',
     ];
@@ -174,7 +173,7 @@ export class ExportacionCronogramaService {
       t.porcentajeAvance.toString(),
       t.estado,
       t.prioridad,
-      `"${t.responsable}"`,
+      `"${t.asignadoA}"`,
       `"${t.dependencias}"`,
       t.esHito ? 'Si' : 'No',
     ]);
@@ -196,7 +195,7 @@ export class ExportacionCronogramaService {
       'fecha_inicio',
       'fecha_fin',
       'prioridad',
-      'responsable_email',
+      'asignado_a',
       'dependencias',
       'es_hito',
     ];
@@ -209,7 +208,7 @@ export class ExportacionCronogramaService {
       '2024-01-15',
       '2024-01-20',
       'Baja | Media | Alta',
-      'usuario@email.com',
+      'Scrum Master | Desarrolladores | Todo el equipo',
       'TAREA-000FS (opcional)',
       'No | Si',
     ];

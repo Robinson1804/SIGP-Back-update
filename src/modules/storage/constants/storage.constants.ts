@@ -44,7 +44,7 @@ export const MIME_TYPES = {
 // =========================================================================
 
 export const EXTENSIONS_BY_CATEGORY = {
-  documento: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'],
+  documento: ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'png', 'jpg', 'jpeg'],
   evidencia: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'zip'],
   acta: ['pdf', 'docx', 'doc'],
   informe: ['pdf', 'xlsx', 'xls'],

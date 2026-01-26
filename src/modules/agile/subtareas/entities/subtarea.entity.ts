@@ -59,7 +59,7 @@ export class Subtarea {
   @Column({ name: 'horas_reales', type: 'decimal', precision: 6, scale: 2, nullable: true })
   horasReales: number;
 
-  @Column({ name: 'evidencia_url', length: 500, nullable: true })
+  @Column({ name: 'evidencia_url', type: 'text', nullable: true })
   evidenciaUrl: string;
 
   @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
@@ -85,4 +85,8 @@ export class Subtarea {
 
   @Column({ name: 'updated_by', type: 'int', nullable: true })
   updatedBy: number | null | undefined;
+
+  @ManyToOne(() => Usuario, { nullable: true })
+  @JoinColumn({ name: 'created_by' })
+  creator: Usuario;
 }

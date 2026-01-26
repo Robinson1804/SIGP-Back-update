@@ -12,6 +12,7 @@ import { DisponibilidadResponseDto } from '../dto/personal-response.dto';
 import { Modalidad } from '../enums/modalidad.enum';
 import { PersonalHabilidad } from '../../habilidades/entities/personal-habilidad.entity';
 import { AsignarHabilidadDto, UpdatePersonalHabilidadDto } from '../../habilidades/dto/asignar-habilidad.dto';
+import { Role } from '../../../../common/constants/roles.constant';
 
 @Injectable()
 export class PersonalService {
@@ -23,24 +24,53 @@ export class PersonalService {
   ) {}
 
   async create(createDto: CreatePersonalDto, userId?: number): Promise<Personal> {
+    // Generate code if not provided
+    let codigoEmpleado = createDto.codigoEmpleado;
+    if (!codigoEmpleado) {
+      codigoEmpleado = await this.generateNextCode();
+    }
+
     // Check for duplicate code
     const existing = await this.personalRepository.findOne({
-      where: { codigoEmpleado: createDto.codigoEmpleado },
+      where: { codigoEmpleado },
     });
 
     if (existing) {
       throw new ConflictException(
-        `Ya existe personal con el código ${createDto.codigoEmpleado}`,
+        `Ya existe personal con el código ${codigoEmpleado}`,
       );
     }
 
     const personal = this.personalRepository.create({
       ...createDto,
+      codigoEmpleado,
       createdBy: userId,
       updatedBy: userId,
     });
 
     return this.personalRepository.save(personal);
+  }
+
+  /**
+   * Gets the next sequential employee code (for preview purposes)
+   */
+  async getNextCode(): Promise<string> {
+    return this.generateNextCode();
+  }
+
+  /**
+   * Generates the next sequential employee code in format EMP-XXX
+   */
+  private async generateNextCode(): Promise<string> {
+    // Get the highest numeric code currently in use
+    const result = await this.personalRepository
+      .createQueryBuilder('personal')
+      .select("MAX(CAST(SUBSTRING(personal.codigoEmpleado FROM 5) AS INTEGER))", 'maxNum')
+      .where("personal.codigoEmpleado ~ '^EMP-[0-9]+$'")
+      .getRawOne();
+
+    const nextNum = (result?.maxNum || 0) + 1;
+    return `EMP-${String(nextNum).padStart(3, '0')}`;
   }
 
   async findAll(filters?: {
@@ -53,6 +83,7 @@ export class PersonalService {
     const queryBuilder = this.personalRepository
       .createQueryBuilder('personal')
       .leftJoinAndSelect('personal.division', 'division')
+      .leftJoinAndSelect('personal.usuario', 'usuario', 'usuario.id = personal.usuarioId')
       .orderBy('personal.apellidos', 'ASC')
       .addOrderBy('personal.nombres', 'ASC');
 
@@ -110,12 +141,52 @@ export class PersonalService {
     });
   }
 
+  /**
+   * Obtener personal por rol del usuario vinculado
+   * Filtra personal activo cuyo usuario tenga el rol especificado (principal o adicional)
+   */
+  async findByUsuarioRol(rol: Role): Promise<Personal[]> {
+    const queryBuilder = this.personalRepository
+      .createQueryBuilder('personal')
+      .innerJoin('personal.usuario', 'usuario')
+      .where('personal.activo = :activo', { activo: true })
+      .andWhere('usuario.activo = :usuarioActivo', { usuarioActivo: true })
+      .andWhere(
+        "(usuario.rol = :rol OR usuario.roles_adicionales @> :rolJsonb)",
+        { rol, rolJsonb: JSON.stringify([rol]) },
+      )
+      .orderBy('personal.apellidos', 'ASC')
+      .addOrderBy('personal.nombres', 'ASC');
+
+    return queryBuilder.getMany();
+  }
+
+  /**
+   * Obtener personal con rol DESARROLLADOR
+   */
+  async findDesarrolladores(): Promise<Personal[]> {
+    return this.findByUsuarioRol(Role.DESARROLLADOR);
+  }
+
+  /**
+   * Obtener personal con rol IMPLEMENTADOR
+   */
+  async findImplementadores(): Promise<Personal[]> {
+    return this.findByUsuarioRol(Role.IMPLEMENTADOR);
+  }
+
   async update(id: number, updateDto: UpdatePersonalDto, userId?: number): Promise<Personal> {
-    const personal = await this.findOne(id);
+    // Verificar que existe
+    await this.findOne(id);
 
-    Object.assign(personal, updateDto, { updatedBy: userId });
+    // Usar update directo para evitar conflictos con relaciones cargadas
+    await this.personalRepository.update(id, {
+      ...updateDto,
+      updatedBy: userId,
+    });
 
-    return this.personalRepository.save(personal);
+    // Recargar la entidad con las relaciones actualizadas
+    return this.findOne(id);
   }
 
   async remove(id: number, userId?: number): Promise<Personal> {

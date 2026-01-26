@@ -60,9 +60,9 @@ export const CAMPO_NOMBRES_LEGIBLES: Record<string, string> = {
   nombre: 'Nombre',
   horasEstimadas: 'Horas Estimadas',
   horasReales: 'Horas Reales',
-  evidenciaUrl: 'Evidencia',
   validada: 'Validada',
   validadaPor: 'Validado por',
+  documentoEvidenciasUrl: 'Documento de Evidencias',
   // Sprint
   objetivo: 'Objetivo',
   fechaInicio: 'Fecha de Inicio',

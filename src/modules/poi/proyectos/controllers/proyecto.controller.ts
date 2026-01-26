@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ProyectoService } from '../services/proyecto.service';
 import { CreateProyectoDto } from '../dto/create-proyecto.dto';
 import { UpdateProyectoDto } from '../dto/update-proyecto.dto';
@@ -21,10 +22,21 @@ import { Roles } from '../../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { Role } from '../../../../common/constants/roles.constant';
 
+@ApiTags('Proyectos')
 @Controller('proyectos')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProyectoController {
   constructor(private readonly proyectoService: ProyectoService) {}
+
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Obtener el siguiente código de proyecto disponible (por PGD si se proporciona accionEstrategicaId)' })
+  @ApiResponse({ status: 200, description: 'Código generado exitosamente' })
+  getNextCodigo(@Query('accionEstrategicaId') accionEstrategicaId?: string) {
+    return this.proyectoService.getNextCodigo(
+      accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
+    );
+  }
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO)
@@ -39,6 +51,7 @@ export class ProyectoController {
     @Query('scrumMasterId') scrumMasterId?: string,
     @Query('accionEstrategicaId') accionEstrategicaId?: string,
     @Query('activo') activo?: string,
+    @Query('pgdId') pgdId?: string,
   ) {
     return this.proyectoService.findAll({
       estado,
@@ -46,6 +59,7 @@ export class ProyectoController {
       scrumMasterId: scrumMasterId ? parseInt(scrumMasterId, 10) : undefined,
       accionEstrategicaId: accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
+      pgdId: pgdId ? parseInt(pgdId, 10) : undefined,
     });
   }
 

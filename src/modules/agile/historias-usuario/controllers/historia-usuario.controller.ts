@@ -19,6 +19,7 @@ import { AsignarHuDto } from '../dto/asignar-hu.dto';
 import { AgregarDependenciaDto } from '../dto/agregar-dependencia.dto';
 import { ReordenarBacklogDto } from '../dto/reordenar-backlog.dto';
 import { VincularRequerimientoDto } from '../dto/vincular-requerimiento.dto';
+import { ValidarHuDto } from '../dto/validar-hu.dto';
 import { HuPrioridad, HuEstado } from '../enums/historia-usuario.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
@@ -30,6 +31,12 @@ import { Role } from '../../../../common/constants/roles.constant';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class HistoriaUsuarioController {
   constructor(private readonly huService: HistoriaUsuarioService) {}
+
+  @Get('next-codigo/:proyectoId')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  getNextCodigo(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
+    return this.huService.getNextCodigo(proyectoId);
+  }
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
@@ -83,6 +90,30 @@ export class HistoriaUsuarioController {
     @CurrentUser('id') userId: number,
   ) {
     return this.huService.cambiarEstado(id, cambiarEstadoDto, userId);
+  }
+
+  /**
+   * Validar (aprobar/rechazar) una Historia de Usuario en estado "En revisión"
+   * Solo SCRUM_MASTER puede validar
+   */
+  @Patch(':id/validar')
+  @Roles(Role.ADMIN, Role.PMO, Role.SCRUM_MASTER)
+  validarHu(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() validarDto: ValidarHuDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.huService.validarHu(id, validarDto, userId);
+  }
+
+  /**
+   * Regenerar el PDF de evidencias para una HU en estado "En revisión"
+   * Útil para actualizar el formato del PDF con nuevas imágenes embebidas
+   */
+  @Post(':id/regenerar-pdf')
+  @Roles(Role.ADMIN, Role.PMO, Role.SCRUM_MASTER)
+  regenerarPdf(@Param('id', ParseIntPipe) id: number) {
+    return this.huService.regenerarPdf(id);
   }
 
   @Patch(':id/mover-sprint')

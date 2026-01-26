@@ -3,29 +3,37 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository, Not } from 'typeorm';
-import { Tarea, EvidenciaTarea } from '../entities';
+import { Tarea, EvidenciaTarea, TareaAsignado } from '../entities';
 import { Subtarea } from '../../subtareas/entities/subtarea.entity';
+import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
+import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Usuario } from '../../../auth/entities/usuario.entity';
 import { CreateTareaDto } from '../dto/create-tarea.dto';
 import { UpdateTareaDto } from '../dto/update-tarea.dto';
 import { CambiarEstadoTareaDto } from '../dto/cambiar-estado-tarea.dto';
 import { ValidarTareaDto } from '../dto/validar-tarea.dto';
 import { CreateEvidenciaTareaDto } from '../dto/create-evidencia-tarea.dto';
 import { TareaTipo, TareaEstado, TareaPrioridad } from '../enums/tarea.enum';
+import { HuEstado } from '../../historias-usuario/enums/historia-usuario.enum';
 import { HistorialCambioService } from '../../common/services/historial-cambio.service';
 import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/historial-cambio.enum';
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+import { HuEvidenciaPdfService } from '../../historias-usuario/services/hu-evidencia-pdf.service';
+import { MinioService } from '../../../storage/services/minio.service';
 
 // Configuración de WIP limits por defecto por columna
 const DEFAULT_WIP_LIMITS: Record<TareaEstado, number | null> = {
   [TareaEstado.POR_HACER]: null, // Sin límite
   [TareaEstado.EN_PROGRESO]: 5,  // Máximo 5 tareas en progreso
-  [TareaEstado.EN_REVISION]: 3,  // Máximo 3 tareas en revisión
+  [TareaEstado.EN_REVISION]: null, // Sin límite - pendiente de revisión
   [TareaEstado.FINALIZADO]: null, // Sin límite
 };
 
@@ -36,11 +44,22 @@ export class TareaService {
     private readonly tareaRepository: Repository<Tarea>,
     @InjectRepository(EvidenciaTarea)
     private readonly evidenciaRepository: Repository<EvidenciaTarea>,
+    @InjectRepository(TareaAsignado)
+    private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
     @InjectRepository(Subtarea)
     private readonly subtareaRepository: Repository<Subtarea>,
+    @InjectRepository(HistoriaUsuario)
+    private readonly historiaUsuarioRepository: Repository<HistoriaUsuario>,
+    @InjectRepository(Proyecto)
+    private readonly proyectoRepository: Repository<Proyecto>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
     private readonly historialCambioService: HistorialCambioService,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
+    private readonly huEvidenciaPdfService: HuEvidenciaPdfService,
+    private readonly minioService: MinioService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createDto: CreateTareaDto, userId?: number): Promise<Tarea> {
@@ -50,6 +69,15 @@ export class TareaService {
     }
     if (createDto.tipo === TareaTipo.KANBAN && !createDto.actividadId) {
       throw new BadRequestException('actividadId es requerido para tareas KANBAN');
+    }
+
+    // Validar fechas de la tarea contra el rango de la HU (solo para tareas SCRUM)
+    if (createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId) {
+      await this.validarFechasContraHistoria(
+        createDto.historiaUsuarioId,
+        createDto.fechaInicio,
+        createDto.fechaFin,
+      );
     }
 
     // Check for duplicate code
@@ -63,13 +91,65 @@ export class TareaService {
       throw new ConflictException(`Ya existe una tarea con el código ${createDto.codigo}`);
     }
 
+    // Filtrar asignadoA y asignadosIds para manejar por separado
+    const { asignadoA, asignadosIds, ...restDto } = createDto;
+
+    // Si hay asignadosIds, usar el primero como asignadoA principal (compatibilidad)
+    const asignadoPrincipal = asignadosIds && asignadosIds.length > 0
+      ? asignadosIds[0]
+      : (asignadoA ?? undefined);
+
     const tarea = this.tareaRepository.create({
-      ...createDto,
+      ...restDto,
+      asignadoA: asignadoPrincipal,
       createdBy: userId,
       updatedBy: userId,
     });
 
     const tareaGuardada = await this.tareaRepository.save(tarea);
+
+    // Crear entradas en tarea_asignados para todos los responsables
+    if (asignadosIds && asignadosIds.length > 0) {
+      const asignaciones = asignadosIds.map(usuarioId =>
+        this.tareaAsignadoRepository.create({
+          tareaId: tareaGuardada.id,
+          usuarioId,
+          rol: 'IMPLEMENTADOR',
+          asignadoPor: userId,
+        })
+      );
+      await this.tareaAsignadoRepository.save(asignaciones);
+
+      // Notificar a todos los asignados
+      for (const usuarioId of asignadosIds) {
+        if (usuarioId !== userId) {
+          await this.notificacionService.notificar(
+            TipoNotificacion.TAREAS,
+            usuarioId,
+            {
+              titulo: `Nueva tarea asignada: ${tareaGuardada.codigo}`,
+              descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
+              entidadTipo: 'Tarea',
+              entidadId: tareaGuardada.id,
+              urlAccion: `/poi/tareas/${tareaGuardada.id}`,
+            },
+          );
+        }
+      }
+    } else if (asignadoA && asignadoA !== userId) {
+      // Compatibilidad: si solo se envió asignadoA, notificar
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        asignadoA,
+        {
+          titulo: `Nueva tarea asignada: ${tareaGuardada.codigo}`,
+          descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
+          entidadTipo: 'Tarea',
+          entidadId: tareaGuardada.id,
+          urlAccion: `/poi/tareas/${tareaGuardada.id}`,
+        },
+      );
+    }
 
     // Registrar creacion en historial
     if (userId) {
@@ -78,21 +158,6 @@ export class TareaService {
         tareaGuardada.id,
         userId,
         { codigo: tareaGuardada.codigo, nombre: tareaGuardada.nombre },
-      );
-    }
-
-    // Notificar al asignado si se le asigna la tarea
-    if (createDto.asignadoA && createDto.asignadoA !== userId) {
-      await this.notificacionService.notificar(
-        TipoNotificacion.TAREAS,
-        createDto.asignadoA,
-        {
-          titulo: `Nueva tarea asignada: ${tareaGuardada.codigo}`,
-          descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
-          entidadTipo: 'Tarea',
-          entidadId: tareaGuardada.id,
-          urlAccion: `/poi/tareas/${tareaGuardada.id}`,
-        },
       );
     }
 
@@ -152,7 +217,7 @@ export class TareaService {
   async findByHistoriaUsuario(historiaUsuarioId: number): Promise<Tarea[]> {
     return this.tareaRepository.find({
       where: { historiaUsuarioId, activo: true },
-      relations: ['asignado'],
+      relations: ['asignado', 'asignados', 'asignados.usuario', 'creator'],
       order: { prioridad: 'ASC', createdAt: 'DESC' },
     });
   }
@@ -160,7 +225,7 @@ export class TareaService {
   async findByActividad(actividadId: number): Promise<Tarea[]> {
     return this.tareaRepository.find({
       where: { actividadId, activo: true },
-      relations: ['asignado'],
+      relations: ['asignado', 'asignados', 'asignados.usuario', 'creator'],
       order: { prioridad: 'ASC', createdAt: 'DESC' },
     });
   }
@@ -168,7 +233,7 @@ export class TareaService {
   async findOne(id: number): Promise<Tarea> {
     const tarea = await this.tareaRepository.findOne({
       where: { id },
-      relations: ['historiaUsuario', 'actividad', 'asignado', 'validador'],
+      relations: ['historiaUsuario', 'actividad', 'asignado', 'validador', 'asignados', 'asignados.usuario', 'creator'],
     });
 
     if (!tarea) {
@@ -178,8 +243,46 @@ export class TareaService {
     return tarea;
   }
 
-  async update(id: number, updateDto: UpdateTareaDto, userId?: number): Promise<Tarea> {
+  async update(id: number, updateDto: UpdateTareaDto, userId?: number, userRole?: string): Promise<Tarea> {
     const tarea = await this.findOne(id);
+
+    // Verificar si la tarea está finalizada
+    if (tarea.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede editar una tarea finalizada');
+    }
+
+    // IMPLEMENTADOR no puede editar tareas, solo ver detalles
+    if (userRole === 'IMPLEMENTADOR') {
+      throw new ForbiddenException('Los implementadores no pueden editar tareas, solo pueden ver detalles');
+    }
+
+    // Si es tarea SCRUM, verificar estado de HU
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: tarea.historiaUsuarioId },
+      });
+      if (hu?.estado === HuEstado.EN_REVISION) {
+        throw new BadRequestException(
+          'No se puede editar una tarea cuya Historia de Usuario está en revisión. Espere a que sea validada o rechazada.',
+        );
+      }
+      if (hu?.estado === HuEstado.FINALIZADO) {
+        throw new BadRequestException(
+          'No se puede editar una tarea cuya Historia de Usuario ya fue validada y finalizada.',
+        );
+      }
+    }
+
+    // Validar fechas de la tarea contra el rango de la HU (solo para tareas SCRUM)
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      const fechaInicio = updateDto.fechaInicio !== undefined
+        ? updateDto.fechaInicio
+        : (tarea.fechaInicio instanceof Date ? tarea.fechaInicio.toISOString().split('T')[0] : tarea.fechaInicio);
+      const fechaFin = updateDto.fechaFin !== undefined
+        ? updateDto.fechaFin
+        : (tarea.fechaFin instanceof Date ? tarea.fechaFin.toISOString().split('T')[0] : tarea.fechaFin);
+      await this.validarFechasContraHistoria(tarea.historiaUsuarioId, fechaInicio, fechaFin);
+    }
 
     // Clonar valores anteriores para comparacion
     const valoresAnteriores = {
@@ -192,17 +295,104 @@ export class TareaService {
       asignadoA: tarea.asignadoA,
     };
 
-    Object.assign(tarea, updateDto, { updatedBy: userId });
+    // Extraer asignadosIds para manejar por separado
+    const { asignadosIds, ...restUpdateDto } = updateDto;
+
+    // Si hay asignadosIds, actualizar el asignadoA principal con el primero
+    if (asignadosIds && asignadosIds.length > 0) {
+      restUpdateDto.asignadoA = asignadosIds[0];
+    }
+
+    Object.assign(tarea, restUpdateDto, { updatedBy: userId });
+
+    // Si se actualizó asignadoA, limpiar la relación 'asignado' para evitar conflicto con TypeORM
+    // TypeORM usa la relación ManyToOne al guardar, lo que puede sobreescribir el valor del campo
+    if (updateDto.asignadoA !== undefined) {
+      tarea.asignado = null as any;
+    }
 
     const tareaActualizada = await this.tareaRepository.save(tarea);
 
-    // Registrar cambios en historial
+    // Actualizar asignados en tabla tarea_asignados si se proporcionó asignadosIds
+    if (asignadosIds && asignadosIds.length > 0) {
+      // Eliminar asignaciones anteriores
+      await this.tareaAsignadoRepository.delete({ tareaId: id });
+
+      // Crear nuevas asignaciones
+      const asignaciones = asignadosIds.map(usuarioId =>
+        this.tareaAsignadoRepository.create({
+          tareaId: id,
+          usuarioId,
+          rol: 'IMPLEMENTADOR',
+          asignadoPor: userId,
+        })
+      );
+      await this.tareaAsignadoRepository.save(asignaciones);
+
+      // Notificar a los nuevos asignados
+      for (const usuarioId of asignadosIds) {
+        if (usuarioId !== userId && usuarioId !== valoresAnteriores.asignadoA) {
+          await this.notificacionService.notificar(
+            TipoNotificacion.TAREAS,
+            usuarioId,
+            {
+              titulo: `Tarea asignada: ${tarea.codigo}`,
+              descripcion: `Se te ha asignado la tarea "${tarea.nombre}"`,
+              entidadTipo: 'Tarea',
+              entidadId: tarea.id,
+              urlAccion: `/poi/tareas/${tarea.id}`,
+            },
+          );
+        }
+      }
+    }
+
+    // Registrar cambios en historial (con nombres de usuario para asignadoA)
     if (userId) {
+      // Resolver nombres de usuario para asignadoA si hay cambios
+      let valoresAnterioresHistorial = { ...valoresAnteriores };
+      let valoresNuevosHistorial = { ...updateDto };
+
+      if (updateDto.asignadoA !== undefined || valoresAnteriores.asignadoA !== undefined) {
+        // Obtener nombre del asignado anterior
+        if (valoresAnteriores.asignadoA) {
+          const usuarioAnterior = await this.usuarioRepository.findOne({
+            where: { id: valoresAnteriores.asignadoA },
+            select: ['id', 'nombre', 'apellido'],
+          });
+          if (usuarioAnterior) {
+            valoresAnterioresHistorial = {
+              ...valoresAnterioresHistorial,
+              asignadoA: `${usuarioAnterior.nombre} ${usuarioAnterior.apellido}`.trim() as any,
+            };
+          }
+        }
+
+        // Obtener nombre del asignado nuevo
+        if (updateDto.asignadoA) {
+          const usuarioNuevo = await this.usuarioRepository.findOne({
+            where: { id: updateDto.asignadoA },
+            select: ['id', 'nombre', 'apellido'],
+          });
+          if (usuarioNuevo) {
+            valoresNuevosHistorial = {
+              ...valoresNuevosHistorial,
+              asignadoA: `${usuarioNuevo.nombre} ${usuarioNuevo.apellido}`.trim() as any,
+            };
+          }
+        } else if (updateDto.asignadoA === null) {
+          valoresNuevosHistorial = {
+            ...valoresNuevosHistorial,
+            asignadoA: 'Sin asignar' as any,
+          };
+        }
+      }
+
       await this.historialCambioService.registrarCambiosMultiples(
         HistorialEntidadTipo.TAREA,
         id,
-        valoresAnteriores,
-        updateDto,
+        valoresAnterioresHistorial,
+        valoresNuevosHistorial,
         userId,
       );
     }
@@ -233,16 +423,17 @@ export class TareaService {
     const tarea = await this.findOne(id);
     const estadoAnterior = tarea.estado;
 
-    // If finalizing, require evidenciaUrl for SCRUM tasks
+    // If finalizing, require evidencias for SCRUM tasks (using evidencias_tarea table)
     if (
       cambiarEstadoDto.estado === TareaEstado.FINALIZADO &&
-      tarea.tipo === TareaTipo.SCRUM &&
-      !cambiarEstadoDto.evidenciaUrl &&
-      !tarea.evidenciaUrl
+      tarea.tipo === TareaTipo.SCRUM
     ) {
-      throw new BadRequestException(
-        'Se requiere evidencia para finalizar una tarea SCRUM',
-      );
+      const evidencias = await this.obtenerEvidencias(id);
+      if (evidencias.length === 0) {
+        throw new BadRequestException(
+          'Se requiere al menos una evidencia para finalizar una tarea SCRUM',
+        );
+      }
     }
 
     // Validar WIP limit antes de mover (solo para tareas KANBAN)
@@ -265,9 +456,7 @@ export class TareaService {
       tarea.horasReales = cambiarEstadoDto.horasReales;
     }
 
-    if (cambiarEstadoDto.evidenciaUrl) {
-      tarea.evidenciaUrl = cambiarEstadoDto.evidenciaUrl;
-    }
+    // evidenciaUrl eliminado - usar tabla evidencias_tarea en su lugar
 
     const tareaActualizada = await this.tareaRepository.save(tarea);
 
@@ -310,6 +499,11 @@ export class TareaService {
         estadoAnterior,
         estadoNuevo: cambiarEstadoDto.estado,
       });
+    }
+
+    // Actualizar estado de la HU automáticamente (solo para tareas SCRUM)
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      await this.actualizarEstadoHUSegunTareas(tarea.historiaUsuarioId, userId);
     }
 
     return tareaActualizada;
@@ -369,8 +563,19 @@ export class TareaService {
     return this.tareaRepository.save(tarea);
   }
 
-  async remove(id: number, userId?: number): Promise<Tarea> {
+  async remove(id: number, userId?: number, userRole?: string): Promise<Tarea> {
     const tarea = await this.findOne(id);
+
+    // Verificar si la tarea está finalizada
+    if (tarea.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede eliminar una tarea finalizada');
+    }
+
+    // IMPLEMENTADOR no puede eliminar tareas
+    if (userRole === 'IMPLEMENTADOR') {
+      throw new ForbiddenException('Los implementadores no pueden eliminar tareas');
+    }
+
     tarea.activo = false;
     tarea.updatedBy = userId;
 
@@ -418,6 +623,40 @@ export class TareaService {
       valorNuevo: createDto.nombre,
     });
 
+    // Cambiar estado de la tarea a "Finalizado" y actualizar fecha_completado
+    if (tarea.estado !== TareaEstado.FINALIZADO) {
+      const estadoAnterior = tarea.estado;
+
+      await this.tareaRepository.update(tareaId, {
+        estado: TareaEstado.FINALIZADO,
+        fechaCompletado: new Date(),
+        updatedBy: userId,
+      });
+
+      // Registrar cambio de estado
+      await this.historialCambioService.registrarCambioEstado(
+        HistorialEntidadTipo.TAREA,
+        tareaId,
+        estadoAnterior,
+        TareaEstado.FINALIZADO,
+        userId,
+      );
+
+      console.log(`[Tarea ${tarea.codigo}] Evidencia agregada → Estado cambiado a "Finalizado"`);
+    } else {
+      // Si ya está en Finalizado, solo actualizar la fecha
+      await this.tareaRepository.update(tareaId, {
+        fechaCompletado: new Date(),
+        updatedBy: userId,
+      });
+    }
+
+    // Actualizar estado de la HU automáticamente (solo para tareas SCRUM)
+    // Se ejecuta siempre que se agrega evidencia para verificar si todas las tareas tienen evidencias
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      await this.actualizarEstadoHUSegunTareas(tarea.historiaUsuarioId, userId);
+    }
+
     return evidenciaCreada;
   }
 
@@ -438,7 +677,7 @@ export class TareaService {
     userId: number,
   ): Promise<void> {
     // Verificar que la tarea existe
-    await this.findOne(tareaId);
+    const tarea = await this.findOne(tareaId);
 
     const evidencia = await this.evidenciaRepository.findOne({
       where: { id: evidenciaId, tareaId },
@@ -459,6 +698,61 @@ export class TareaService {
       campoModificado: 'evidencia',
       valorAnterior: evidencia.nombre,
     });
+
+    // Verificar si la tarea queda sin evidencias
+    const evidenciasRestantes = await this.evidenciaRepository.count({
+      where: { tareaId },
+    });
+
+    // Si no quedan evidencias y la tarea está en "Finalizado", cambiar a "En progreso"
+    if (evidenciasRestantes === 0 && tarea.estado === TareaEstado.FINALIZADO) {
+      const estadoAnterior = tarea.estado;
+
+      await this.tareaRepository.update(tareaId, {
+        estado: TareaEstado.EN_PROGRESO,
+        fechaCompletado: null as any, // Limpiar fecha de completado
+        updatedBy: userId,
+      });
+
+      // Registrar cambio de estado
+      await this.historialCambioService.registrarCambioEstado(
+        HistorialEntidadTipo.TAREA,
+        tareaId,
+        estadoAnterior,
+        TareaEstado.EN_PROGRESO,
+        userId,
+      );
+
+      console.log(`[Tarea ${tarea.codigo}] Última evidencia eliminada → Estado cambiado a "En progreso"`);
+
+      // Si la HU estaba en "En revisión", también debe volver a "En progreso"
+      if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+        const hu = await this.historiaUsuarioRepository.findOne({
+          where: { id: tarea.historiaUsuarioId, activo: true },
+        });
+
+        if (hu && hu.estado === HuEstado.EN_REVISION) {
+          const huEstadoAnterior = hu.estado;
+
+          await this.historiaUsuarioRepository.update(tarea.historiaUsuarioId, {
+            estado: HuEstado.EN_PROGRESO,
+            documentoEvidenciasUrl: null, // Invalidar el PDF anterior
+            updatedBy: userId,
+          });
+
+          // Registrar cambio de estado de la HU
+          await this.historialCambioService.registrarCambioEstado(
+            HistorialEntidadTipo.HISTORIA_USUARIO,
+            tarea.historiaUsuarioId,
+            huEstadoAnterior,
+            HuEstado.EN_PROGRESO,
+            userId,
+          );
+
+          console.log(`[HU-${hu.codigo}] Evidencia de tarea eliminada → Estado cambiado a "En progreso"`);
+        }
+      }
+    }
   }
 
   // ================================================================
@@ -557,5 +851,236 @@ export class TareaService {
     }
 
     return result;
+  }
+
+  /**
+   * Valida que las fechas de la tarea estén dentro del rango de fechas de la HU
+   */
+  private async validarFechasContraHistoria(
+    historiaUsuarioId: number,
+    fechaInicio: string | null | undefined,
+    fechaFin: string | null | undefined,
+  ): Promise<void> {
+    if (!fechaInicio && !fechaFin) return;
+
+    const historia = await this.historiaUsuarioRepository.findOne({
+      where: { id: historiaUsuarioId },
+      select: ['id', 'codigo', 'fechaInicio', 'fechaFin'],
+    });
+
+    if (!historia) {
+      throw new NotFoundException(`Historia de usuario con ID ${historiaUsuarioId} no encontrada`);
+    }
+
+    // Si la HU no tiene fechas definidas, no validar
+    if (!historia.fechaInicio && !historia.fechaFin) return;
+
+    const huInicio = historia.fechaInicio ? new Date(historia.fechaInicio) : null;
+    const huFin = historia.fechaFin ? new Date(historia.fechaFin) : null;
+
+    if (fechaInicio) {
+      const tareaInicio = new Date(fechaInicio);
+      if (huInicio && tareaInicio < huInicio) {
+        throw new BadRequestException(
+          `La fecha de inicio de la tarea (${fechaInicio}) no puede ser anterior a la fecha de inicio de la HU ${historia.codigo} (${historia.fechaInicio})`,
+        );
+      }
+      if (huFin && tareaInicio > huFin) {
+        throw new BadRequestException(
+          `La fecha de inicio de la tarea (${fechaInicio}) no puede ser posterior a la fecha fin de la HU ${historia.codigo} (${historia.fechaFin})`,
+        );
+      }
+    }
+
+    if (fechaFin) {
+      const tareaFin = new Date(fechaFin);
+      if (huInicio && tareaFin < huInicio) {
+        throw new BadRequestException(
+          `La fecha fin de la tarea (${fechaFin}) no puede ser anterior a la fecha de inicio de la HU ${historia.codigo} (${historia.fechaInicio})`,
+        );
+      }
+      if (huFin && tareaFin > huFin) {
+        throw new BadRequestException(
+          `La fecha fin de la tarea (${fechaFin}) no puede ser posterior a la fecha fin de la HU ${historia.codigo} (${historia.fechaFin})`,
+        );
+      }
+    }
+
+    // Validar que fecha inicio no sea mayor que fecha fin
+    if (fechaInicio && fechaFin) {
+      const tareaInicio = new Date(fechaInicio);
+      const tareaFin = new Date(fechaFin);
+      if (tareaInicio > tareaFin) {
+        throw new BadRequestException(
+          'La fecha de inicio de la tarea no puede ser posterior a la fecha fin',
+        );
+      }
+    }
+  }
+
+  /**
+   * Actualiza el estado de la Historia de Usuario según el estado de sus tareas
+   * Lógica:
+   * - Si alguna tarea pasa a "Finalizado" → HU pasa a "En progreso" (si tiene más de 1 tarea)
+   * - Si TODAS las tareas están "Finalizado" con evidencias → HU pasa a "En revisión" y se genera PDF
+   * - Si solo tiene 1 tarea y está "Finalizado" con evidencia → HU pasa a "En revisión" y se genera PDF
+   */
+  async actualizarEstadoHUSegunTareas(historiaUsuarioId: number, userId?: number): Promise<void> {
+    // Obtener la HU
+    const hu = await this.historiaUsuarioRepository.findOne({
+      where: { id: historiaUsuarioId, activo: true },
+    });
+
+    if (!hu) return;
+
+    // No actualizar si la HU ya está en "Finalizado"
+    if (hu.estado === HuEstado.FINALIZADO) return;
+
+    // Obtener todas las tareas activas de la HU
+    const tareas = await this.tareaRepository.find({
+      where: {
+        historiaUsuarioId,
+        activo: true,
+        tipo: TareaTipo.SCRUM,
+      },
+    });
+
+    // Si no hay tareas, no hacer nada
+    if (tareas.length === 0) return;
+
+    // Contar tareas finalizadas
+    const tareasFinalizadas = tareas.filter(t => t.estado === TareaEstado.FINALIZADO);
+    const todasFinalizadas = tareasFinalizadas.length === tareas.length;
+
+    // Si todas las tareas están finalizadas, verificar si todas tienen evidencias
+    if (todasFinalizadas) {
+      let todasConEvidencia = true;
+
+      for (const tarea of tareas) {
+        const evidencias = await this.evidenciaRepository.count({
+          where: { tareaId: tarea.id },
+        });
+        if (evidencias === 0) {
+          todasConEvidencia = false;
+          break;
+        }
+      }
+
+      if (todasConEvidencia) {
+        // Todas las tareas finalizadas con evidencias → HU pasa a "En revisión"
+        const estadoAnterior = hu.estado;
+
+        // Obtener proyecto para el PDF y notificación
+        const proyecto = await this.proyectoRepository.findOne({
+          where: { id: hu.proyectoId },
+        });
+
+        // Obtener sprint (si existe) para el PDF
+        let sprintNombre: string | null = null;
+        if (hu.sprintId) {
+          const huConSprint = await this.historiaUsuarioRepository.findOne({
+            where: { id: historiaUsuarioId },
+            relations: ['sprint'],
+          });
+          sprintNombre = huConSprint?.sprint?.nombre || null;
+        }
+
+        // Generar PDF consolidado de evidencias
+        let pdfUrl = '';
+        try {
+          const pdfBuffer = await this.huEvidenciaPdfService.generateEvidenciasPdf(
+            historiaUsuarioId,
+            { codigo: proyecto?.codigo || '', nombre: proyecto?.nombre || '' },
+            sprintNombre ? { nombre: sprintNombre } : null,
+          );
+
+          // Subir PDF a MinIO
+          const bucketName = this.configService.get('minio.buckets.documentos', 'sigp-documentos');
+          const objectKey = `evidencias/hu/${hu.codigo}_evidencias_${Date.now()}.pdf`;
+
+          await this.minioService.putObject(
+            bucketName,
+            objectKey,
+            pdfBuffer,
+            pdfBuffer.length,
+            { 'Content-Type': 'application/pdf' },
+          );
+
+          // Generar URL de descarga
+          pdfUrl = await this.minioService.getPresignedGetUrl(bucketName, objectKey, 7 * 24 * 60 * 60); // 7 días
+
+          console.log(`[HU-${hu.codigo}] PDF de evidencias generado: ${objectKey}`);
+        } catch (error) {
+          console.error(`[HU-${hu.codigo}] Error generando PDF de evidencias:`, error);
+          // Continuar aunque falle la generación del PDF
+        }
+
+        // Actualizar HU con estado "En revisión" y URL del PDF
+        await this.historiaUsuarioRepository.update(historiaUsuarioId, {
+          estado: HuEstado.EN_REVISION,
+          updatedBy: userId,
+          documentoEvidenciasUrl: pdfUrl || null,
+        });
+
+        // Registrar cambio de estado en historial
+        if (userId && estadoAnterior !== HuEstado.EN_REVISION) {
+          await this.historialCambioService.registrarCambioEstado(
+            HistorialEntidadTipo.HISTORIA_USUARIO,
+            historiaUsuarioId,
+            estadoAnterior,
+            HuEstado.EN_REVISION,
+            userId,
+          );
+        }
+
+        // Enviar notificación al SCRUM_MASTER del proyecto
+        if (proyecto?.scrumMasterId) {
+          try {
+            await this.notificacionService.notificar(
+              TipoNotificacion.VALIDACIONES,
+              proyecto.scrumMasterId,
+              {
+                titulo: `HU en Revisión: ${hu.codigo}`,
+                descripcion: `La Historia de Usuario "${hu.titulo}" del proyecto "${proyecto.nombre}" tiene todas sus tareas finalizadas con evidencias y está pendiente de validación.`,
+                entidadTipo: 'HistoriaUsuario',
+                entidadId: hu.id,
+                proyectoId: proyecto.id,
+                urlAccion: `/poi/proyecto/detalles?tab=Backlog`,
+              },
+            );
+            console.log(`[HU-${hu.codigo}] Notificación enviada a SCRUM_MASTER (ID: ${proyecto.scrumMasterId})`);
+          } catch (error) {
+            console.error(`[HU-${hu.codigo}] Error enviando notificación a SCRUM_MASTER:`, error);
+          }
+        }
+
+        console.log(`[HU-${hu.codigo}] Todas las tareas finalizadas con evidencias. Estado cambiado a "En revisión".`);
+        return;
+      }
+    }
+
+    // Si hay alguna tarea finalizada pero no todas, y la HU está en "Por hacer"
+    // → cambiar a "En progreso"
+    if (tareasFinalizadas.length > 0 && hu.estado === HuEstado.POR_HACER) {
+      const estadoAnterior = hu.estado;
+
+      await this.historiaUsuarioRepository.update(historiaUsuarioId, {
+        estado: HuEstado.EN_PROGRESO,
+        updatedBy: userId,
+      });
+
+      // Registrar cambio de estado en historial
+      if (userId) {
+        await this.historialCambioService.registrarCambioEstado(
+          HistorialEntidadTipo.HISTORIA_USUARIO,
+          historiaUsuarioId,
+          estadoAnterior,
+          HuEstado.EN_PROGRESO,
+          userId,
+        );
+      }
+
+      console.log(`[HU-${hu.codigo}] Tarea finalizada. Estado cambiado a "En progreso".`);
+    }
   }
 }

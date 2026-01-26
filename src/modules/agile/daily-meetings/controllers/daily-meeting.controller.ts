@@ -51,6 +51,24 @@ export class DailyMeetingController {
     });
   }
 
+  // IMPORTANTE: Las rutas con paths literales deben definirse ANTES de las rutas con parámetros
+  // para evitar conflictos de routing (ej: 'participantes/:id' antes de ':id')
+
+  @Patch('participantes/:participanteId')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
+  updateParticipante(
+    @Param('participanteId', ParseIntPipe) participanteId: number,
+    @Body() updateDto: UpdateParticipanteDto,
+  ) {
+    return this.dailyMeetingService.updateParticipante(participanteId, updateDto);
+  }
+
+  @Delete('participantes/:participanteId')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  removeParticipante(@Param('participanteId', ParseIntPipe) participanteId: number) {
+    return this.dailyMeetingService.removeParticipante(participanteId);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.dailyMeetingService.findOne(id);
@@ -78,21 +96,6 @@ export class DailyMeetingController {
     @Body() createDto: CreateParticipanteDto,
   ) {
     return this.dailyMeetingService.addParticipante(id, createDto);
-  }
-
-  @Patch('participantes/:participanteId')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
-  updateParticipante(
-    @Param('participanteId', ParseIntPipe) participanteId: number,
-    @Body() updateDto: UpdateParticipanteDto,
-  ) {
-    return this.dailyMeetingService.updateParticipante(participanteId, updateDto);
-  }
-
-  @Delete('participantes/:participanteId')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
-  removeParticipante(@Param('participanteId', ParseIntPipe) participanteId: number) {
-    return this.dailyMeetingService.removeParticipante(participanteId);
   }
 
   @Delete(':id')

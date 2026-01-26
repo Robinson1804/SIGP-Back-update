@@ -36,6 +36,22 @@ export class Subproyecto {
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   monto: number;
 
+  // Años del subproyecto
+  @Column({ type: 'simple-array', nullable: true })
+  anios: number[];
+
+  // Áreas financieras
+  @Column({ name: 'areas_financieras', type: 'simple-array', nullable: true })
+  areasFinancieras: string[];
+
+  /**
+   * @deprecated Los responsables ahora se manejan via tabla rrhh.asignaciones
+   * con tipoAsignacion='Subproyecto'. Este campo se mantiene por compatibilidad
+   * pero no se usa activamente.
+   */
+  @Column({ type: 'simple-array', nullable: true })
+  responsables: number[];
+
   @Index()
   @Column({
     type: 'varchar',

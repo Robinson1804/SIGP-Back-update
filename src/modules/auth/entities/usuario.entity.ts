@@ -45,6 +45,14 @@ export class Usuario {
   })
   rol: Role;
 
+  // Roles adicionales para usuarios con múltiples roles
+  @Column({
+    name: 'roles_adicionales',
+    type: 'jsonb',
+    default: '[]',
+  })
+  rolesAdicionales: Role[];
+
   @Column({ name: 'avatar_url', length: 500, nullable: true })
   avatarUrl: string;
 

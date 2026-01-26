@@ -20,8 +20,9 @@ import { UpdateCronogramaDto } from '../dto/update-cronograma.dto';
 import { CreateTareaCronogramaDto } from '../dto/create-tarea-cronograma.dto';
 import { UpdateTareaCronogramaDto } from '../dto/update-tarea-cronograma.dto';
 import { CreateDependenciaDto } from '../dto/create-dependencia.dto';
+import { AprobarCronogramaDto } from '../dto/aprobar-cronograma.dto';
 import { ResultadoRutaCriticaDto, DatosExportacionDto } from '../dto/ruta-critica-response.dto';
-import { CronogramaEstado } from '../enums/cronograma.enum';
+import { CronogramaEstado, TareaEstado } from '../enums/cronograma.enum';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
@@ -79,6 +80,26 @@ export class CronogramaController {
     @CurrentUser('id') userId: number,
   ) {
     return this.cronogramaService.cambiarEstado(id, estado, userId);
+  }
+
+  @Post(':id/aprobar')
+  @Roles(Role.ADMIN, Role.PMO, Role.PATROCINADOR)
+  aprobar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AprobarCronogramaDto,
+    @CurrentUser('id') userId: number,
+    @CurrentUser('rol') userRole: string,
+  ) {
+    return this.cronogramaService.aprobar(id, dto, userId, userRole);
+  }
+
+  @Post(':id/enviar-revision')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  enviarARevision(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.cronogramaService.enviarARevision(id, userId);
   }
 
   @Delete(':id')
@@ -194,6 +215,21 @@ export class TareaCronogramaController {
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
     return this.tareaCronogramaService.remove(id, userId);
   }
+
+  /**
+   * Actualiza SOLO el estado de una tarea del cronograma.
+   * Funciona incluso cuando el cronograma está aprobado.
+   * Solo ADMIN, SCRUM_MASTER y COORDINADOR pueden usar este endpoint.
+   */
+  @Patch(':id/estado')
+  @Roles(Role.ADMIN, Role.SCRUM_MASTER, Role.COORDINADOR)
+  updateEstado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('estado') estado: TareaEstado,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.tareaCronogramaService.updateEstadoOnly(id, estado, userId);
+  }
 }
 
 @Controller('cronogramas/:cronogramaId/tareas')
@@ -204,6 +240,28 @@ export class CronogramaTareasController {
   @Get()
   findByCronograma(@Param('cronogramaId', ParseIntPipe) cronogramaId: number) {
     return this.tareaCronogramaService.findByCronograma(cronogramaId);
+  }
+
+  @Patch(':tareaId')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
+  update(
+    @Param('cronogramaId', ParseIntPipe) cronogramaId: number,
+    @Param('tareaId', ParseIntPipe) tareaId: number,
+    @Body() updateDto: UpdateTareaCronogramaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    // El cronogramaId se puede usar para validación adicional si es necesario
+    return this.tareaCronogramaService.update(tareaId, updateDto, userId);
+  }
+
+  @Delete(':tareaId')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  remove(
+    @Param('cronogramaId', ParseIntPipe) cronogramaId: number,
+    @Param('tareaId', ParseIntPipe) tareaId: number,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.tareaCronogramaService.remove(tareaId, userId);
   }
 }
 

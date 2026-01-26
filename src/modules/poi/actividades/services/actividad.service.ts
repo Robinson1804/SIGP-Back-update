@@ -13,17 +13,48 @@ export class ActividadService {
     private readonly actividadRepository: Repository<Actividad>,
   ) {}
 
+  /**
+   * Genera el siguiente código de actividad disponible (ACT N°X)
+   */
+  private async generateCodigo(): Promise<string> {
+    const actividades = await this.actividadRepository.find({
+      select: ['codigo'],
+    });
+
+    let maxNum = 0;
+    for (const actividad of actividades) {
+      const match = actividad.codigo.match(/ACT\s*N°(\d+)/i) || actividad.codigo.match(/ACT-(\d+)/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+
+    return `ACT N°${maxNum + 1}`;
+  }
+
+  /**
+   * Obtener el siguiente código disponible para actividades
+   */
+  async getNextCodigo(): Promise<string> {
+    return this.generateCodigo();
+  }
+
   async create(createDto: CreateActividadDto, userId?: number): Promise<Actividad> {
+    // Si no se proporciona código, generar uno automáticamente
+    const codigo = createDto.codigo || await this.generateCodigo();
+
     const existing = await this.actividadRepository.findOne({
-      where: { codigo: createDto.codigo },
+      where: { codigo },
     });
 
     if (existing) {
-      throw new ConflictException(`Ya existe una actividad con el código ${createDto.codigo}`);
+      throw new ConflictException(`Ya existe una actividad con el código ${codigo}`);
     }
 
     const actividad = this.actividadRepository.create({
       ...createDto,
+      codigo,
       metodoGestion: 'Kanban',
       createdBy: userId,
       updatedBy: userId,
@@ -37,10 +68,13 @@ export class ActividadService {
     coordinadorId?: number;
     accionEstrategicaId?: number;
     activo?: boolean;
+    pgdId?: number;
   }): Promise<Actividad[]> {
     const queryBuilder = this.actividadRepository
       .createQueryBuilder('actividad')
       .leftJoinAndSelect('actividad.coordinador', 'coordinador')
+      .leftJoinAndSelect('actividad.gestor', 'gestor')
+      .leftJoinAndSelect('actividad.accionEstrategica', 'ae')
       .orderBy('actividad.createdAt', 'DESC');
 
     if (filters?.estado) {
@@ -55,6 +89,14 @@ export class ActividadService {
       queryBuilder.andWhere('actividad.accionEstrategicaId = :accionEstrategicaId', { accionEstrategicaId: filters.accionEstrategicaId });
     }
 
+    // Filtrar por PGD a través de la cadena: Actividad -> AE -> OEGD -> OGD -> PGD
+    if (filters?.pgdId) {
+      queryBuilder
+        .leftJoin('ae.oegd', 'oegd')
+        .leftJoin('oegd.ogd', 'ogd')
+        .andWhere('ogd.pgdId = :pgdId', { pgdId: filters.pgdId });
+    }
+
     if (filters?.activo !== undefined) {
       queryBuilder.andWhere('actividad.activo = :activo', { activo: filters.activo });
     }
@@ -65,7 +107,7 @@ export class ActividadService {
   async findOne(id: number): Promise<Actividad> {
     const actividad = await this.actividadRepository.findOne({
       where: { id },
-      relations: ['coordinador', 'accionEstrategica'],
+      relations: ['coordinador', 'gestor', 'accionEstrategica'],
     });
 
     if (!actividad) {

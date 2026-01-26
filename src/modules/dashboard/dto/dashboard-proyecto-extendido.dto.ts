@@ -25,7 +25,7 @@ export class EventoActividadDto {
   descripcion: string;
   usuarioId: number | null;
   usuarioNombre: string | null;
-  timestamp: Date;
+  timestamp: string | Date | null;
   entidadTipo: 'Tarea' | 'HistoriaUsuario' | 'Sprint' | 'Documento';
   entidadId: number;
   metadata?: Record<string, any>;

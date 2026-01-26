@@ -186,7 +186,7 @@ export class Acta {
   @Column({ name: 'comentario_rechazo', type: 'text', nullable: true })
   comentarioRechazo: string | null;
 
-  // Aprobación
+  // Aprobación simple (para actas de reunión y daily)
   @Column({ name: 'aprobado_por', nullable: true })
   aprobadoPor: number;
 
@@ -196,6 +196,19 @@ export class Acta {
 
   @Column({ name: 'fecha_aprobacion', type: 'timestamp with time zone', nullable: true })
   fechaAprobacion: Date;
+
+  // Aprobación dual (para Acta de Constitución - PMO y PATROCINADOR)
+  @Column({ name: 'aprobado_por_pmo', default: false })
+  aprobadoPorPmo: boolean;
+
+  @Column({ name: 'fecha_aprobacion_pmo', type: 'timestamp with time zone', nullable: true })
+  fechaAprobacionPmo: Date | null;
+
+  @Column({ name: 'aprobado_por_patrocinador', default: false })
+  aprobadoPorPatrocinador: boolean;
+
+  @Column({ name: 'fecha_aprobacion_patrocinador', type: 'timestamp with time zone', nullable: true })
+  fechaAprobacionPatrocinador: Date | null;
 
   // Auditoría
   @Index()

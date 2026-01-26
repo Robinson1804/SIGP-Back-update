@@ -1,12 +1,3 @@
-export enum RequerimientoEstado {
-  PENDIENTE = 'Pendiente',
-  EN_ANALISIS = 'En Analisis',
-  APROBADO = 'Aprobado',
-  RECHAZADO = 'Rechazado',
-  EN_DESARROLLO = 'En Desarrollo',
-  COMPLETADO = 'Completado',
-}
-
 export enum RequerimientoPrioridad {
   BAJA = 'Baja',
   MEDIA = 'Media',

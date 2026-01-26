@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '../auth/auth.module';
 
 // Divisiones
 import { Division } from './divisiones/entities/division.entity';
@@ -28,6 +29,7 @@ import {
   AsignacionController,
   ProyectoAsignacionesController,
   ActividadAsignacionesController,
+  SubproyectoAsignacionesController,
 } from './asignaciones/controllers/asignacion.controller';
 
 @Module({
@@ -43,6 +45,7 @@ import {
       // Asignaciones
       Asignacion,
     ]),
+    forwardRef(() => AuthModule),
   ],
   controllers: [
     // Divisiones
@@ -56,6 +59,7 @@ import {
     AsignacionController,
     ProyectoAsignacionesController,
     ActividadAsignacionesController,
+    SubproyectoAsignacionesController,
   ],
   providers: [
     // Divisiones

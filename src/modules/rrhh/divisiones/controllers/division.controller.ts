@@ -10,9 +10,11 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DivisionService } from '../services/division.service';
 import { CreateDivisionDto } from '../dto/create-division.dto';
 import { UpdateDivisionDto } from '../dto/update-division.dto';
+import { AsignarPersonalDto } from '../dto/asignar-personal.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
@@ -61,5 +63,60 @@ export class DivisionController {
   @Roles(Role.ADMIN, Role.PMO)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
     return this.divisionService.remove(id, userId);
+  }
+
+  // ===== COORDINADOR ENDPOINTS =====
+
+  @Post(':id/coordinador')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Asignar coordinador a una división' })
+  @ApiResponse({ status: 200, description: 'Coordinador asignado correctamente' })
+  asignarCoordinador(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AsignarPersonalDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.divisionService.asignarCoordinador(id, dto.personalId, userId);
+  }
+
+  @Delete(':id/coordinador')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Remover coordinador de una división' })
+  removerCoordinador(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.divisionService.removerCoordinador(id, userId);
+  }
+
+  // ===== SCRUM MASTERS ENDPOINTS =====
+
+  @Get(':id/scrum-masters')
+  @ApiOperation({ summary: 'Obtener scrum masters de una división' })
+  getScrumMasters(@Param('id', ParseIntPipe) id: number) {
+    return this.divisionService.getScrumMasters(id);
+  }
+
+  @Post(':id/scrum-masters')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Asignar scrum master a una división' })
+  @ApiResponse({ status: 201, description: 'Scrum master asignado correctamente' })
+  asignarScrumMaster(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AsignarPersonalDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.divisionService.asignarScrumMaster(id, dto.personalId, userId);
+  }
+
+  @Delete(':id/scrum-masters/:personalId')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Remover scrum master de una división' })
+  removerScrumMaster(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('personalId', ParseIntPipe) personalId: number,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.divisionService.removerScrumMaster(id, personalId, userId);
   }
 }

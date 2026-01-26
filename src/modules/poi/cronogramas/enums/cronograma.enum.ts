@@ -1,15 +1,14 @@
 export enum CronogramaEstado {
   BORRADOR = 'Borrador',
-  VIGENTE = 'Vigente',
-  DESACTUALIZADO = 'Desactualizado',
+  EN_REVISION = 'En revisión',
+  APROBADO = 'Aprobado',
+  RECHAZADO = 'Rechazado',
 }
 
 export enum TareaEstado {
-  PENDIENTE = 'Pendiente',
-  EN_PROGRESO = 'En Progreso',
-  COMPLETADA = 'Completada',
-  BLOQUEADA = 'Bloqueada',
-  CANCELADA = 'Cancelada',
+  POR_HACER = 'Por hacer',
+  EN_PROGRESO = 'En progreso',
+  COMPLETADO = 'Completado',
 }
 
 export enum TareaPrioridad {
@@ -42,4 +41,16 @@ export enum TipoDependencia {
   FF = 'FF',
   SS = 'SS',
   SF = 'SF',
+}
+
+/**
+ * Opciones de asignación para tareas del cronograma
+ * SCRUM_MASTER: Solo el Scrum Master del proyecto
+ * DESARROLLADORES: Todos los desarrolladores del proyecto
+ * TODO_EQUIPO: Scrum Master + Todos los desarrolladores
+ */
+export enum AsignadoA {
+  SCRUM_MASTER = 'Scrum Master',
+  DESARROLLADORES = 'Desarrolladores',
+  TODO_EQUIPO = 'Todo el equipo',
 }

@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
 import { Usuario } from '../../auth/entities/usuario.entity';
+import { Proyecto } from '../../poi/proyectos/entities/proyecto.entity';
 
 @Entity({ schema: 'notificaciones', name: 'notificaciones' })
 @Index(['destinatarioId', 'leida', 'createdAt'])
@@ -35,6 +36,10 @@ export class Notificacion {
   @Column({ type: 'int', nullable: true })
   proyectoId: number;
 
+  @ManyToOne(() => Proyecto, { nullable: true })
+  @JoinColumn({ name: 'proyectoId' })
+  proyecto: Proyecto;
+
   @Column({ type: 'int' })
   @Index()
   destinatarioId: number;
@@ -47,13 +52,16 @@ export class Notificacion {
   @Index()
   leida: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   fechaLeida: Date;
+
+  @Column({ type: 'text', nullable: true })
+  observacion: string;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   urlAccion: string;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamptz' })
   @Index()
   createdAt: Date;
 }

@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificacionesModule } from '../notificaciones';
+import { StorageModule } from '../storage/storage.module';
 
 // Entities
 import { Proyecto } from './proyectos/entities/proyecto.entity';
@@ -12,6 +13,8 @@ import { Requerimiento } from './requerimientos/entities/requerimiento.entity';
 import { Cronograma, TareaCronograma, DependenciaCronograma } from './cronogramas/entities';
 import { InformeSprint } from './informes-sprint/entities/informe-sprint.entity';
 import { InformeActividad } from './informes-actividad/entities/informe-actividad.entity';
+import { AccionEstrategica } from '../planning/acciones-estrategicas/entities/accion-estrategica.entity';
+import { Usuario } from '../auth/entities/usuario.entity';
 
 // Services
 import { ProyectoService } from './proyectos/services/proyecto.service';
@@ -69,6 +72,7 @@ import {
 @Module({
   imports: [
     forwardRef(() => NotificacionesModule),
+    StorageModule,
     TypeOrmModule.forFeature([
       Proyecto,
       Actividad,
@@ -81,6 +85,8 @@ import {
       DependenciaCronograma,
       InformeSprint,
       InformeActividad,
+      AccionEstrategica,
+      Usuario,
     ]),
   ],
   controllers: [

@@ -3,14 +3,18 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Subtarea } from '../entities/subtarea.entity';
+import { EvidenciaSubtarea } from '../entities/evidencia-subtarea.entity';
 import { Tarea } from '../../tareas/entities/tarea.entity';
+import { TareaAsignado } from '../../tareas/entities/tarea-asignado.entity';
 import { CreateSubtareaDto } from '../dto/create-subtarea.dto';
 import { UpdateSubtareaDto } from '../dto/update-subtarea.dto';
-import { TareaTipo } from '../../tareas/enums/tarea.enum';
+import { CreateEvidenciaSubtareaDto } from '../dto/create-evidencia-subtarea.dto';
+import { TareaTipo, TareaEstado } from '../../tareas/enums/tarea.enum';
 
 @Injectable()
 export class SubtareaService {
@@ -19,9 +23,89 @@ export class SubtareaService {
     private readonly subtareaRepository: Repository<Subtarea>,
     @InjectRepository(Tarea)
     private readonly tareaRepository: Repository<Tarea>,
+    @InjectRepository(EvidenciaSubtarea)
+    private readonly evidenciaSubtareaRepository: Repository<EvidenciaSubtarea>,
+    @InjectRepository(TareaAsignado)
+    private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
   ) {}
 
-  async create(createDto: CreateSubtareaDto, userId?: number): Promise<Subtarea> {
+  // ================================================================
+  // Métodos de Verificación de Permisos
+  // ================================================================
+
+  /**
+   * Verifica si un usuario está asignado como responsable en una tarea
+   */
+  async isUserAssignedToTask(tareaId: number, userId: number): Promise<boolean> {
+    const asignacion = await this.tareaAsignadoRepository.findOne({
+      where: { tareaId, usuarioId: userId, activo: true },
+    });
+    return !!asignacion;
+  }
+
+  /**
+   * Verifica si un usuario es el responsable de una subtarea
+   */
+  async isUserResponsibleForSubtask(subtareaId: number, userId: number): Promise<boolean> {
+    const subtarea = await this.subtareaRepository.findOne({
+      where: { id: subtareaId },
+    });
+    return subtarea?.responsableId === userId;
+  }
+
+  // ================================================================
+  // Métodos de Actualización de Estado de Tarea
+  // ================================================================
+
+  /**
+   * Actualiza el estado de la tarea padre basándose en el estado de sus subtareas
+   * - Si todas las subtareas están "Finalizado" → tarea = "Finalizado"
+   * - Si al menos una subtarea tiene evidencia → tarea = "En progreso"
+   * - Si no hay subtareas o ninguna tiene evidencia → tarea = "Por hacer"
+   */
+  async actualizarEstadoTareaPadre(tareaId: number, userId?: number): Promise<void> {
+    const subtareas = await this.subtareaRepository.find({
+      where: { tareaId, activo: true },
+    });
+
+    // Si no hay subtareas, estado = "Por hacer"
+    if (subtareas.length === 0) {
+      await this.tareaRepository.update(tareaId, {
+        estado: TareaEstado.POR_HACER,
+        updatedBy: userId,
+      });
+      return;
+    }
+
+    // Contar subtareas finalizadas y con evidencia
+    const finalizadas = subtareas.filter((s) => s.estado === TareaEstado.FINALIZADO);
+
+    // Si todas las subtareas están finalizadas → tarea = "Finalizado"
+    if (finalizadas.length === subtareas.length) {
+      await this.tareaRepository.update(tareaId, {
+        estado: TareaEstado.FINALIZADO,
+        updatedBy: userId,
+      });
+      return;
+    }
+
+    // Si al menos una subtarea está finalizada → tarea = "En progreso"
+    if (finalizadas.length > 0) {
+      await this.tareaRepository.update(tareaId, {
+        estado: TareaEstado.EN_PROGRESO,
+        updatedBy: userId,
+      });
+      return;
+    }
+
+    // Si ninguna está finalizada → tarea = "Por hacer"
+    await this.tareaRepository.update(tareaId, {
+      estado: TareaEstado.POR_HACER,
+      updatedBy: userId,
+    });
+  }
+
+  async create(createDto: CreateSubtareaDto, userId?: number, userRole?: string): Promise<Subtarea> {
     // Verify tarea exists and is KANBAN type
     const tarea = await this.tareaRepository.findOne({
       where: { id: createDto.tareaId },
@@ -33,6 +117,14 @@ export class SubtareaService {
 
     if (tarea.tipo !== TareaTipo.KANBAN) {
       throw new BadRequestException('Solo se pueden crear subtareas para tareas de tipo KANBAN');
+    }
+
+    // Verificar permisos para IMPLEMENTADOR: debe estar asignado a la tarea
+    if (userRole === 'IMPLEMENTADOR' && userId) {
+      const isAssigned = await this.isUserAssignedToTask(createDto.tareaId, userId);
+      if (!isAssigned) {
+        throw new ForbiddenException('Solo puedes crear subtareas en tareas donde estés asignado como responsable');
+      }
     }
 
     // Check for duplicate code within the same tarea
@@ -84,7 +176,7 @@ export class SubtareaService {
 
     return this.subtareaRepository.find({
       where: { tareaId, activo: true },
-      relations: ['responsable'],
+      relations: ['responsable', 'creator'],
       order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
     });
   }
@@ -92,7 +184,7 @@ export class SubtareaService {
   async findOne(id: number): Promise<Subtarea> {
     const subtarea = await this.subtareaRepository.findOne({
       where: { id },
-      relations: ['tarea', 'responsable'],
+      relations: ['tarea', 'responsable', 'creator'],
     });
 
     if (!subtarea) {
@@ -102,8 +194,29 @@ export class SubtareaService {
     return subtarea;
   }
 
-  async update(id: number, updateDto: UpdateSubtareaDto, userId?: number): Promise<Subtarea> {
+  async update(id: number, updateDto: UpdateSubtareaDto, userId?: number, userRole?: string): Promise<Subtarea> {
     const subtarea = await this.findOne(id);
+
+    // Verificar si la subtarea está finalizada
+    if (subtarea.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede editar una subtarea finalizada');
+    }
+
+    // Verificar si la tarea padre está finalizada
+    const tareaPadre = await this.tareaRepository.findOne({
+      where: { id: subtarea.tareaId },
+    });
+    if (tareaPadre?.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede editar subtareas de una tarea finalizada');
+    }
+
+    // Verificar permisos para IMPLEMENTADOR: debe ser el responsable de la subtarea
+    if (userRole === 'IMPLEMENTADOR' && userId) {
+      const isResponsible = await this.isUserResponsibleForSubtask(id, userId);
+      if (!isResponsible) {
+        throw new ForbiddenException('Solo puedes editar subtareas donde estés asignado como responsable');
+      }
+    }
 
     // Check for duplicate code if updating
     if (updateDto.codigo && updateDto.codigo !== subtarea.codigo) {
@@ -121,11 +234,39 @@ export class SubtareaService {
     return this.subtareaRepository.save(subtarea);
   }
 
-  async remove(id: number, userId?: number): Promise<Subtarea> {
+  async remove(id: number, userId?: number, userRole?: string): Promise<void> {
     const subtarea = await this.findOne(id);
-    subtarea.activo = false;
-    subtarea.updatedBy = userId;
-    return this.subtareaRepository.save(subtarea);
+    const tareaId = subtarea.tareaId;
+
+    // Verificar si la subtarea está finalizada
+    if (subtarea.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede eliminar una subtarea finalizada');
+    }
+
+    // Verificar si la tarea padre está finalizada
+    const tareaPadre = await this.tareaRepository.findOne({
+      where: { id: tareaId },
+    });
+    if (tareaPadre?.estado === TareaEstado.FINALIZADO) {
+      throw new ForbiddenException('No se puede eliminar subtareas de una tarea finalizada');
+    }
+
+    // Verificar permisos para IMPLEMENTADOR: debe ser el responsable de la subtarea
+    if (userRole === 'IMPLEMENTADOR' && userId) {
+      const isResponsible = await this.isUserResponsibleForSubtask(id, userId);
+      if (!isResponsible) {
+        throw new ForbiddenException('Solo puedes eliminar subtareas donde estés asignado como responsable');
+      }
+    }
+
+    // Eliminar evidencias asociadas primero
+    await this.evidenciaSubtareaRepository.delete({ subtareaId: id });
+
+    // Eliminar la subtarea permanentemente de la base de datos
+    await this.subtareaRepository.remove(subtarea);
+
+    // Actualizar el estado de la tarea padre
+    await this.actualizarEstadoTareaPadre(tareaId, userId);
   }
 
   async getEstadisticasByTarea(tareaId: number): Promise<{
@@ -210,5 +351,94 @@ export class SubtareaService {
       relations: ['responsable'],
       order: { orden: 'ASC' },
     });
+  }
+
+  // ================================================================
+  // Métodos de Evidencias
+  // ================================================================
+
+  /**
+   * Agregar evidencia a una subtarea
+   * Las evidencias son archivos adjuntos (imágenes, documentos)
+   * Al agregar evidencia, la subtarea se marca como "Finalizado" y se actualiza el estado de la tarea padre
+   */
+  async agregarEvidencia(
+    subtareaId: number,
+    createDto: CreateEvidenciaSubtareaDto,
+    userId: number,
+  ): Promise<EvidenciaSubtarea> {
+    // Verificar que la subtarea existe
+    const subtarea = await this.findOne(subtareaId);
+
+    const evidencia = this.evidenciaSubtareaRepository.create({
+      subtareaId: subtarea.id,
+      nombre: createDto.nombre,
+      descripcion: createDto.descripcion,
+      url: createDto.url,
+      tipo: createDto.tipo,
+      tamanoBytes: createDto.tamanoBytes,
+      subidoPor: userId,
+    });
+
+    const savedEvidencia = await this.evidenciaSubtareaRepository.save(evidencia);
+
+    // Marcar la subtarea como "Finalizado" al adjuntar evidencia
+    await this.subtareaRepository.update(subtareaId, {
+      estado: TareaEstado.FINALIZADO,
+      updatedBy: userId,
+    });
+
+    // Actualizar el estado de la tarea padre
+    await this.actualizarEstadoTareaPadre(subtarea.tareaId, userId);
+
+    return savedEvidencia;
+  }
+
+  /**
+   * Obtener todas las evidencias de una subtarea
+   */
+  async obtenerEvidencias(subtareaId: number): Promise<EvidenciaSubtarea[]> {
+    // Verificar que la subtarea existe
+    await this.findOne(subtareaId);
+
+    return this.evidenciaSubtareaRepository.find({
+      where: { subtareaId },
+      relations: ['usuario'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Eliminar una evidencia de una subtarea
+   */
+  async eliminarEvidencia(
+    subtareaId: number,
+    evidenciaId: number,
+    userId: number,
+  ): Promise<void> {
+    // Verificar que la subtarea existe
+    await this.findOne(subtareaId);
+
+    const evidencia = await this.evidenciaSubtareaRepository.findOne({
+      where: { id: evidenciaId, subtareaId },
+    });
+
+    if (!evidencia) {
+      throw new NotFoundException(
+        `Evidencia con ID ${evidenciaId} no encontrada en la subtarea ${subtareaId}`,
+      );
+    }
+
+    await this.evidenciaSubtareaRepository.remove(evidencia);
+  }
+
+  /**
+   * Verificar si una subtarea tiene evidencias
+   */
+  async tieneEvidencias(subtareaId: number): Promise<boolean> {
+    const count = await this.evidenciaSubtareaRepository.count({
+      where: { subtareaId },
+    });
+    return count > 0;
   }
 }

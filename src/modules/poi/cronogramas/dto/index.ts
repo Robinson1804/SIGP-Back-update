@@ -5,3 +5,4 @@ export * from './update-tarea-cronograma.dto';
 export * from './cronograma-response.dto';
 export * from './create-dependencia.dto';
 export * from './ruta-critica-response.dto';
+export * from './aprobar-cronograma.dto';

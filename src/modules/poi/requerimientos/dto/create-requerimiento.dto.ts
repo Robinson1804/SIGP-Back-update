@@ -4,7 +4,6 @@ import {
   IsInt,
   IsArray,
   IsEnum,
-  IsDateString,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -53,14 +52,6 @@ export class CreateRequerimientoDto {
   @IsArray()
   @IsInt({ each: true })
   dependencias?: number[];
-
-  @IsOptional()
-  @IsInt()
-  solicitanteId?: number;
-
-  @IsOptional()
-  @IsDateString()
-  fechaSolicitud?: string;
 
   @IsOptional()
   @IsString()

@@ -12,9 +12,10 @@ import { ActividadEstado, Periodicidad } from '../enums/actividad-estado.enum';
 import { Clasificacion } from '../../proyectos/enums/proyecto-estado.enum';
 
 export class CreateActividadDto {
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)
@@ -35,6 +36,10 @@ export class CreateActividadDto {
   @IsOptional()
   @IsInt()
   coordinadorId?: number;
+
+  @IsOptional()
+  @IsInt()
+  gestorId?: number;
 
   @IsOptional()
   @IsString()

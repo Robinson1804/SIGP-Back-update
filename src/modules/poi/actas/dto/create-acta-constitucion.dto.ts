@@ -97,4 +97,8 @@ export class CreateActaConstitucionDto {
   @IsString()
   @MaxLength(500)
   archivoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  observaciones?: string;
 }

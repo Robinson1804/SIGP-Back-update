@@ -114,7 +114,7 @@ export class DashboardGeneralService {
     });
 
     const activos = sprints.filter(
-      (s) => s.estado === SprintEstado.ACTIVO,
+      (s) => s.estado === SprintEstado.EN_PROGRESO,
     ).length;
 
     // Calcular velocidad promedio de sprints completados
@@ -130,7 +130,7 @@ export class DashboardGeneralService {
           qb
             .select('hu.sprint_id', 'sprint_id')
             .addSelect(
-              "SUM(CASE WHEN hu.estado = 'Terminada' THEN hu.story_points ELSE 0 END)",
+              "SUM(CASE WHEN hu.estado = 'Finalizado' THEN hu.story_points ELSE 0 END)",
               'total_sp',
             )
             .from('agile.historias_usuario', 'hu')
@@ -139,7 +139,7 @@ export class DashboardGeneralService {
         'sp_completados',
         's.id = sp_completados.sprint_id',
       )
-      .where("s.estado = 'Completado'")
+      .where("s.estado = 'Finalizado'")
       .andWhere('s.activo = true')
       .getRawOne();
 
@@ -249,7 +249,7 @@ export class DashboardGeneralService {
 
     // Sprints que deberían haber terminado
     const sprintsVencidos = await this.sprintRepository.find({
-      where: { activo: true, estado: SprintEstado.ACTIVO },
+      where: { activo: true, estado: SprintEstado.EN_PROGRESO },
       select: ['id', 'nombre', 'fechaFin', 'proyectoId'],
     });
 

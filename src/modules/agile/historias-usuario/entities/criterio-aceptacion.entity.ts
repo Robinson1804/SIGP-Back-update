@@ -7,7 +7,6 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { CriterioEstado } from '../enums/historia-usuario.enum';
 import { HistoriaUsuario } from './historia-usuario.entity';
 
 @Entity({ schema: 'agile', name: 'criterios_aceptacion' })
@@ -19,20 +18,10 @@ export class CriterioAceptacion {
   historiaUsuarioId: number;
 
   @Column({ type: 'text' })
-  given: string;
+  descripcion: string;
 
-  @Column({ type: 'text' })
-  when: string;
-
-  @Column({ type: 'text' })
-  then: string;
-
-  @Column({
-    type: 'enum',
-    enum: CriterioEstado,
-    default: CriterioEstado.PENDIENTE,
-  })
-  estado: CriterioEstado;
+  @Column({ type: 'boolean', default: false })
+  completado: boolean;
 
   @Column({ type: 'int', nullable: true })
   orden: number;

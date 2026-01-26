@@ -54,6 +54,11 @@ export class DocumentoController {
     return this.documentoService.findOne(id);
   }
 
+  @Get(':id/download')
+  getDownloadUrl(@Param('id', ParseIntPipe) id: number) {
+    return this.documentoService.getDownloadUrl(id);
+  }
+
   @Patch(':id')
   @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
   update(

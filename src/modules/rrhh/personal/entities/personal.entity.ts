@@ -66,7 +66,7 @@ export class Personal {
   @Column({
     type: 'varchar',
     length: 30,
-    default: Modalidad.PLANILLA,
+    default: Modalidad.NOMBRADO,
   })
   modalidad: Modalidad;
 

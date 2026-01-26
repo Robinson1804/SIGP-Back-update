@@ -17,24 +17,76 @@ export class AeiService {
 
   /**
    * Genera el siguiente código AEI para un OEI dado
-   * Formato: AEI.XX.YY donde XX es el número del OEI y YY es secuencial
+   * Formato: "AEI N°X.Y" (ej: AEI N°1.1, AEI N°1.2 para OEI N°1; AEI N°2.1 para OEI N°2)
+   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
    */
-  private async generateCodigo(oeiId: number): Promise<string> {
-    // Obtener el OEI para extraer su número
-    const oei = await this.oeiRepository.findOne({ where: { id: oeiId } });
+  private async generateCodigo(oeiId: number, oei: Oei): Promise<string> {
+    // Extraer el número del código OEI (ej: "1" de "OEI N°1" o "001" de "OEI-001")
+    const oeiNumMatch = oei.codigo.match(/OEI\s*N°(\d+)/i) || oei.codigo.match(/OEI-(\d+)/);
+    const oeiNum = oeiNumMatch ? parseInt(oeiNumMatch[1], 10) : oeiId;
+
+    // Buscar el máximo número secuencial para este OEI
+    const aeis = await this.aeiRepository.find({
+      where: { oeiId },
+      select: ['codigo'],
+    });
+
+    let maxSeq = 0;
+    const pattern = new RegExp(`AEI\\s*N°${oeiNum}\\.(\\d+)`, 'i');
+    for (const aei of aeis) {
+      const match = aei.codigo.match(pattern);
+      if (match) {
+        const seq = parseInt(match[1], 10);
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+
+    return `AEI N°${oeiNum}.${maxSeq + 1}`;
+  }
+
+  /**
+   * Genera el código del indicador automáticamente
+   * Formato: "IND-AEI-X.Y" (ej: IND-AEI-1.1, IND-AEI-1.2)
+   * Busca el máximo número existente para evitar duplicados
+   */
+  private async generateIndicadorCodigo(oeiId: number, oei: Oei): Promise<string> {
+    // Extraer el número del código OEI
+    const oeiNumMatch = oei.codigo.match(/OEI\s*N°(\d+)/i) || oei.codigo.match(/OEI-(\d+)/);
+    const oeiNum = oeiNumMatch ? parseInt(oeiNumMatch[1], 10) : oeiId;
+
+    // Buscar el máximo número secuencial para este OEI
+    const aeis = await this.aeiRepository.find({
+      where: { oeiId },
+      select: ['indicadorCodigo'],
+    });
+
+    let maxSeq = 0;
+    const pattern = new RegExp(`IND-AEI-${oeiNum}\\.(\\d+)`, 'i');
+    for (const aei of aeis) {
+      if (aei.indicadorCodigo) {
+        const match = aei.indicadorCodigo.match(pattern);
+        if (match) {
+          const seq = parseInt(match[1], 10);
+          if (seq > maxSeq) maxSeq = seq;
+        }
+      }
+    }
+
+    return `IND-AEI-${oeiNum}.${maxSeq + 1}`;
+  }
+
+  /**
+   * Obtiene el siguiente código AEI disponible para un OEI
+   * Este método es público para ser llamado desde el controlador
+   */
+  async getNextCodigo(oeiId: number): Promise<string> {
+    const oei = await this.oeiRepository.findOne({
+      where: { id: oeiId },
+    });
     if (!oei) {
       throw new NotFoundException(`OEI con ID ${oeiId} no encontrado`);
     }
-
-    // Extraer número del código OEI (ej: "OEI N°1" → 1)
-    const oeiMatch = oei.codigo.match(/(\d+)/);
-    const oeiNum = oeiMatch ? oeiMatch[1].padStart(2, '0') : '01';
-
-    // Contar AEIs existentes para este OEI
-    const count = await this.aeiRepository.count({ where: { oeiId } });
-    const aeiNum = String(count + 1).padStart(2, '0');
-
-    return `AEI.${oeiNum}.${aeiNum}`;
+    return this.generateCodigo(oeiId, oei);
   }
 
   async create(createAeiDto: CreateAeiDto, userId?: number): Promise<Aei> {
@@ -47,20 +99,24 @@ export class AeiService {
     }
 
     // Generar código si no se proporciona
-    const codigo = createAeiDto.codigo || await this.generateCodigo(createAeiDto.oeiId);
+    const codigo = createAeiDto.codigo || await this.generateCodigo(createAeiDto.oeiId, oei);
 
-    // Verificar que el código no existe
+    // Generar código del indicador si no se proporciona
+    const indicadorCodigo = createAeiDto.indicadorCodigo || await this.generateIndicadorCodigo(createAeiDto.oeiId, oei);
+
+    // Verificar que el código no existe DENTRO del mismo OEI (no globalmente)
     const existing = await this.aeiRepository.findOne({
-      where: { codigo },
+      where: { codigo, oeiId: createAeiDto.oeiId },
     });
 
     if (existing) {
-      throw new ConflictException(`Ya existe una AEI con el código ${codigo}`);
+      throw new ConflictException(`Ya existe una AEI con el código ${codigo} en este OEI`);
     }
 
     const aei = this.aeiRepository.create({
       ...createAeiDto,
       codigo,
+      indicadorCodigo,
       createdBy: userId,
       updatedBy: userId,
     });
@@ -122,12 +178,13 @@ export class AeiService {
   async update(id: number, updateAeiDto: UpdateAeiDto, userId?: number): Promise<Aei> {
     const aei = await this.findOne(id);
 
+    // Validar que el código sea único DENTRO del mismo OEI (no globalmente)
     if (updateAeiDto.codigo && updateAeiDto.codigo !== aei.codigo) {
       const existing = await this.aeiRepository.findOne({
-        where: { codigo: updateAeiDto.codigo },
+        where: { codigo: updateAeiDto.codigo, oeiId: aei.oeiId },
       });
       if (existing) {
-        throw new ConflictException(`Ya existe una AEI con el código ${updateAeiDto.codigo}`);
+        throw new ConflictException(`Ya existe una AEI con el código ${updateAeiDto.codigo} en este OEI`);
       }
     }
 

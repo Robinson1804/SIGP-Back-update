@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsInt,
   IsBoolean,
+  IsArray,
   MaxLength,
 } from 'class-validator';
 
@@ -23,6 +24,15 @@ export class UpdateDivisionDto {
   @IsInt()
   @IsOptional()
   jefeId?: number;
+
+  @IsInt()
+  @IsOptional()
+  coordinadorId?: number;
+
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  scrumMasterIds?: number[];
 
   @IsBoolean()
   @IsOptional()

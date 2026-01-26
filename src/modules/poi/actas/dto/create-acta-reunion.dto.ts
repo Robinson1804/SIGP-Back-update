@@ -6,6 +6,8 @@ import {
   IsArray,
   IsDateString,
   MaxLength,
+  IsNotEmpty,
+  ArrayMinSize,
 } from 'class-validator';
 import { TipoReunion, Modalidad } from '../enums/acta.enum';
 
@@ -13,9 +15,10 @@ export class CreateActaReunionDto {
   @IsInt()
   proyectoId: number;
 
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @MaxLength(200)
@@ -27,23 +30,23 @@ export class CreateActaReunionDto {
   @IsEnum(TipoReunion)
   tipoReunion: TipoReunion;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'La fase del proyecto es obligatoria' })
   @IsString()
   @MaxLength(100)
-  fasePerteneciente?: string;
+  fasePerteneciente: string;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'La hora de inicio es obligatoria' })
   @IsString()
-  horaInicio?: string;
+  horaInicio: string;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'La hora de fin es obligatoria' })
   @IsString()
-  horaFin?: string;
+  horaFin: string;
 
   // Nuevos campos
-  @IsOptional()
+  @IsNotEmpty({ message: 'La modalidad es obligatoria' })
   @IsEnum(Modalidad)
-  modalidad?: Modalidad;
+  modalidad: Modalidad;
 
   @IsOptional()
   @IsString()
@@ -57,9 +60,10 @@ export class CreateActaReunionDto {
   @IsDateString()
   proximaReunionFecha?: string;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'Debe incluir al menos un asistente' })
   @IsArray()
-  asistentes?: {
+  @ArrayMinSize(1, { message: 'Debe incluir al menos un asistente' })
+  asistentes: {
     nombre: string;
     cargo?: string;
     organizacion?: string;
@@ -72,21 +76,24 @@ export class CreateActaReunionDto {
   @IsArray()
   ausentes?: { nombre: string; cargo?: string; motivo?: string }[];
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'La agenda es obligatoria' })
   @IsArray()
-  agenda?: { numero: number; tema: string }[];
+  @ArrayMinSize(1, { message: 'Debe incluir al menos un tema en la agenda' })
+  agenda: { numero: number; tema: string }[];
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'Los temas desarrollados son obligatorios' })
   @IsArray()
-  temasDesarrollados?: {
+  @ArrayMinSize(1, { message: 'Debe incluir al menos un tema desarrollado' })
+  temasDesarrollados: {
     tema: string;
     notas?: string;
     conclusiones?: string;
   }[];
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'Los acuerdos son obligatorios' })
   @IsArray()
-  acuerdos?: {
+  @ArrayMinSize(1, { message: 'Debe incluir al menos un acuerdo' })
+  acuerdos: {
     descripcion: string;
     responsables?: string[];
     responsableIds?: number[];

@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AccionEstrategicaService } from '../services/accion-estrategica.service';
 import { CreateAccionEstrategicaDto } from '../dto/create-accion-estrategica.dto';
 import { UpdateAccionEstrategicaDto } from '../dto/update-accion-estrategica.dto';
@@ -19,6 +20,8 @@ import { Roles } from '../../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
 import { Role } from '../../../../common/constants/roles.constant';
 
+@ApiTags('AE - Acciones Estratégicas')
+@ApiBearerAuth()
 @Controller('acciones-estrategicas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AccionEstrategicaController {
@@ -26,6 +29,7 @@ export class AccionEstrategicaController {
 
   @Post()
   @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Crear una nueva Acción Estratégica' })
   create(
     @Body() createDto: CreateAccionEstrategicaDto,
     @CurrentUser('id') userId: number,
@@ -33,14 +37,23 @@ export class AccionEstrategicaController {
     return this.accionEstrategicaService.create(createDto, userId);
   }
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO)
+  @ApiOperation({ summary: 'Obtener el siguiente código AE disponible para un OEGD' })
+  getNextCodigo(@Query('oegdId', ParseIntPipe) oegdId: number) {
+    return this.accionEstrategicaService.getNextCodigo(oegdId);
+  }
+
   @Get()
   findAll(
     @Query('oegdId') oegdId?: string,
     @Query('activo') activo?: string,
+    @Query('pgdId') pgdId?: string,
   ) {
     return this.accionEstrategicaService.findAll(
       oegdId ? parseInt(oegdId, 10) : undefined,
       activo !== undefined ? activo === 'true' : undefined,
+      pgdId ? parseInt(pgdId, 10) : undefined,
     );
   }
 

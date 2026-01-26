@@ -91,7 +91,7 @@ export class SprintTimelineDto {
   proyectoCodigo: string;
   fechaInicio: string;
   fechaFin: string;
-  estado: 'Planificado' | 'Activo' | 'Completado';
+  estado: 'Por hacer' | 'En progreso' | 'Finalizado';
   progreso: number;
   storyPointsCompletados: number;
   storyPointsTotal: number;

@@ -102,6 +102,7 @@ export class AsignacionService {
     tipoAsignacion?: TipoAsignacion;
     proyectoId?: number;
     actividadId?: number;
+    subproyectoId?: number;
     activo?: boolean;
   }): Promise<Asignacion[]> {
     const queryBuilder = this.asignacionRepository
@@ -136,6 +137,12 @@ export class AsignacionService {
       });
     }
 
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('asignacion.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
+      });
+    }
+
     if (filters?.activo !== undefined) {
       queryBuilder.andWhere('asignacion.activo = :activo', {
         activo: filters.activo,
@@ -161,7 +168,7 @@ export class AsignacionService {
   async findByProyecto(proyectoId: number): Promise<Asignacion[]> {
     return this.asignacionRepository.find({
       where: { proyectoId, activo: true },
-      relations: ['personal'],
+      relations: ['personal', 'personal.usuario'],
       order: { porcentajeDedicacion: 'DESC' },
     });
   }
@@ -169,6 +176,14 @@ export class AsignacionService {
   async findByActividad(actividadId: number): Promise<Asignacion[]> {
     return this.asignacionRepository.find({
       where: { actividadId, activo: true },
+      relations: ['personal'],
+      order: { porcentajeDedicacion: 'DESC' },
+    });
+  }
+
+  async findBySubproyecto(subproyectoId: number): Promise<Asignacion[]> {
+    return this.asignacionRepository.find({
+      where: { subproyectoId, activo: true },
       relations: ['personal'],
       order: { porcentajeDedicacion: 'DESC' },
     });

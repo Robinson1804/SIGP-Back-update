@@ -12,6 +12,7 @@ import { Oegd } from '../../oegd/entities/oegd.entity';
 import { MetaAnual } from '../../oei/entities/oei.entity';
 
 @Entity('acciones_estrategicas', { schema: 'planning' })
+@Index(['oegdId', 'codigo'], { unique: true }) // Código único dentro del mismo OEGD
 export class AccionEstrategica {
   @PrimaryGeneratedColumn()
   id: number;
@@ -21,7 +22,7 @@ export class AccionEstrategica {
   oegdId: number;
 
   @Index()
-  @Column({ length: 20, unique: true })
+  @Column({ length: 50 }) // Removido unique: true, ahora es composite con oegdId
   codigo: string;
 
   @Column({ length: 300 })

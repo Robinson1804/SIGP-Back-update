@@ -14,6 +14,9 @@ import { config } from 'dotenv';
 // Load environment variables
 config();
 
+// Check if running as seed command (to skip NestJS-dependent subscribers)
+const isSeeding = process.argv.some(arg => arg.includes('seed-runner'));
+
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DATABASE_HOST || 'localhost',
@@ -30,8 +33,8 @@ export const dataSourceOptions: DataSourceOptions = {
   migrations: ['dist/database/migrations/[0-9]*-*.js'],
   migrationsTableName: 'typeorm_migrations',
 
-  // Subscriber paths
-  subscribers: ['dist/database/subscribers/*.js'],
+  // Subscriber paths - skip for seeding (they use NestJS DI)
+  subscribers: isSeeding ? [] : ['dist/database/subscribers/*.js'],
 
   // Configuration
   synchronize: false, // NEVER true in production

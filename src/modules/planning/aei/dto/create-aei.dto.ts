@@ -7,6 +7,7 @@ import {
   ValidateNested,
   MaxLength,
   Min,
+  IsNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -73,7 +74,7 @@ export class CreateAeiDto {
   descripcion?: string;
 
   @ApiPropertyOptional({
-    description: 'Código del indicador de medición',
+    description: 'Código del indicador (autogenerado si no se proporciona)',
     example: 'IND-AEI-001',
     maxLength: 50,
   })
@@ -82,41 +83,41 @@ export class CreateAeiDto {
   @MaxLength(50)
   indicadorCodigo?: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Nombre del indicador de medición',
     example: 'Porcentaje de censos y encuestas ejecutados',
     maxLength: 500,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'El nombre del indicador es obligatorio' })
   @IsString()
   @MaxLength(500)
-  indicadorNombre?: string;
+  indicadorNombre: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Unidad de medida del indicador',
     example: 'Porcentaje',
     maxLength: 50,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'La unidad de medida es obligatoria' })
   @IsString()
   @MaxLength(50)
-  unidadMedida?: string;
+  unidadMedida: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Año de la línea base',
     example: 2024,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'El año de la línea base es obligatorio' })
   @IsInt()
-  lineaBaseAnio?: number;
+  lineaBaseAnio: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Valor de la línea base',
     example: 85.5,
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'El valor de la línea base es obligatorio' })
   @IsNumber()
-  lineaBaseValor?: number;
+  lineaBaseValor: number;
 
   @ApiPropertyOptional({
     description: 'Metas anuales de la AEI',

@@ -49,6 +49,10 @@ export class Documento {
   @Column({ length: 500, nullable: true })
   link: string;
 
+  // Referencia al archivo en StorageModule (tabla archivos)
+  @Column({ name: 'archivo_id', type: 'uuid', nullable: true })
+  archivoId: string;
+
   @Column({ name: 'archivo_url', length: 500, nullable: true })
   archivoUrl: string;
 
@@ -57,6 +61,10 @@ export class Documento {
 
   @Column({ name: 'archivo_tamano', nullable: true })
   archivoTamano: number;
+
+  // Tipo MIME del archivo para detectar imagen/pdf
+  @Column({ name: 'tipo_archivo', length: 100, nullable: true })
+  tipoArchivo: string;
 
   // Estado
   @Column({ name: 'es_obligatorio', default: false })
@@ -92,6 +100,10 @@ export class Documento {
 
   @Column({ name: 'created_by', type: 'int', nullable: true })
   createdBy: number | null | undefined;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'created_by' })
+  creador: any;
 
   @Column({ name: 'updated_by', type: 'int', nullable: true })
   updatedBy: number | null | undefined;

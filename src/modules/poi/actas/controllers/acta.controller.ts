@@ -41,7 +41,7 @@ export class ActaController {
   }
 
   @Post('constitucion')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
   createConstitucion(@Body() createDto: CreateActaConstitucionDto, @CurrentUser('id') userId: number) {
     return this.actaService.createConstitucion(createDto, userId);
   }
@@ -83,7 +83,7 @@ export class ActaController {
   }
 
   @Put(':id/constitucion')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
   updateConstitucion(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: Partial<CreateActaConstitucionDto>,
@@ -138,18 +138,36 @@ export class ActaController {
     return this.actaService.subirDocumentoFirmado(id, dto.documentoFirmadoUrl, userId);
   }
 
+  /**
+   * Enviar Acta de Constitución a revisión
+   * Solo SCRUM_MASTER y COORDINADOR pueden enviar a revisión
+   */
+  @Post(':id/enviar-revision')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  enviarARevision(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.actaService.enviarARevision(id, userId);
+  }
+
+  /**
+   * Aprobar o rechazar un acta
+   * Para Acta de Constitución: requiere aprobación de PMO y PATROCINADOR
+   */
   @Post(':id/aprobar')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.PATROCINADOR)
   aprobar(
     @Param('id', ParseIntPipe) id: number,
     @Body() aprobarDto: AprobarActaDto,
     @CurrentUser('id') userId: number,
+    @CurrentUser('rol') userRole: string,
   ) {
-    return this.actaService.aprobar(id, aprobarDto, userId);
+    return this.actaService.aprobar(id, aprobarDto, userId, userRole);
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
     return this.actaService.remove(id, userId);
   }
