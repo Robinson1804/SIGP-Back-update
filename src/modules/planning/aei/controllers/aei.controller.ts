@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AeiService } from '../services/aei.service';
@@ -72,9 +73,10 @@ export class AeiController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO)
-  @ApiOperation({ summary: 'Desactivar una AEI (soft delete)' })
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.aeiService.remove(id, userId);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Eliminar una AEI permanentemente (hard delete)' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.aeiService.remove(id);
   }
 }
 

@@ -18,7 +18,7 @@ export class OgdService {
   /**
    * Genera el siguiente código OGD para un PGD dado
    * Formato: "OGD N°X" (ej: OGD N°1, OGD N°2)
-   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   * Busca el primer número disponible en la secuencia (reutiliza códigos eliminados)
    */
   private async generateCodigo(pgdId: number): Promise<string> {
     const ogds = await this.ogdRepository.find({
@@ -26,16 +26,22 @@ export class OgdService {
       select: ['codigo'],
     });
 
-    let maxNum = 0;
+    // Extraer números usados
+    const usedNumbers = new Set<number>();
     for (const ogd of ogds) {
       const match = ogd.codigo.match(/OGD\s*N°(\d+)/i);
       if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
+        usedNumbers.add(parseInt(match[1], 10));
       }
     }
 
-    return `OGD N°${maxNum + 1}`;
+    // Encontrar el primer número disponible
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum)) {
+      nextNum++;
+    }
+
+    return `OGD N°${nextNum}`;
   }
 
   /**
@@ -174,11 +180,15 @@ export class OgdService {
     return this.findOne(id);
   }
 
-  async remove(id: number, userId?: number): Promise<Ogd> {
+  /**
+   * Elimina permanentemente un OGD (hard delete)
+   * Las entidades hijas (OEGDs y sus AEs) se eliminan en cascada
+   */
+  async remove(id: number): Promise<void> {
     const ogd = await this.findOne(id);
-    ogd.activo = false;
-    ogd.updatedBy = userId;
-    return this.ogdRepository.save(ogd);
+    // Eliminar relaciones M:N primero
+    await this.ogdOeiRepository.delete({ ogdId: id });
+    await this.ogdRepository.remove(ogd);
   }
 
   /**

@@ -16,7 +16,7 @@ export class AccionEstrategicaService {
    * Genera el siguiente código AE para un OEGD dado
    * Formato: "AE N°X" (ej: AE N°1, AE N°2, AE N°3)
    * La secuencia es por OEGD, permitiendo que diferentes OEGDs tengan AE N°1
-   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   * Busca el primer número disponible en la secuencia (reutiliza códigos eliminados)
    */
   private async generateCodigo(oegdId: number): Promise<string> {
     const acciones = await this.accionEstrategicaRepository.find({
@@ -24,16 +24,22 @@ export class AccionEstrategicaService {
       select: ['codigo'],
     });
 
-    let maxNum = 0;
+    // Extraer números usados
+    const usedNumbers = new Set<number>();
     for (const accion of acciones) {
       const match = accion.codigo.match(/AE\s*N°(\d+)/i);
       if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
+        usedNumbers.add(parseInt(match[1], 10));
       }
     }
 
-    return `AE N°${maxNum + 1}`;
+    // Encontrar el primer número disponible
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum)) {
+      nextNum++;
+    }
+
+    return `AE N°${nextNum}`;
   }
 
   /**
@@ -131,10 +137,11 @@ export class AccionEstrategicaService {
     return this.accionEstrategicaRepository.save(accion);
   }
 
-  async remove(id: number, userId?: number): Promise<AccionEstrategica> {
+  /**
+   * Elimina permanentemente una Acción Estratégica (hard delete)
+   */
+  async remove(id: number): Promise<void> {
     const accion = await this.findOne(id);
-    accion.activo = false;
-    accion.updatedBy = userId;
-    return this.accionEstrategicaRepository.save(accion);
+    await this.accionEstrategicaRepository.remove(accion);
   }
 }

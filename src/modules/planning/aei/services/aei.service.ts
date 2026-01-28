@@ -18,30 +18,35 @@ export class AeiService {
   /**
    * Genera el siguiente código AEI para un OEI dado
    * Formato: "AEI N°X.Y" (ej: AEI N°1.1, AEI N°1.2 para OEI N°1; AEI N°2.1 para OEI N°2)
-   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   * Busca el primer número disponible en la secuencia (reutiliza códigos eliminados)
    */
   private async generateCodigo(oeiId: number, oei: Oei): Promise<string> {
     // Extraer el número del código OEI (ej: "1" de "OEI N°1" o "001" de "OEI-001")
     const oeiNumMatch = oei.codigo.match(/OEI\s*N°(\d+)/i) || oei.codigo.match(/OEI-(\d+)/);
     const oeiNum = oeiNumMatch ? parseInt(oeiNumMatch[1], 10) : oeiId;
 
-    // Buscar el máximo número secuencial para este OEI
+    // Buscar números secuenciales usados para este OEI
     const aeis = await this.aeiRepository.find({
       where: { oeiId },
       select: ['codigo'],
     });
 
-    let maxSeq = 0;
+    const usedSeqs = new Set<number>();
     const pattern = new RegExp(`AEI\\s*N°${oeiNum}\\.(\\d+)`, 'i');
     for (const aei of aeis) {
       const match = aei.codigo.match(pattern);
       if (match) {
-        const seq = parseInt(match[1], 10);
-        if (seq > maxSeq) maxSeq = seq;
+        usedSeqs.add(parseInt(match[1], 10));
       }
     }
 
-    return `AEI N°${oeiNum}.${maxSeq + 1}`;
+    // Encontrar el primer número disponible
+    let nextSeq = 1;
+    while (usedSeqs.has(nextSeq)) {
+      nextSeq++;
+    }
+
+    return `AEI N°${oeiNum}.${nextSeq}`;
   }
 
   /**
@@ -192,14 +197,10 @@ export class AeiService {
     return this.aeiRepository.save(aei);
   }
 
-  async remove(id: number, userId?: number): Promise<Aei> {
-    const aei = await this.findOne(id);
-    aei.activo = false;
-    aei.updatedBy = userId;
-    return this.aeiRepository.save(aei);
-  }
-
-  async hardDelete(id: number): Promise<void> {
+  /**
+   * Elimina permanentemente una AEI (hard delete)
+   */
+  async remove(id: number): Promise<void> {
     const aei = await this.findOne(id);
     await this.aeiRepository.remove(aei);
   }

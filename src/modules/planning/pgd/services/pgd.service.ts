@@ -172,11 +172,14 @@ export class PgdService {
     return this.pgdRepository.save(pgd);
   }
 
-  async remove(id: number, userId?: number): Promise<Pgd> {
+  /**
+   * Elimina permanentemente un PGD (hard delete)
+   * Todas las entidades hijas (OEI, AEI, OGD, OEGD, AE) se eliminan en cascada
+   * Los proyectos y actividades del POI se desvinculan (SET NULL en accion_estrategica_id)
+   */
+  async remove(id: number): Promise<void> {
     const pgd = await this.findOne(id);
-    pgd.activo = false;
-    pgd.updatedBy = userId;
-    return this.pgdRepository.save(pgd);
+    await this.pgdRepository.remove(pgd);
   }
 
   async setVigente(id: number, userId?: number): Promise<Pgd> {
@@ -193,12 +196,4 @@ export class PgdService {
     return this.pgdRepository.save(pgd);
   }
 
-  /**
-   * Eliminar PGD y todo su contenido (CASCADE)
-   * Los proyectos y actividades se desvinculan (SET NULL)
-   */
-  async hardDelete(id: number): Promise<void> {
-    const pgd = await this.findOne(id);
-    await this.pgdRepository.remove(pgd);
-  }
 }

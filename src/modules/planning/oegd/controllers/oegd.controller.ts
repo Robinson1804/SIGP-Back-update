@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OegdService } from '../services/oegd.service';
@@ -71,8 +72,10 @@ export class OegdController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO)
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.oegdService.remove(id, userId);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Eliminar un OEGD permanentemente (hard delete)' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.oegdService.remove(id);
   }
 }
 

@@ -47,30 +47,35 @@ export class OegdService {
   /**
    * Genera el siguiente código OEGD para un OGD dado
    * Formato: "OEGD N°X.Y" (ej: OEGD N°1.1, OEGD N°1.2 para OGD N°1)
-   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   * Busca el primer número disponible en la secuencia (reutiliza códigos eliminados)
    */
   private async generateCodigo(ogdId: number, ogd: Ogd): Promise<string> {
     // Extraer el número del código OGD (ej: "1" de "OGD N°1")
     const ogdNumMatch = ogd.codigo.match(/OGD\s*N°(\d+)/i) || ogd.codigo.match(/OGD-(\d+)/);
     const ogdNum = ogdNumMatch ? parseInt(ogdNumMatch[1], 10) : ogdId;
 
-    // Buscar el máximo número secuencial para este OGD
+    // Buscar números secuenciales usados para este OGD
     const oegds = await this.oegdRepository.find({
       where: { ogdId },
       select: ['codigo'],
     });
 
-    let maxSeq = 0;
+    const usedSeqs = new Set<number>();
     const pattern = new RegExp(`OEGD\\s*N°${ogdNum}\\.(\\d+)`, 'i');
     for (const oegd of oegds) {
       const match = oegd.codigo.match(pattern);
       if (match) {
-        const seq = parseInt(match[1], 10);
-        if (seq > maxSeq) maxSeq = seq;
+        usedSeqs.add(parseInt(match[1], 10));
       }
     }
 
-    return `OEGD N°${ogdNum}.${maxSeq + 1}`;
+    // Encontrar el primer número disponible
+    let nextSeq = 1;
+    while (usedSeqs.has(nextSeq)) {
+      nextSeq++;
+    }
+
+    return `OEGD N°${ogdNum}.${nextSeq}`;
   }
 
   /**
@@ -210,11 +215,15 @@ export class OegdService {
     return this.findOne(id);
   }
 
-  async remove(id: number, userId?: number): Promise<Oegd> {
+  /**
+   * Elimina permanentemente un OEGD (hard delete)
+   * Las entidades hijas (AEs) se eliminan en cascada
+   */
+  async remove(id: number): Promise<void> {
     const oegd = await this.findOne(id);
-    oegd.activo = false;
-    oegd.updatedBy = userId;
-    return this.oegdRepository.save(oegd);
+    // Eliminar relaciones M:N primero
+    await this.oegdAeiRepository.delete({ oegdId: id });
+    await this.oegdRepository.remove(oegd);
   }
 
   /**

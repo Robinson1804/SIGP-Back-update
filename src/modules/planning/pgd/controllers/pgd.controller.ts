@@ -61,7 +61,7 @@ export class PgdController {
   @Roles(Role.ADMIN, Role.PMO)
   @HttpCode(204)
   async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.pgdService.hardDelete(id);
+    await this.pgdService.remove(id);
   }
 
   @Post(':id/set-vigente')

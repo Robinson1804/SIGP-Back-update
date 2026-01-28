@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OgdService } from '../services/ogd.service';
@@ -69,8 +70,10 @@ export class OgdController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO)
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.ogdService.remove(id, userId);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Eliminar un OGD permanentemente (hard delete)' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.ogdService.remove(id);
   }
 }
 

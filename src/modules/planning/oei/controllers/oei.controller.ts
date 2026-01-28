@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { OeiService } from '../services/oei.service';
 import { CreateOeiDto } from '../dto/create-oei.dto';
@@ -64,8 +65,9 @@ export class OeiController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO)
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.oeiService.remove(id, userId);
+  @HttpCode(204)
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.oeiService.remove(id);
   }
 }
 

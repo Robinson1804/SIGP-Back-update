@@ -12,6 +12,7 @@ import {
   Max,
 } from 'class-validator';
 import { Modalidad } from '../enums/modalidad.enum';
+import { Role } from '../../../../common/constants/roles.constant';
 
 export class CreatePersonalDto {
   @IsInt()
@@ -70,4 +71,12 @@ export class CreatePersonalDto {
   @Min(1)
   @Max(168)
   horasSemanales?: number;
+
+  /**
+   * Rol para crear automáticamente el usuario del sistema
+   * Si se proporciona, se crea el usuario con este rol al guardar el personal
+   */
+  @IsEnum(Role)
+  @IsOptional()
+  rol?: Role;
 }

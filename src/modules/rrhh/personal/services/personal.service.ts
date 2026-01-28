@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +15,7 @@ import { Modalidad } from '../enums/modalidad.enum';
 import { PersonalHabilidad } from '../../habilidades/entities/personal-habilidad.entity';
 import { AsignarHabilidadDto, UpdatePersonalHabilidadDto } from '../../habilidades/dto/asignar-habilidad.dto';
 import { Role } from '../../../../common/constants/roles.constant';
+import { UsuariosService } from '../../../auth/services/usuarios.service';
 
 @Injectable()
 export class PersonalService {
@@ -21,11 +24,16 @@ export class PersonalService {
     private readonly personalRepository: Repository<Personal>,
     @InjectRepository(PersonalHabilidad)
     private readonly personalHabilidadRepository: Repository<PersonalHabilidad>,
+    @Inject(forwardRef(() => UsuariosService))
+    private readonly usuariosService: UsuariosService,
   ) {}
 
-  async create(createDto: CreatePersonalDto, userId?: number): Promise<Personal> {
+  async create(createDto: CreatePersonalDto, userId?: number): Promise<Personal & { credenciales?: { username: string; passwordTemporal: string; email: string; rol: string } }> {
+    // Extract rol before creating personal (not a column)
+    const { rol, ...personalData } = createDto;
+
     // Generate code if not provided
-    let codigoEmpleado = createDto.codigoEmpleado;
+    let codigoEmpleado = personalData.codigoEmpleado;
     if (!codigoEmpleado) {
       codigoEmpleado = await this.generateNextCode();
     }
@@ -42,13 +50,43 @@ export class PersonalService {
     }
 
     const personal = this.personalRepository.create({
-      ...createDto,
+      ...personalData,
       codigoEmpleado,
       createdBy: userId,
       updatedBy: userId,
     });
 
-    return this.personalRepository.save(personal);
+    const savedPersonal = await this.personalRepository.save(personal);
+
+    // If a rol was provided, create the user automatically
+    if (rol) {
+      try {
+        const userResult = await this.usuariosService.crearUsuarioDesdePersonalId(
+          savedPersonal.id,
+          rol,
+        );
+
+        // Reload the personal entity with the updated usuarioId
+        const reloadedPersonal = await this.findOne(savedPersonal.id);
+
+        // Return personal with credentials info
+        return {
+          ...reloadedPersonal,
+          credenciales: {
+            username: userResult.username,
+            passwordTemporal: userResult.passwordTemporal,
+            email: userResult.email,
+            rol: userResult.rol,
+          },
+        };
+      } catch (error) {
+        // If user creation fails, we still return the personal but log the error
+        console.error(`Error creating user for personal ${savedPersonal.id}:`, error);
+        throw error;
+      }
+    }
+
+    return savedPersonal;
   }
 
   /**

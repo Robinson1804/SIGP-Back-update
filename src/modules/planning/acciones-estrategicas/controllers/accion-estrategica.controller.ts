@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AccionEstrategicaService } from '../services/accion-estrategica.service';
@@ -74,8 +75,10 @@ export class AccionEstrategicaController {
 
   @Delete(':id')
   @Roles(Role.ADMIN, Role.PMO)
-  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
-    return this.accionEstrategicaService.remove(id, userId);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Eliminar una Acción Estratégica permanentemente (hard delete)' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    await this.accionEstrategicaService.remove(id);
   }
 }
 

@@ -18,7 +18,7 @@ export class OeiService {
   /**
    * Genera el siguiente código OEI para un PGD dado
    * Formato: "OEI N°X" (ej: OEI N°1, OEI N°2)
-   * Busca el máximo número existente (activos e inactivos) para evitar duplicados
+   * Busca el primer número disponible en la secuencia (reutiliza códigos eliminados)
    */
   private async generateCodigo(pgdId: number): Promise<string> {
     const oeis = await this.oeiRepository.find({
@@ -26,16 +26,22 @@ export class OeiService {
       select: ['codigo'],
     });
 
-    let maxNum = 0;
+    // Extraer números usados
+    const usedNumbers = new Set<number>();
     for (const oei of oeis) {
       const match = oei.codigo.match(/OEI\s*N°(\d+)/i);
       if (match) {
-        const num = parseInt(match[1], 10);
-        if (num > maxNum) maxNum = num;
+        usedNumbers.add(parseInt(match[1], 10));
       }
     }
 
-    return `OEI N°${maxNum + 1}`;
+    // Encontrar el primer número disponible
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum)) {
+      nextNum++;
+    }
+
+    return `OEI N°${nextNum}`;
   }
 
   /**
@@ -180,10 +186,12 @@ export class OeiService {
     return this.oeiRepository.save(oei);
   }
 
-  async remove(id: number, userId?: number): Promise<Oei> {
+  /**
+   * Elimina permanentemente un OEI (hard delete)
+   * Las entidades hijas (AEIs) se eliminan en cascada
+   */
+  async remove(id: number): Promise<void> {
     const oei = await this.findOne(id);
-    oei.activo = false;
-    oei.updatedBy = userId;
-    return this.oeiRepository.save(oei);
+    await this.oeiRepository.remove(oei);
   }
 }
