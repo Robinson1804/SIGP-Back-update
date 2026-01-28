@@ -507,3 +507,7 @@ Este proyecto es propietario del INEI (Instituto Nacional de Estadística e Info
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [Redis Documentation](https://redis.io/docs/)
 - [MinIO Documentation](https://min.io/docs/)
+
+---
+
+*Última actualización: Enero 2026*
