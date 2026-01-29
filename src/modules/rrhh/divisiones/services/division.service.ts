@@ -355,6 +355,7 @@ export class DivisionService {
 
   /**
    * Remover scrum master de una división
+   * También remueve el rol SCRUM_MASTER del usuario si ya no es SM de ninguna división
    */
   async removerScrumMaster(
     divisionId: number,
@@ -372,6 +373,7 @@ export class DivisionService {
     }
 
     // 2. Verificar que el personal está asignado como scrum master
+    const scrumMasterARemover = division.scrumMasters?.find(sm => sm.id === personalId);
     const index = division.scrumMasters?.findIndex(sm => sm.id === personalId);
     if (index === undefined || index === -1) {
       throw new BadRequestException(`Personal no está asignado como Scrum Master en esta división`);
@@ -381,7 +383,33 @@ export class DivisionService {
     division.scrumMasters.splice(index, 1);
     division.updatedBy = userId;
 
-    return this.divisionRepository.save(division);
+    const divisionActualizada = await this.divisionRepository.save(division);
+
+    // 4. Verificar si debe removerse el rol SCRUM_MASTER del usuario
+    if (scrumMasterARemover?.usuarioId) {
+      // Contar en cuántas divisiones activas sigue siendo scrum master
+      const otrasAsignaciones = await this.divisionRepository
+        .createQueryBuilder('division')
+        .innerJoin('division.scrumMasters', 'sm')
+        .where('sm.id = :personalId', { personalId })
+        .andWhere('division.activo = true')
+        .getCount();
+
+      // Si ya no es scrum master de ninguna división, remover el rol
+      if (otrasAsignaciones === 0) {
+        try {
+          await this.usuariosService.removerRol(
+            scrumMasterARemover.usuarioId,
+            Role.SCRUM_MASTER,
+          );
+        } catch (error) {
+          // Log pero no fallar si no se puede remover el rol
+          console.warn(`No se pudo remover rol SCRUM_MASTER del usuario ${scrumMasterARemover.usuarioId}:`, error);
+        }
+      }
+    }
+
+    return divisionActualizada;
   }
 
   /**
