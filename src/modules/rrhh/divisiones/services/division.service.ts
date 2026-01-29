@@ -296,7 +296,10 @@ export class DivisionService {
     division.coordinadorId = personalId;
     division.updatedBy = userId;
 
-    return this.divisionRepository.save(division);
+    await this.divisionRepository.save(division);
+
+    // 6. Recargar la división con todas las relaciones para devolver datos completos
+    return this.findOne(divisionId);
   }
 
   /**
@@ -350,7 +353,10 @@ export class DivisionService {
     division.scrumMasters.push(personal);
     division.updatedBy = userId;
 
-    return this.divisionRepository.save(division);
+    await this.divisionRepository.save(division);
+
+    // 7. Recargar la división con todas las relaciones para devolver datos completos
+    return this.findOne(divisionId);
   }
 
   /**
@@ -383,7 +389,7 @@ export class DivisionService {
     division.scrumMasters.splice(index, 1);
     division.updatedBy = userId;
 
-    const divisionActualizada = await this.divisionRepository.save(division);
+    await this.divisionRepository.save(division);
 
     // 4. Verificar si debe removerse el rol SCRUM_MASTER del usuario
     // Buscar el personal completo para obtener el usuarioId
@@ -414,7 +420,8 @@ export class DivisionService {
       }
     }
 
-    return divisionActualizada;
+    // Recargar la división con todas las relaciones para devolver datos completos
+    return this.findOne(divisionId);
   }
 
   /**
@@ -449,7 +456,7 @@ export class DivisionService {
     division.coordinador = null as any;
     division.updatedBy = userId;
 
-    const divisionActualizada = await this.divisionRepository.save(division);
+    await this.divisionRepository.save(division);
 
     // Si había un coordinador, verificar si debe removerse el rol
     if (coordinadorIdAnterior) {
@@ -479,6 +486,7 @@ export class DivisionService {
       }
     }
 
-    return divisionActualizada;
+    // Recargar la división con todas las relaciones para devolver datos completos
+    return this.findOne(divisionId);
   }
 }
