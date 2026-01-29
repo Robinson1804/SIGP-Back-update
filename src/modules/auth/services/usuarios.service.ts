@@ -197,22 +197,24 @@ export class UsuariosService {
       throw new NotFoundException(`Usuario con ID ${usuarioId} no encontrado`);
     }
 
+    // Asegurar que rolesAdicionales sea siempre un array
+    if (!Array.isArray(usuario.rolesAdicionales)) {
+      usuario.rolesAdicionales = [];
+    }
+
     // Si ya tiene el rol (principal o adicional), no hacer nada
-    if (usuario.rol === rol || usuario.rolesAdicionales?.includes(rol)) {
+    if (usuario.rol === rol || usuario.rolesAdicionales.includes(rol)) {
       return usuario;
     }
 
-    const rolesAdicionales = usuario.rolesAdicionales || [];
-
     // Si el nuevo rol es más alto en la jerarquía, hacerlo el principal
     if (ROLE_HIERARCHY[rol] > ROLE_HIERARCHY[usuario.rol]) {
-      rolesAdicionales.push(usuario.rol);
+      usuario.rolesAdicionales.push(usuario.rol);
       usuario.rol = rol;
     } else {
-      rolesAdicionales.push(rol);
+      usuario.rolesAdicionales.push(rol);
     }
 
-    usuario.rolesAdicionales = rolesAdicionales;
     return this.usuarioRepository.save(usuario);
   }
 
@@ -228,7 +230,12 @@ export class UsuariosService {
       throw new NotFoundException(`Usuario con ID ${usuarioId} no encontrado`);
     }
 
-    const rolesAdicionales = usuario.rolesAdicionales || [];
+    // Asegurar que rolesAdicionales sea siempre un array
+    if (!Array.isArray(usuario.rolesAdicionales)) {
+      usuario.rolesAdicionales = [];
+    }
+
+    const rolesAdicionales = usuario.rolesAdicionales;
 
     // Si el rol a remover es el principal
     if (usuario.rol === rol) {
