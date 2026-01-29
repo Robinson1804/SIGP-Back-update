@@ -386,7 +386,12 @@ export class DivisionService {
     const divisionActualizada = await this.divisionRepository.save(division);
 
     // 4. Verificar si debe removerse el rol SCRUM_MASTER del usuario
-    if (scrumMasterARemover?.usuarioId) {
+    // Buscar el personal completo para obtener el usuarioId
+    const personalCompleto = await this.personalRepository.findOne({
+      where: { id: personalId },
+    });
+
+    if (personalCompleto?.usuarioId) {
       // Contar en cuántas divisiones activas sigue siendo scrum master
       const otrasAsignaciones = await this.divisionRepository
         .createQueryBuilder('division')
@@ -399,12 +404,12 @@ export class DivisionService {
       if (otrasAsignaciones === 0) {
         try {
           await this.usuariosService.removerRol(
-            scrumMasterARemover.usuarioId,
+            personalCompleto.usuarioId,
             Role.SCRUM_MASTER,
           );
         } catch (error) {
           // Log pero no fallar si no se puede remover el rol
-          console.warn(`No se pudo remover rol SCRUM_MASTER del usuario ${scrumMasterARemover.usuarioId}:`, error);
+          console.warn(`No se pudo remover rol SCRUM_MASTER del usuario ${personalCompleto.usuarioId}:`, error);
         }
       }
     }
@@ -447,22 +452,29 @@ export class DivisionService {
     const divisionActualizada = await this.divisionRepository.save(division);
 
     // Si había un coordinador, verificar si debe removerse el rol
-    if (coordinadorAnterior?.usuarioId || coordinadorIdAnterior) {
-      // Verificar si este personal es coordinador en alguna otra división
-      const otrasAsignaciones = await this.divisionRepository.count({
-        where: { coordinadorId: coordinadorIdAnterior, activo: true },
+    if (coordinadorIdAnterior) {
+      // Buscar el personal completo para obtener el usuarioId
+      const personalCompleto = await this.personalRepository.findOne({
+        where: { id: coordinadorIdAnterior },
       });
 
-      // Si ya no es coordinador de ninguna división, remover el rol
-      if (otrasAsignaciones === 0 && coordinadorAnterior?.usuarioId) {
-        try {
-          await this.usuariosService.removerRol(
-            coordinadorAnterior.usuarioId,
-            Role.COORDINADOR,
-          );
-        } catch (error) {
-          // Log pero no fallar si no se puede remover el rol
-          console.warn(`No se pudo remover rol COORDINADOR del usuario ${coordinadorAnterior.usuarioId}:`, error);
+      if (personalCompleto?.usuarioId) {
+        // Verificar si este personal es coordinador en alguna otra división
+        const otrasAsignaciones = await this.divisionRepository.count({
+          where: { coordinadorId: coordinadorIdAnterior, activo: true },
+        });
+
+        // Si ya no es coordinador de ninguna división, remover el rol
+        if (otrasAsignaciones === 0) {
+          try {
+            await this.usuariosService.removerRol(
+              personalCompleto.usuarioId,
+              Role.COORDINADOR,
+            );
+          } catch (error) {
+            // Log pero no fallar si no se puede remover el rol
+            console.warn(`No se pudo remover rol COORDINADOR del usuario ${personalCompleto.usuarioId}:`, error);
+          }
         }
       }
     }
