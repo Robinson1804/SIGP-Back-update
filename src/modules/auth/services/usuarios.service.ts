@@ -62,16 +62,9 @@ export class UsuariosService {
   }
 
   /**
-   * Obtener usuarios por rol
+   * Obtener usuarios por rol (busca en rol principal y rolesAdicionales)
    */
   async findByRol(rol: Role): Promise<Usuario[]> {
-    return this.findAll({ rol, activo: true });
-  }
-
-  /**
-   * Obtener usuarios por múltiples roles
-   */
-  async findByRoles(roles: Role[]): Promise<Usuario[]> {
     const queryBuilder = this.usuarioRepository
       .createQueryBuilder('usuario')
       .select([
@@ -86,8 +79,47 @@ export class UsuariosService {
         'usuario.telefono',
         'usuario.activo',
       ])
-      .where('usuario.rol IN (:...roles)', { roles })
-      .andWhere('usuario.activo = :activo', { activo: true })
+      .where('usuario.activo = :activo', { activo: true })
+      .andWhere(
+        '(usuario.rol = :rol OR usuario.rolesAdicionales @> :rolArray)',
+        { rol, rolArray: JSON.stringify([rol]) }
+      )
+      .orderBy('usuario.apellido', 'ASC')
+      .addOrderBy('usuario.nombre', 'ASC');
+
+    return queryBuilder.getMany();
+  }
+
+  /**
+   * Obtener usuarios por múltiples roles (busca en rol principal y rolesAdicionales)
+   */
+  async findByRoles(roles: Role[]): Promise<Usuario[]> {
+    // Construir condiciones para buscar en rolesAdicionales
+    const rolesConditions = roles.map((_, i) => `usuario.rolesAdicionales @> :rolArray${i}`).join(' OR ');
+    const rolesParams = roles.reduce((acc, rol, i) => {
+      acc[`rolArray${i}`] = JSON.stringify([rol]);
+      return acc;
+    }, {} as Record<string, string>);
+
+    const queryBuilder = this.usuarioRepository
+      .createQueryBuilder('usuario')
+      .select([
+        'usuario.id',
+        'usuario.email',
+        'usuario.username',
+        'usuario.nombre',
+        'usuario.apellido',
+        'usuario.rol',
+        'usuario.rolesAdicionales',
+        'usuario.avatarUrl',
+        'usuario.telefono',
+        'usuario.activo',
+      ])
+      .where('usuario.activo = :activo', { activo: true })
+      .andWhere(
+        `(usuario.rol IN (:...roles) OR ${rolesConditions})`,
+        { roles, ...rolesParams }
+      )
       .orderBy('usuario.apellido', 'ASC')
       .addOrderBy('usuario.nombre', 'ASC');
 
