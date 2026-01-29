@@ -106,4 +106,4 @@ Redis caches presigned URLs and tracks pending uploads. Cron jobs handle cleanup
 
 ## Database
 
-PostgreSQL with TypeORM. Entities use decorators for validation and auto-loading is enabled. All entities should be placed in `entities/` folders within their respective modules.
+PostgreSQL with TypeORM. Entities use decorators for validation and auto-loading is enabled. All entities should be placed in `entities/` folders within their respective modules..
