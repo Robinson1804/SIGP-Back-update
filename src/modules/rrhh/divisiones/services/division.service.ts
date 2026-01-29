@@ -406,7 +406,9 @@ export class DivisionService {
   async removerCoordinador(divisionId: number, userId?: number): Promise<Division> {
     const division = await this.findOne(divisionId);
 
+    // Limpiar tanto el ID como la relación para que TypeORM lo maneje correctamente
     division.coordinadorId = null as any;
+    division.coordinador = null as any;
     division.updatedBy = userId;
 
     return this.divisionRepository.save(division);
