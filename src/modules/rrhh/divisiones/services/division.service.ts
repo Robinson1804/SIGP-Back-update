@@ -402,15 +402,43 @@ export class DivisionService {
 
   /**
    * Remover coordinador de una división
+   * También remueve el rol COORDINADOR del usuario si ya no es coordinador de ninguna división
    */
   async removerCoordinador(divisionId: number, userId?: number): Promise<Division> {
     const division = await this.findOne(divisionId);
+
+    // Guardar referencia al coordinador antes de removerlo
+    const coordinadorAnterior = division.coordinador;
+    const coordinadorIdAnterior = division.coordinadorId;
 
     // Limpiar tanto el ID como la relación para que TypeORM lo maneje correctamente
     division.coordinadorId = null as any;
     division.coordinador = null as any;
     division.updatedBy = userId;
 
-    return this.divisionRepository.save(division);
+    const divisionActualizada = await this.divisionRepository.save(division);
+
+    // Si había un coordinador, verificar si debe removerse el rol
+    if (coordinadorAnterior?.usuarioId || coordinadorIdAnterior) {
+      // Verificar si este personal es coordinador en alguna otra división
+      const otrasAsignaciones = await this.divisionRepository.count({
+        where: { coordinadorId: coordinadorIdAnterior, activo: true },
+      });
+
+      // Si ya no es coordinador de ninguna división, remover el rol
+      if (otrasAsignaciones === 0 && coordinadorAnterior?.usuarioId) {
+        try {
+          await this.usuariosService.removerRol(
+            coordinadorAnterior.usuarioId,
+            Role.COORDINADOR,
+          );
+        } catch (error) {
+          // Log pero no fallar si no se puede remover el rol
+          console.warn(`No se pudo remover rol COORDINADOR del usuario ${coordinadorAnterior.usuarioId}:`, error);
+        }
+      }
+    }
+
+    return divisionActualizada;
   }
 }
