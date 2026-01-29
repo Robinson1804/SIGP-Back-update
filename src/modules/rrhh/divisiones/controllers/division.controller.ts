@@ -39,6 +39,14 @@ export class DivisionController {
     );
   }
 
+  @Get('siguiente-codigo')
+  @ApiOperation({ summary: 'Obtener el siguiente código de división disponible' })
+  @ApiResponse({ status: 200, description: 'Código siguiente disponible' })
+  async getSiguienteCodigo() {
+    const codigo = await this.divisionService.generateCodigo();
+    return { codigo };
+  }
+
   @Get('arbol')
   getArbol() {
     return this.divisionService.getArbol();

@@ -30,9 +30,9 @@ export class DivisionService {
   /**
    * Genera automáticamente el código de la división
    * Formato: "DIV-001", "DIV-002", etc.
-   * Reutiliza códigos eliminados
+   * Reutiliza códigos eliminados (soft delete)
    */
-  private async generateCodigo(): Promise<string> {
+  async generateCodigo(): Promise<string> {
     const divisiones = await this.divisionRepository.find({
       select: ['codigo'],
     });
