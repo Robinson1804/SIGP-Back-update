@@ -8,10 +8,12 @@ import {
 } from 'class-validator';
 
 export class CreateDivisionDto {
+  // Codigo is auto-generated with format DIV-001, DIV-002, etc.
+  // If provided, it will be ignored
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(20)
-  codigo: string;
+  codigo?: string;
 
   @IsString()
   @IsNotEmpty()

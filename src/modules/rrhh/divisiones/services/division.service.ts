@@ -27,15 +27,35 @@ export class DivisionService {
     private readonly usuariosService: UsuariosService,
   ) {}
 
-  async create(createDto: CreateDivisionDto, userId?: number): Promise<Division> {
-    // Check for duplicate code
-    const existing = await this.divisionRepository.findOne({
-      where: { codigo: createDto.codigo },
+  /**
+   * Genera automáticamente el código de la división
+   * Formato: "DIV-001", "DIV-002", etc.
+   * Reutiliza códigos eliminados
+   */
+  private async generateCodigo(): Promise<string> {
+    const divisiones = await this.divisionRepository.find({
+      select: ['codigo'],
     });
 
-    if (existing) {
-      throw new ConflictException(`Ya existe una división con el código ${createDto.codigo}`);
+    const usedNumbers = new Set<number>();
+    for (const div of divisiones) {
+      const match = div.codigo.match(/DIV-(\d+)/i);
+      if (match) {
+        usedNumbers.add(parseInt(match[1], 10));
+      }
     }
+
+    let nextNum = 1;
+    while (usedNumbers.has(nextNum)) {
+      nextNum++;
+    }
+
+    return `DIV-${String(nextNum).padStart(3, '0')}`;
+  }
+
+  async create(createDto: CreateDivisionDto, userId?: number): Promise<Division> {
+    // Auto-generate codigo
+    const codigo = await this.generateCodigo();
 
     // Validate parent division exists if provided
     if (createDto.divisionPadreId) {
@@ -49,6 +69,7 @@ export class DivisionService {
 
     const division = this.divisionRepository.create({
       ...createDto,
+      codigo, // Use auto-generated code
       createdBy: userId,
       updatedBy: userId,
     });
