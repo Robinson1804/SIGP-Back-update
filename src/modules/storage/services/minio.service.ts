@@ -105,23 +105,32 @@ export class MinioService implements OnModuleInit {
     const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
     const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
     const internalPort = this.configService.get<number>('storage.minio.port', 9000);
-    const useSSL = this.configService.get<boolean>('storage.minio.useSSL', false);
 
     // Si son iguales, no hace falta reemplazar
     if (internalEndpoint === publicEndpoint) {
       return url;
     }
 
-    // Construir la URL interna que necesitamos reemplazar
-    const internalPattern = `http://${internalEndpoint}:${internalPort}`;
+    // Construir la URL interna que necesitamos reemplazar (puede ser http o https)
+    const internalPatternHttp = `http://${internalEndpoint}:${internalPort}`;
+    const internalPatternHttps = `https://${internalEndpoint}:${internalPort}`;
 
-    // Construir la URL pública (Railway usa HTTPS sin puerto explícito)
-    const publicUrl = useSSL
+    // Railway y servicios cloud usan HTTPS sin puerto explícito para URLs públicas
+    // Detectar si el publicEndpoint parece ser un dominio de Railway/cloud
+    const isCloudEndpoint = publicEndpoint.includes('.railway.app') ||
+                            publicEndpoint.includes('.vercel.app') ||
+                            publicEndpoint.includes('.amazonaws.com') ||
+                            publicEndpoint.includes('.cloudflare.com');
+
+    const publicUrl = isCloudEndpoint
       ? `https://${publicEndpoint}`
       : `http://${publicEndpoint}:${internalPort}`;
 
     // Reemplazar el endpoint interno con el público
-    return url.replace(internalPattern, publicUrl);
+    let result = url.replace(internalPatternHttp, publicUrl);
+    result = result.replace(internalPatternHttps, publicUrl);
+
+    return result;
   }
 
   /**
