@@ -265,14 +265,50 @@ export class PersonalService {
       }
     }
 
-    // Sincronizar estado activo con el usuario vinculado
-    if (personalData.activo !== undefined && personal.usuarioId) {
-      try {
-        await this.usuariosService.update(personal.usuarioId, { activo: personalData.activo });
-        console.log(`[RRHH] Estado activo sincronizado para usuario ${personal.usuarioId}: ${personalData.activo}`);
-      } catch (error) {
-        console.error(`Error syncing activo status for user ${personal.usuarioId}:`, error);
-        // No lanzar error para no interrumpir la actualización del personal
+    // Sincronizar datos con el usuario vinculado
+    if (personal.usuarioId) {
+      const usuarioUpdateData: {
+        activo?: boolean;
+        nombre?: string;
+        apellido?: string;
+        email?: string;
+        telefono?: string;
+      } = {};
+
+      // Sincronizar estado activo
+      if (personalData.activo !== undefined) {
+        usuarioUpdateData.activo = personalData.activo;
+      }
+
+      // Sincronizar nombres → nombre
+      if (personalData.nombres) {
+        usuarioUpdateData.nombre = personalData.nombres;
+      }
+
+      // Sincronizar apellidos → apellido
+      if (personalData.apellidos) {
+        usuarioUpdateData.apellido = personalData.apellidos;
+      }
+
+      // Sincronizar email
+      if (personalData.email) {
+        usuarioUpdateData.email = personalData.email;
+      }
+
+      // Sincronizar teléfono
+      if (personalData.telefono !== undefined) {
+        usuarioUpdateData.telefono = personalData.telefono;
+      }
+
+      // Solo actualizar si hay campos a sincronizar
+      if (Object.keys(usuarioUpdateData).length > 0) {
+        try {
+          await this.usuariosService.update(personal.usuarioId, usuarioUpdateData);
+          console.log(`[RRHH] Datos sincronizados para usuario ${personal.usuarioId}:`, Object.keys(usuarioUpdateData).join(', '));
+        } catch (error) {
+          console.error(`Error syncing data for user ${personal.usuarioId}:`, error);
+          // No lanzar error para no interrumpir la actualización del personal
+        }
       }
     }
 
