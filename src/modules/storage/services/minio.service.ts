@@ -102,21 +102,24 @@ export class MinioService implements OnModuleInit {
    * Reemplazar endpoint interno de Docker con endpoint público para URLs del browser
    */
   private replaceWithPublicEndpoint(url: string): string {
-    const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
-    const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
-    const internalPort = this.configService.get<number>('storage.minio.port', 9000);
+    // Leer directamente de variables de entorno para evitar problemas de config
+    const internalEndpoint = process.env.MINIO_ENDPOINT || 'localhost';
+    const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT || internalEndpoint;
+    const internalPort = process.env.MINIO_PORT || '9000';
+
+    this.logger.debug(`[MinIO URL] Original: ${url}`);
+    this.logger.debug(`[MinIO URL] Internal: ${internalEndpoint}, Public: ${publicEndpoint}`);
 
     // Si son iguales, no hace falta reemplazar
-    if (internalEndpoint === publicEndpoint) {
+    if (internalEndpoint === publicEndpoint || !publicEndpoint) {
       return url;
     }
 
-    // Construir la URL interna que necesitamos reemplazar (puede ser http o https)
+    // Construir la URL interna que necesitamos reemplazar
     const internalPatternHttp = `http://${internalEndpoint}:${internalPort}`;
     const internalPatternHttps = `https://${internalEndpoint}:${internalPort}`;
 
     // Railway y servicios cloud usan HTTPS sin puerto explícito para URLs públicas
-    // Detectar si el publicEndpoint parece ser un dominio de Railway/cloud
     const isCloudEndpoint = publicEndpoint.includes('.railway.app') ||
                             publicEndpoint.includes('.vercel.app') ||
                             publicEndpoint.includes('.amazonaws.com') ||
@@ -129,6 +132,8 @@ export class MinioService implements OnModuleInit {
     // Reemplazar el endpoint interno con el público
     let result = url.replace(internalPatternHttp, publicUrl);
     result = result.replace(internalPatternHttps, publicUrl);
+
+    this.logger.debug(`[MinIO URL] Transformed: ${result}`);
 
     return result;
   }
