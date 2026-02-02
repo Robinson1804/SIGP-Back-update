@@ -46,11 +46,14 @@ export class MinioService implements OnModuleInit {
     // Leer directamente de env vars para evitar problemas de caching con ConfigService
     const endpoint = process.env.MINIO_ENDPOINT || 'localhost';
     const port = parseInt(process.env.MINIO_PORT || '9000', 10);
-    const useSSL = process.env.MINIO_USE_SSL === 'true';
     const accessKey = process.env.MINIO_ACCESS_KEY || 'minioadmin';
     const secretKey = process.env.MINIO_SECRET_KEY || 'minioadmin';
 
-    this.logger.log(`[MinIO Config] Endpoint: ${endpoint}, Port: ${port}, SSL: ${useSSL}`);
+    // IMPORTANTE: La conexión INTERNA a MinIO siempre es HTTP (sin SSL)
+    // Railway y Docker usan HTTP internamente, SSL es solo para el endpoint público
+    const useSSL = false;
+
+    this.logger.log(`[MinIO Config] Endpoint: ${endpoint}, Port: ${port}, SSL: ${useSSL} (interno siempre HTTP)`);
 
     this.client = new Minio.Client({
       endPoint: endpoint,
