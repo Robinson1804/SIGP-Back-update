@@ -213,15 +213,57 @@ export class PersonalService {
     return this.findByUsuarioRol(Role.IMPLEMENTADOR);
   }
 
-  async update(id: number, updateDto: UpdatePersonalDto, userId?: number): Promise<Personal> {
+  async update(id: number, updateDto: UpdatePersonalDto, userId?: number): Promise<Personal & { credenciales?: { username: string; passwordTemporal: string; email: string; rol: string } }> {
     // Verificar que existe
-    await this.findOne(id);
+    const personal = await this.findOne(id);
+
+    // Extract rol before updating (not a column in personal table)
+    const { rol, ...personalData } = updateDto;
 
     // Usar update directo para evitar conflictos con relaciones cargadas
     await this.personalRepository.update(id, {
-      ...updateDto,
+      ...personalData,
       updatedBy: userId,
     });
+
+    // Handle rol assignment
+    if (rol) {
+      if (!personal.usuarioId) {
+        // Personal doesn't have a user - create one
+        try {
+          const userResult = await this.usuariosService.crearUsuarioDesdePersonalId(
+            id,
+            rol,
+          );
+
+          // Reload the personal entity with the updated usuarioId
+          const reloadedPersonal = await this.findOne(id);
+
+          // Return personal with credentials info
+          return {
+            ...reloadedPersonal,
+            credenciales: {
+              username: userResult.username,
+              passwordTemporal: userResult.passwordTemporal,
+              email: userResult.email,
+              rol: userResult.rol,
+            },
+          };
+        } catch (error) {
+          console.error(`Error creating user for personal ${id}:`, error);
+          throw error;
+        }
+      } else {
+        // Personal already has a user - update their rol
+        try {
+          await this.usuariosService.update(personal.usuarioId, { rol });
+          console.log(`[RRHH] Rol actualizado para usuario ${personal.usuarioId}: ${rol}`);
+        } catch (error) {
+          console.error(`Error updating rol for user ${personal.usuarioId}:`, error);
+          throw error;
+        }
+      }
+    }
 
     // Recargar la entidad con las relaciones actualizadas
     return this.findOne(id);

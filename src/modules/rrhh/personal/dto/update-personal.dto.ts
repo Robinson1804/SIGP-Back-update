@@ -12,6 +12,7 @@ import {
   Max,
 } from 'class-validator';
 import { Modalidad } from '../enums/modalidad.enum';
+import { Role } from '../../../../common/constants/roles.constant';
 
 export class UpdatePersonalDto {
   @IsInt()
@@ -69,4 +70,12 @@ export class UpdatePersonalDto {
   @IsBoolean()
   @IsOptional()
   activo?: boolean;
+
+  /**
+   * Rol para crear automáticamente el usuario del sistema
+   * Si se proporciona y el personal no tiene usuario, se crea uno con este rol
+   */
+  @IsEnum(Role)
+  @IsOptional()
+  rol?: Role;
 }
