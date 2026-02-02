@@ -46,10 +46,8 @@ export class UsuariosService {
 
     if (filters?.activo !== undefined) {
       queryBuilder.andWhere('usuario.activo = :activo', { activo: filters.activo });
-    } else {
-      // Por defecto, solo usuarios activos
-      queryBuilder.andWhere('usuario.activo = :activo', { activo: true });
     }
+    // Si no se especifica filtro activo, devolver todos los usuarios
 
     if (filters?.busqueda) {
       queryBuilder.andWhere(

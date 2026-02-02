@@ -265,6 +265,17 @@ export class PersonalService {
       }
     }
 
+    // Sincronizar estado activo con el usuario vinculado
+    if (personalData.activo !== undefined && personal.usuarioId) {
+      try {
+        await this.usuariosService.update(personal.usuarioId, { activo: personalData.activo });
+        console.log(`[RRHH] Estado activo sincronizado para usuario ${personal.usuarioId}: ${personalData.activo}`);
+      } catch (error) {
+        console.error(`Error syncing activo status for user ${personal.usuarioId}:`, error);
+        // No lanzar error para no interrumpir la actualización del personal
+      }
+    }
+
     // Recargar la entidad con las relaciones actualizadas
     return this.findOne(id);
   }
