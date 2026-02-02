@@ -43,12 +43,21 @@ export class MinioService implements OnModuleInit {
   readonly DEFAULT_PRESIGNED_TTL = 3600; // 1 hora
 
   constructor(private configService: ConfigService) {
+    // Leer directamente de env vars para evitar problemas de caching con ConfigService
+    const endpoint = process.env.MINIO_ENDPOINT || 'localhost';
+    const port = parseInt(process.env.MINIO_PORT || '9000', 10);
+    const useSSL = process.env.MINIO_USE_SSL === 'true';
+    const accessKey = process.env.MINIO_ACCESS_KEY || 'minioadmin';
+    const secretKey = process.env.MINIO_SECRET_KEY || 'minioadmin';
+
+    this.logger.log(`[MinIO Config] Endpoint: ${endpoint}, Port: ${port}, SSL: ${useSSL}`);
+
     this.client = new Minio.Client({
-      endPoint: this.configService.get<string>('storage.minio.endpoint', 'localhost'),
-      port: this.configService.get<number>('storage.minio.port', 9000),
-      useSSL: this.configService.get<boolean>('storage.minio.useSSL', false),
-      accessKey: this.configService.get<string>('storage.minio.accessKey', 'minioadmin'),
-      secretKey: this.configService.get<string>('storage.minio.secretKey', 'minioadmin'),
+      endPoint: endpoint,
+      port: port,
+      useSSL: useSSL,
+      accessKey: accessKey,
+      secretKey: secretKey,
     });
   }
 
@@ -56,28 +65,44 @@ export class MinioService implements OnModuleInit {
    * Inicializar buckets al arrancar el módulo
    */
   async onModuleInit(): Promise<void> {
-    this.logger.log('Inicializando MinIO Service...');
+    const endpoint = process.env.MINIO_ENDPOINT || 'localhost';
+    const port = process.env.MINIO_PORT || '9000';
+    const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT || endpoint;
+
+    this.logger.log(`Inicializando MinIO Service...`);
+    this.logger.log(`[MinIO] Endpoint interno: ${endpoint}:${port}`);
+    this.logger.log(`[MinIO] Endpoint público: ${publicEndpoint}`);
+
+    // Verificar conexión primero
+    try {
+      const buckets = await this.client.listBuckets();
+      this.logger.log(`[MinIO] Conexión exitosa. Buckets existentes: ${buckets.map(b => b.name).join(', ') || 'ninguno'}`);
+    } catch (error) {
+      this.logger.error(`[MinIO] ERROR DE CONEXIÓN: ${error.message}`);
+      this.logger.error(`[MinIO] Verificar que MinIO esté accesible en ${endpoint}:${port}`);
+      return; // No continuar si no hay conexión
+    }
 
     for (const [name, bucket] of Object.entries(this.BUCKETS)) {
       try {
         const exists = await this.client.bucketExists(bucket);
         if (!exists) {
           await this.client.makeBucket(bucket, 'us-east-1');
-          this.logger.log(`Bucket creado: ${bucket}`);
+          this.logger.log(`[MinIO] Bucket creado: ${bucket}`);
 
           // Configurar política para avatares (público)
           if (bucket === this.BUCKETS.AVATARES) {
             await this.setBucketPublicRead(bucket);
           }
         } else {
-          this.logger.debug(`Bucket existente: ${bucket}`);
+          this.logger.debug(`[MinIO] Bucket existente: ${bucket}`);
         }
       } catch (error) {
-        this.logger.error(`Error inicializando bucket ${bucket}:`, error);
+        this.logger.error(`[MinIO] Error inicializando bucket ${bucket}: ${error.message}`);
       }
     }
 
-    this.logger.log('MinIO Service inicializado correctamente');
+    this.logger.log('[MinIO] Service inicializado correctamente');
   }
 
   /**
@@ -146,8 +171,17 @@ export class MinioService implements OnModuleInit {
     objectKey: string,
     ttlSeconds: number = this.DEFAULT_PRESIGNED_TTL,
   ): Promise<string> {
-    const url = await this.client.presignedPutObject(bucket, objectKey, ttlSeconds);
-    return this.replaceWithPublicEndpoint(url);
+    try {
+      this.logger.debug(`[MinIO] Generando presigned PUT URL para ${bucket}/${objectKey}`);
+      const url = await this.client.presignedPutObject(bucket, objectKey, ttlSeconds);
+      this.logger.debug(`[MinIO] URL generada: ${url.substring(0, 80)}...`);
+      const publicUrl = this.replaceWithPublicEndpoint(url);
+      this.logger.debug(`[MinIO] URL pública: ${publicUrl.substring(0, 80)}...`);
+      return publicUrl;
+    } catch (error) {
+      this.logger.error(`[MinIO] Error generando presigned PUT URL: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
@@ -158,8 +192,15 @@ export class MinioService implements OnModuleInit {
     objectKey: string,
     ttlSeconds: number = this.DEFAULT_PRESIGNED_TTL,
   ): Promise<string> {
-    const url = await this.client.presignedGetObject(bucket, objectKey, ttlSeconds);
-    return this.replaceWithPublicEndpoint(url);
+    try {
+      this.logger.debug(`[MinIO] Generando presigned GET URL para ${bucket}/${objectKey}`);
+      const url = await this.client.presignedGetObject(bucket, objectKey, ttlSeconds);
+      const publicUrl = this.replaceWithPublicEndpoint(url);
+      return publicUrl;
+    } catch (error) {
+      this.logger.error(`[MinIO] Error generando presigned GET URL: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**

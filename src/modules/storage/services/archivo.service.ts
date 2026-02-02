@@ -75,74 +75,89 @@ export class ArchivoService {
     dto: RequestUploadUrlDto,
     usuarioId: number,
   ): Promise<UploadUrlResponseDto> {
-    // Validar formato y tamaño
-    const extension = path.extname(dto.nombreArchivo).toLowerCase().slice(1);
-    await this.validationService.validateFormat(extension, dto.categoria, dto.tamano);
+    try {
+      this.logger.log(`[Upload] Iniciando requestUploadUrl para ${dto.nombreArchivo}`);
 
-    // Generar identificadores únicos
-    const archivoId = uuidv4();
-    const nombreAlmacenado = `${archivoId}.${extension}`;
-    const bucket = this.getBucketPorCategoria(dto.categoria);
-    const objectKey = this.generarObjectKey(
-      dto.entidadTipo,
-      dto.entidadId,
-      dto.categoria,
-      nombreAlmacenado,
-    );
+      // Validar formato y tamaño
+      const extension = path.extname(dto.nombreArchivo).toLowerCase().slice(1);
+      this.logger.debug(`[Upload] Validando formato: ${extension}`);
+      await this.validationService.validateFormat(extension, dto.categoria, dto.tamano);
 
-    // Crear registro en BD (estado: pendiente)
-    const archivo = this.archivoRepository.create({
-      id: archivoId,
-      entidadTipo: dto.entidadTipo,
-      entidadId: dto.entidadId,
-      nombreOriginal: dto.nombreArchivo,
-      nombreAlmacenado,
-      extension,
-      mimeType: dto.mimeType,
-      tamanoBytes: dto.tamano,
-      bucket,
-      objectKey,
-      categoria: dto.categoria,
-      estado: ArchivoEstado.PENDIENTE,
-      esObligatorio: dto.esObligatorio || false,
-      metadata: dto.metadata || {},
-      createdBy: usuarioId,
-    });
+      // Generar identificadores únicos
+      const archivoId = uuidv4();
+      const nombreAlmacenado = `${archivoId}.${extension}`;
+      const bucket = this.getBucketPorCategoria(dto.categoria);
+      const objectKey = this.generarObjectKey(
+        dto.entidadTipo,
+        dto.entidadId,
+        dto.categoria,
+        nombreAlmacenado,
+      );
 
-    await this.archivoRepository.save(archivo);
+      this.logger.debug(`[Upload] Bucket: ${bucket}, ObjectKey: ${objectKey}`);
 
-    // Generar URL presignada para PUT
-    const uploadUrl = await this.minioService.getPresignedPutUrl(
-      bucket,
-      objectKey,
-      this.PRESIGNED_URL_TTL,
-    );
+      // Crear registro en BD (estado: pendiente)
+      const archivo = this.archivoRepository.create({
+        id: archivoId,
+        entidadTipo: dto.entidadTipo,
+        entidadId: dto.entidadId,
+        nombreOriginal: dto.nombreArchivo,
+        nombreAlmacenado,
+        extension,
+        mimeType: dto.mimeType,
+        tamanoBytes: dto.tamano,
+        bucket,
+        objectKey,
+        categoria: dto.categoria,
+        estado: ArchivoEstado.PENDIENTE,
+        esObligatorio: dto.esObligatorio || false,
+        metadata: dto.metadata || {},
+        createdBy: usuarioId,
+      });
 
-    // Guardar en Redis para tracking
-    await this.redis.setex(
-      `upload:pending:${archivoId}`,
-      this.PRESIGNED_URL_TTL + 60,
-      JSON.stringify({
+      this.logger.debug(`[Upload] Guardando archivo en BD...`);
+      await this.archivoRepository.save(archivo);
+      this.logger.debug(`[Upload] Archivo guardado en BD: ${archivoId}`);
+
+      // Generar URL presignada para PUT
+      this.logger.debug(`[Upload] Generando URL presignada para MinIO...`);
+      const uploadUrl = await this.minioService.getPresignedPutUrl(
+        bucket,
+        objectKey,
+        this.PRESIGNED_URL_TTL,
+      );
+      this.logger.debug(`[Upload] URL presignada generada: ${uploadUrl.substring(0, 100)}...`);
+
+      // Guardar en Redis para tracking
+      this.logger.debug(`[Upload] Guardando tracking en Redis...`);
+      await this.redis.setex(
+        `upload:pending:${archivoId}`,
+        this.PRESIGNED_URL_TTL + 60,
+        JSON.stringify({
+          archivoId,
+          usuarioId,
+          nombreArchivo: dto.nombreArchivo,
+          estado: 'esperando_subida',
+          createdAt: new Date().toISOString(),
+        }),
+      );
+
+      this.logger.log(`[Upload] URL de subida generada exitosamente para archivo ${archivoId}`);
+
+      return {
+        uploadUrl,
         archivoId,
-        usuarioId,
-        nombreArchivo: dto.nombreArchivo,
-        estado: 'esperando_subida',
-        createdAt: new Date().toISOString(),
-      }),
-    );
-
-    this.logger.log(`URL de subida generada para archivo ${archivoId}`);
-
-    return {
-      uploadUrl,
-      archivoId,
-      objectKey,
-      bucket,
-      expiresIn: this.PRESIGNED_URL_TTL,
-      requiredHeaders: {
-        'Content-Type': dto.mimeType,
-      },
-    };
+        objectKey,
+        bucket,
+        expiresIn: this.PRESIGNED_URL_TTL,
+        requiredHeaders: {
+          'Content-Type': dto.mimeType,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`[Upload] Error en requestUploadUrl: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**
