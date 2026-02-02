@@ -104,14 +104,24 @@ export class MinioService implements OnModuleInit {
   private replaceWithPublicEndpoint(url: string): string {
     const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
     const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
+    const internalPort = this.configService.get<number>('storage.minio.port', 9000);
+    const useSSL = this.configService.get<boolean>('storage.minio.useSSL', false);
 
     // Si son iguales, no hace falta reemplazar
     if (internalEndpoint === publicEndpoint) {
       return url;
     }
 
+    // Construir la URL interna que necesitamos reemplazar
+    const internalPattern = `http://${internalEndpoint}:${internalPort}`;
+
+    // Construir la URL pública (Railway usa HTTPS sin puerto explícito)
+    const publicUrl = useSSL
+      ? `https://${publicEndpoint}`
+      : `http://${publicEndpoint}:${internalPort}`;
+
     // Reemplazar el endpoint interno con el público
-    return url.replace(`://${internalEndpoint}:`, `://${publicEndpoint}:`);
+    return url.replace(internalPattern, publicUrl);
   }
 
   /**
