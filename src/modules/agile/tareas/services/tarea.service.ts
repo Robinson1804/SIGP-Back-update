@@ -969,8 +969,8 @@ export class TareaService {
 
     if (!hu) return;
 
-    // No actualizar si la HU ya está en "Finalizado"
-    if (hu.estado === HuEstado.FINALIZADO) return;
+    // No actualizar si la HU ya está en "Finalizado" o "En revisión"
+    if (hu.estado === HuEstado.FINALIZADO || hu.estado === HuEstado.EN_REVISION) return;
 
     // Obtener todas las tareas activas de la HU
     const tareas = await this.tareaRepository.find({
@@ -1059,7 +1059,7 @@ export class TareaService {
         });
 
         // Registrar cambio de estado en historial
-        if (userId && estadoAnterior !== HuEstado.EN_REVISION) {
+        if (userId) {
           await this.historialCambioService.registrarCambioEstado(
             HistorialEntidadTipo.HISTORIA_USUARIO,
             historiaUsuarioId,
