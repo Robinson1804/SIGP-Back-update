@@ -42,6 +42,19 @@ export class NotificacionController {
     return this.notificacionService.getConteo(usuarioId);
   }
 
+  /**
+   * Endpoint admin: listar notificaciones de un usuario específico
+   */
+  @Get('admin/usuario/:usuarioId')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.PMO)
+  findAllByUser(
+    @Param('usuarioId', ParseIntPipe) usuarioId: number,
+    @Query('tipo') tipo?: TipoNotificacion,
+  ) {
+    return this.notificacionService.findAll(usuarioId, { tipo });
+  }
+
   @Get(':id')
   findOne(
     @Param('id', ParseIntPipe) id: number,
@@ -63,14 +76,6 @@ export class NotificacionController {
     return this.notificacionService.marcarTodasLeidas(usuarioId);
   }
 
-  @Delete(':id')
-  remove(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser('id') usuarioId: number,
-  ) {
-    return this.notificacionService.remove(id, usuarioId);
-  }
-
   /**
    * Endpoint admin: eliminar notificación de cualquier usuario
    */
@@ -81,16 +86,11 @@ export class NotificacionController {
     return this.notificacionService.removeAdmin(id);
   }
 
-  /**
-   * Endpoint admin: listar notificaciones de un usuario específico
-   */
-  @Get('admin/usuario/:usuarioId')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.PMO)
-  findAllByUser(
-    @Param('usuarioId', ParseIntPipe) usuarioId: number,
-    @Query('tipo') tipo?: TipoNotificacion,
+  @Delete(':id')
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser('id') usuarioId: number,
   ) {
-    return this.notificacionService.findAll(usuarioId, { tipo });
+    return this.notificacionService.remove(id, usuarioId);
   }
 }
