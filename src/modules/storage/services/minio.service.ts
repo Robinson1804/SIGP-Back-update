@@ -1,6 +1,10 @@
 /**
  * SIGP - MinIO Service
  * Wrapper para operaciones con MinIO S3-compatible storage
+ *
+ * Usa DOS clientes:
+ * - client (interno): Para operaciones del servidor (put, get, stat, etc.) via HTTP interno
+ * - presignClient (público): Para generar URLs presignadas que el browser puede usar via HTTPS
  */
 
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
@@ -29,7 +33,12 @@ export interface BucketPolicy {
 @Injectable()
 export class MinioService implements OnModuleInit {
   private readonly logger = new Logger(MinioService.name);
+
+  /** Cliente interno: operaciones servidor-a-MinIO (HTTP) */
   private client: Minio.Client;
+
+  /** Cliente público: genera URLs presignadas con el host público (HTTPS) */
+  private presignClient: Minio.Client;
 
   // Buckets del sistema
   readonly BUCKETS = {
@@ -43,25 +52,46 @@ export class MinioService implements OnModuleInit {
   readonly DEFAULT_PRESIGNED_TTL = 3600; // 1 hora
 
   constructor(private configService: ConfigService) {
-    // Leer directamente de env vars para evitar problemas de caching con ConfigService
     const endpoint = process.env.MINIO_ENDPOINT || 'localhost';
     const port = parseInt(process.env.MINIO_PORT || '9000', 10);
     const accessKey = process.env.MINIO_ACCESS_KEY || 'minioadmin';
     const secretKey = process.env.MINIO_SECRET_KEY || 'minioadmin';
+    const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT || '';
 
-    // IMPORTANTE: La conexión INTERNA a MinIO siempre es HTTP (sin SSL)
-    // Railway y Docker usan HTTP internamente, SSL es solo para el endpoint público
-    const useSSL = false;
-
-    this.logger.log(`[MinIO Config] Endpoint: ${endpoint}, Port: ${port}, SSL: ${useSSL} (interno siempre HTTP)`);
-
+    // Cliente INTERNO: siempre HTTP para comunicación dentro de Railway/Docker
+    this.logger.log(`[MinIO] Cliente interno: ${endpoint}:${port} (HTTP)`);
     this.client = new Minio.Client({
       endPoint: endpoint,
       port: port,
-      useSSL: useSSL,
+      useSSL: false,
       accessKey: accessKey,
       secretKey: secretKey,
     });
+
+    // Cliente PÚBLICO: para generar URLs presignadas que el browser pueda usar
+    // La firma incluye el host, así que DEBE coincidir con el endpoint público
+    if (publicEndpoint && publicEndpoint !== endpoint) {
+      const isCloudEndpoint = publicEndpoint.includes('.railway.app') ||
+                              publicEndpoint.includes('.vercel.app') ||
+                              publicEndpoint.includes('.amazonaws.com') ||
+                              publicEndpoint.includes('.cloudflare.com');
+
+      const publicPort = isCloudEndpoint ? 443 : port;
+      const publicSSL = isCloudEndpoint;
+
+      this.logger.log(`[MinIO] Cliente presign: ${publicEndpoint}:${publicPort} (SSL: ${publicSSL})`);
+      this.presignClient = new Minio.Client({
+        endPoint: publicEndpoint,
+        port: publicPort,
+        useSSL: publicSSL,
+        accessKey: accessKey,
+        secretKey: secretKey,
+      });
+    } else {
+      // Sin endpoint público, usar el mismo cliente
+      this.logger.log(`[MinIO] Sin endpoint público, usando cliente interno para presign`);
+      this.presignClient = this.client;
+    }
   }
 
   /**
@@ -83,7 +113,7 @@ export class MinioService implements OnModuleInit {
     } catch (error) {
       this.logger.error(`[MinIO] ERROR DE CONEXIÓN: ${error.message}`);
       this.logger.error(`[MinIO] Verificar que MinIO esté accesible en ${endpoint}:${port}`);
-      return; // No continuar si no hay conexión
+      return;
     }
 
     for (const [name, bucket] of Object.entries(this.BUCKETS)) {
@@ -93,7 +123,6 @@ export class MinioService implements OnModuleInit {
           await this.client.makeBucket(bucket, 'us-east-1');
           this.logger.log(`[MinIO] Bucket creado: ${bucket}`);
 
-          // Configurar política para avatares (público)
           if (bucket === this.BUCKETS.AVATARES) {
             await this.setBucketPublicRead(bucket);
           }
@@ -127,47 +156,8 @@ export class MinioService implements OnModuleInit {
   }
 
   /**
-   * Reemplazar endpoint interno de Docker con endpoint público para URLs del browser
-   */
-  private replaceWithPublicEndpoint(url: string): string {
-    // Leer directamente de variables de entorno para evitar problemas de config
-    const internalEndpoint = process.env.MINIO_ENDPOINT || 'localhost';
-    const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT || internalEndpoint;
-    const internalPort = process.env.MINIO_PORT || '9000';
-
-    this.logger.debug(`[MinIO URL] Original: ${url}`);
-    this.logger.debug(`[MinIO URL] Internal: ${internalEndpoint}, Public: ${publicEndpoint}`);
-
-    // Si son iguales, no hace falta reemplazar
-    if (internalEndpoint === publicEndpoint || !publicEndpoint) {
-      return url;
-    }
-
-    // Construir la URL interna que necesitamos reemplazar
-    const internalPatternHttp = `http://${internalEndpoint}:${internalPort}`;
-    const internalPatternHttps = `https://${internalEndpoint}:${internalPort}`;
-
-    // Railway y servicios cloud usan HTTPS sin puerto explícito para URLs públicas
-    const isCloudEndpoint = publicEndpoint.includes('.railway.app') ||
-                            publicEndpoint.includes('.vercel.app') ||
-                            publicEndpoint.includes('.amazonaws.com') ||
-                            publicEndpoint.includes('.cloudflare.com');
-
-    const publicUrl = isCloudEndpoint
-      ? `https://${publicEndpoint}`
-      : `http://${publicEndpoint}:${internalPort}`;
-
-    // Reemplazar el endpoint interno con el público
-    let result = url.replace(internalPatternHttp, publicUrl);
-    result = result.replace(internalPatternHttps, publicUrl);
-
-    this.logger.debug(`[MinIO URL] Transformed: ${result}`);
-
-    return result;
-  }
-
-  /**
    * Generar URL presignada para subida (PUT)
+   * Usa el presignClient (público) para que la firma coincida con el host del browser
    */
   async getPresignedPutUrl(
     bucket: string,
@@ -176,11 +166,9 @@ export class MinioService implements OnModuleInit {
   ): Promise<string> {
     try {
       this.logger.debug(`[MinIO] Generando presigned PUT URL para ${bucket}/${objectKey}`);
-      const url = await this.client.presignedPutObject(bucket, objectKey, ttlSeconds);
-      this.logger.debug(`[MinIO] URL generada: ${url.substring(0, 80)}...`);
-      const publicUrl = this.replaceWithPublicEndpoint(url);
-      this.logger.debug(`[MinIO] URL pública: ${publicUrl.substring(0, 80)}...`);
-      return publicUrl;
+      const url = await this.presignClient.presignedPutObject(bucket, objectKey, ttlSeconds);
+      this.logger.debug(`[MinIO] Presigned PUT URL: ${url.substring(0, 100)}...`);
+      return url;
     } catch (error) {
       this.logger.error(`[MinIO] Error generando presigned PUT URL: ${error.message}`, error.stack);
       throw error;
@@ -189,6 +177,7 @@ export class MinioService implements OnModuleInit {
 
   /**
    * Generar URL presignada para descarga (GET)
+   * Usa el presignClient (público) para que la firma coincida con el host del browser
    */
   async getPresignedGetUrl(
     bucket: string,
@@ -197,9 +186,8 @@ export class MinioService implements OnModuleInit {
   ): Promise<string> {
     try {
       this.logger.debug(`[MinIO] Generando presigned GET URL para ${bucket}/${objectKey}`);
-      const url = await this.client.presignedGetObject(bucket, objectKey, ttlSeconds);
-      const publicUrl = this.replaceWithPublicEndpoint(url);
-      return publicUrl;
+      const url = await this.presignClient.presignedGetObject(bucket, objectKey, ttlSeconds);
+      return url;
     } catch (error) {
       this.logger.error(`[MinIO] Error generando presigned GET URL: ${error.message}`, error.stack);
       throw error;
@@ -358,16 +346,15 @@ export class MinioService implements OnModuleInit {
 
   /**
    * Obtener URL pública (solo para buckets públicos)
-   * Usa el endpoint público para acceso desde el browser
    */
   getPublicUrl(bucket: string, objectKey: string): string {
-    const internalEndpoint = this.configService.get<string>('storage.minio.endpoint', 'localhost');
-    const publicEndpoint = this.configService.get<string>('storage.minio.publicEndpoint', internalEndpoint);
-    const port = this.configService.get<number>('storage.minio.port', 9000);
-    const useSSL = this.configService.get<boolean>('storage.minio.useSSL', false);
-    const protocol = useSSL ? 'https' : 'http';
+    const publicEndpoint = process.env.MINIO_PUBLIC_ENDPOINT || process.env.MINIO_ENDPOINT || 'localhost';
+    const port = parseInt(process.env.MINIO_PORT || '9000', 10);
+    const isCloud = publicEndpoint.includes('.railway.app') || publicEndpoint.includes('.vercel.app');
+    const protocol = isCloud ? 'https' : 'http';
+    const portStr = isCloud ? '' : `:${port}`;
 
-    return `${protocol}://${publicEndpoint}:${port}/${bucket}/${objectKey}`;
+    return `${protocol}://${publicEndpoint}${portStr}/${bucket}/${objectKey}`;
   }
 
   /**
@@ -382,7 +369,7 @@ export class MinioService implements OnModuleInit {
       contentType?: string;
     },
   ): Promise<Minio.PostPolicy> {
-    const policy = this.client.newPostPolicy();
+    const policy = this.presignClient.newPostPolicy();
 
     policy.setBucket(bucket);
     policy.setKey(objectKey);
@@ -406,7 +393,7 @@ export class MinioService implements OnModuleInit {
    * Presign POST policy
    */
   async presignedPostPolicy(policy: Minio.PostPolicy): Promise<Minio.PostPolicyResult> {
-    return this.client.presignedPostPolicy(policy);
+    return this.presignClient.presignedPostPolicy(policy);
   }
 
   /**
