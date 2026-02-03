@@ -540,6 +540,42 @@ export class TareaService {
       usuarioId: userId,
     });
 
+    // Notificar al usuario asignado sobre la validación/rechazo
+    if (tarea.asignadoA && tarea.asignadoA !== userId) {
+      try {
+        const esValidada = validarDto.validada;
+        const titulo = esValidada
+          ? `Tarea validada: ${tarea.codigo}`
+          : `Tarea rechazada: ${tarea.codigo}`;
+        const descripcion = esValidada
+          ? `La tarea "${tarea.nombre}" ha sido validada.`
+          : `La tarea "${tarea.nombre}" ha sido rechazada.${validarDto.observacion ? ` Observación: ${validarDto.observacion}` : ''}`;
+
+        // Determinar URL según tipo de tarea
+        let urlAccion: string;
+        if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
+          urlAccion = `/poi/actividad/detalles?id=${tarea.actividadId}`;
+        } else {
+          urlAccion = `/poi/proyecto/detalles?tab=Backlog`;
+        }
+
+        await this.notificacionService.notificar(
+          TipoNotificacion.APROBACIONES,
+          tarea.asignadoA,
+          {
+            titulo,
+            descripcion,
+            entidadTipo: 'Tarea',
+            entidadId: tarea.id,
+            proyectoId: tarea.tipo === TareaTipo.SCRUM ? tarea.historiaUsuario?.proyecto?.id : undefined,
+            urlAccion,
+          },
+        );
+      } catch (error) {
+        console.error('Error sending task validation notification:', error);
+      }
+    }
+
     return tareaValidada;
   }
 

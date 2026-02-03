@@ -440,13 +440,25 @@ export class CronogramaService {
       destinatarios.add(cronograma.proyecto.coordinadorId);
     }
 
+    // Cross-notify: si aprobó Patrocinador → notificar PMOs, si aprobó PMO → notificar Patrocinadores
+    const { pmoUsers, patrocinadorUsers } = await this.getAprobadores();
+    if (rolAprobador === 'Patrocinador') {
+      for (const pmoUser of pmoUsers) {
+        destinatarios.add(pmoUser.id);
+      }
+    } else if (rolAprobador === 'PMO') {
+      for (const patUser of patrocinadorUsers) {
+        destinatarios.add(patUser.id);
+      }
+    }
+
     // Excluir al usuario que realizó la acción (no notificarse a sí mismo)
     if (excludeUserId) {
       destinatarios.delete(excludeUserId);
     }
 
     // Enviar notificación a cada destinatario
-    // Usar APROBACIONES para que aparezca en la sección de Aprobaciones del SCRUM_MASTER
+    // Usar APROBACIONES para que aparezca en la sección de Aprobaciones
     for (const destinatarioId of destinatarios) {
       try {
         await this.notificacionService.notificar(

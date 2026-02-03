@@ -479,6 +479,18 @@ export class ActaService {
         destinatarios.add(acta.proyecto.coordinadorId);
       }
 
+      // Cross-notify: si aprobó Patrocinador → notificar PMOs, si aprobó PMO → notificar Patrocinadores
+      const { pmoUsers, patrocinadorUsers } = await this.getAprobadores();
+      if (rolAprobador === 'Patrocinador') {
+        for (const pmoUser of pmoUsers) {
+          destinatarios.add(pmoUser.id);
+        }
+      } else if (rolAprobador === 'PMO') {
+        for (const patUser of patrocinadorUsers) {
+          destinatarios.add(patUser.id);
+        }
+      }
+
       // Excluir al usuario que realizó la acción (no notificarse a sí mismo)
       if (excludeUserId) {
         destinatarios.delete(excludeUserId);
