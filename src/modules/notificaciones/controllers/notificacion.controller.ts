@@ -11,7 +11,10 @@ import {
 import { NotificacionService } from '../services/notificacion.service';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../common/guards/roles.guard';
+import { Roles } from '../../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { Role } from '../../../common/constants/roles.constant';
 
 @Controller('notificaciones')
 @UseGuards(JwtAuthGuard)
@@ -66,5 +69,28 @@ export class NotificacionController {
     @CurrentUser('id') usuarioId: number,
   ) {
     return this.notificacionService.remove(id, usuarioId);
+  }
+
+  /**
+   * Endpoint admin: eliminar notificación de cualquier usuario
+   */
+  @Delete('admin/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.PMO)
+  removeAdmin(@Param('id', ParseIntPipe) id: number) {
+    return this.notificacionService.removeAdmin(id);
+  }
+
+  /**
+   * Endpoint admin: listar notificaciones de un usuario específico
+   */
+  @Get('admin/usuario/:usuarioId')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.PMO)
+  findAllByUser(
+    @Param('usuarioId', ParseIntPipe) usuarioId: number,
+    @Query('tipo') tipo?: TipoNotificacion,
+  ) {
+    return this.notificacionService.findAll(usuarioId, { tipo });
   }
 }

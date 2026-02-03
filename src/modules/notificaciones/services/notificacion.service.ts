@@ -142,6 +142,14 @@ export class NotificacionService {
     await this.notificacionRepository.remove(notificacion);
   }
 
+  async removeAdmin(id: number): Promise<void> {
+    const notificacion = await this.notificacionRepository.findOne({ where: { id } });
+    if (!notificacion) {
+      throw new NotFoundException(`Notificación #${id} no encontrada`);
+    }
+    await this.notificacionRepository.remove(notificacion);
+  }
+
   /**
    * Método para crear notificaciones desde otros módulos.
    * Uso:
