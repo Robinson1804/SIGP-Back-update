@@ -408,10 +408,10 @@ export class ActaService {
         acta.fechaAprobacion = new Date();
 
         // Notificar al SCRUM_MASTER que el acta fue aprobada completamente
-        await this.notificarAprobacionIndividual(acta, rolAprobador, true, true, dto.comentario);
+        await this.notificarAprobacionIndividual(acta, rolAprobador, true, true, dto.comentario, userId);
       } else {
         // Notificar al SCRUM_MASTER que uno aprobó (pendiente el otro)
-        await this.notificarAprobacionIndividual(acta, rolAprobador, true, false, dto.comentario);
+        await this.notificarAprobacionIndividual(acta, rolAprobador, true, false, dto.comentario, userId);
       }
     } else {
       // Rechazar: volver a estado BORRADOR y resetear aprobaciones
@@ -423,7 +423,7 @@ export class ActaService {
       acta.comentarioRechazo = dto.comentario || null;
 
       // Notificar al SCRUM_MASTER que fue rechazada por PMO o PATROCINADOR
-      await this.notificarAprobacionIndividual(acta, rolAprobador, false, false, dto.comentario);
+      await this.notificarAprobacionIndividual(acta, rolAprobador, false, false, dto.comentario, userId);
     }
 
     return this.actaRepository.save(acta);
@@ -431,6 +431,7 @@ export class ActaService {
 
   /**
    * Notifica al SCRUM_MASTER cuando PMO o PATROCINADOR aprueba/rechaza individualmente
+   * Excluye al usuario que realizó la acción para que no se notifique a sí mismo
    */
   private async notificarAprobacionIndividual(
     acta: Acta,
@@ -438,6 +439,7 @@ export class ActaService {
     aprobado: boolean,
     aprobacionCompleta: boolean,
     comentario?: string,
+    excludeUserId?: number,
   ): Promise<void> {
     try {
       let titulo: string;
@@ -464,18 +466,11 @@ export class ActaService {
         entidadId: acta.id,
         proyectoId: acta.proyectoId,
         urlAccion: `/poi/proyecto/detalles?id=${acta.proyectoId}&tab=Actas`,
-        observacion: comentario, // Observación/comentario del aprobador
+        observacion: comentario,
       };
 
       // Recopilar destinatarios únicos (SCRUM_MASTER y COORDINADOR del proyecto)
       const destinatarios = new Set<number>();
-
-      console.log('=== DEBUG notificarAprobacionIndividual ===');
-      console.log('acta.id:', acta.id);
-      console.log('acta.proyectoId:', acta.proyectoId);
-      console.log('acta.proyecto:', acta.proyecto ? 'existe' : 'NO existe');
-      console.log('acta.proyecto?.scrumMasterId:', acta.proyecto?.scrumMasterId);
-      console.log('acta.proyecto?.coordinadorId:', acta.proyecto?.coordinadorId);
 
       if (acta.proyecto?.scrumMasterId) {
         destinatarios.add(acta.proyecto.scrumMasterId);
@@ -484,17 +479,18 @@ export class ActaService {
         destinatarios.add(acta.proyecto.coordinadorId);
       }
 
-      console.log('destinatarios:', Array.from(destinatarios));
+      // Excluir al usuario que realizó la acción (no notificarse a sí mismo)
+      if (excludeUserId) {
+        destinatarios.delete(excludeUserId);
+      }
 
       // Enviar notificación a cada destinatario (APROBACIONES para que aparezca en esa sección)
       for (const destinatarioId of destinatarios) {
-        console.log('Enviando notificacion a usuario:', destinatarioId);
         await this.notificacionService.notificar(
           TipoNotificacion.APROBACIONES,
           destinatarioId,
           notificationData,
         );
-        console.log('Notificacion enviada exitosamente a:', destinatarioId);
       }
     } catch (error) {
       console.error('Error sending individual approval notification:', error);

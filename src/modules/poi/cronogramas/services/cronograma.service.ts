@@ -302,6 +302,7 @@ export class CronogramaService {
         true, // aprobado
         aprobacionCompleta,
         dto.comentario, // observación/comentario del aprobador
+        userId,
       );
     } else {
       // Rechazar: volver a estado BORRADOR y resetear aprobaciones
@@ -321,6 +322,7 @@ export class CronogramaService {
         false, // rechazado
         false, // no aplica para rechazos
         dto.comentario,
+        userId,
       );
     }
 
@@ -392,6 +394,7 @@ export class CronogramaService {
   /**
    * Notifica al SCRUM_MASTER/COORDINADOR sobre aprobación o rechazo individual
    * Se llama cada vez que PMO o PATROCINADOR aprueba/rechaza
+   * Excluye al usuario que realizó la acción para que no se notifique a sí mismo
    */
   private async notificarAprobacionIndividual(
     cronograma: Cronograma,
@@ -399,6 +402,7 @@ export class CronogramaService {
     aprobado: boolean,
     aprobacionCompleta: boolean,
     comentario?: string,
+    excludeUserId?: number,
   ): Promise<void> {
     let titulo: string;
     let descripcion: string;
@@ -434,6 +438,11 @@ export class CronogramaService {
     }
     if (cronograma.proyecto?.coordinadorId) {
       destinatarios.add(cronograma.proyecto.coordinadorId);
+    }
+
+    // Excluir al usuario que realizó la acción (no notificarse a sí mismo)
+    if (excludeUserId) {
+      destinatarios.delete(excludeUserId);
     }
 
     // Enviar notificación a cada destinatario
