@@ -547,6 +547,18 @@ export class TareaService {
     tarea.estado = cambiarEstadoDto.estado;
     tarea.updatedBy = userId;
 
+    // Actualizar fechas para métricas Kanban
+    if (cambiarEstadoDto.estado === TareaEstado.EN_PROGRESO && !tarea.fechaInicioProgreso) {
+      tarea.fechaInicioProgreso = new Date();
+    }
+    if (cambiarEstadoDto.estado === TareaEstado.FINALIZADO) {
+      tarea.fechaCompletado = new Date();
+    }
+    // Limpiar fechaCompletado si se mueve fuera de Finalizado
+    if (estadoAnterior === TareaEstado.FINALIZADO && cambiarEstadoDto.estado !== TareaEstado.FINALIZADO) {
+      tarea.fechaCompletado = null;
+    }
+
     if (cambiarEstadoDto.horasReales !== undefined) {
       tarea.horasReales = cambiarEstadoDto.horasReales;
     }
