@@ -63,13 +63,13 @@ export class DashboardController {
 
   // Dashboard Actividad
   @Get('actividad/:id')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR, Role.DESARROLLADOR)
   getDashboardActividad(@Param('id', ParseIntPipe) id: number) {
     return this.dashboardActividadService.getDashboard(id);
   }
 
   @Get('actividad/:id/throughput')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR, Role.DESARROLLADOR)
   getThroughputActividad(@Param('id', ParseIntPipe) id: number) {
     return this.dashboardActividadService.getThroughput(id);
   }
@@ -156,7 +156,7 @@ export class DashboardController {
   @Get('actividad/:id/cfd')
   @ApiOperation({ summary: 'Obtener datos para CFD (Cumulative Flow Diagram)' })
   @ApiQuery({ name: 'dias', required: false, type: Number, example: 30 })
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR, Role.DESARROLLADOR)
   getCfdData(
     @Param('id', ParseIntPipe) id: number,
     @Query('dias') dias: number = 30,
@@ -167,7 +167,7 @@ export class DashboardController {
   @Get('actividad/:id/tendencias-metricas')
   @ApiOperation({ summary: 'Obtener tendencias de metricas Kanban de una actividad' })
   @ApiQuery({ name: 'semanas', required: false, type: Number, example: 8 })
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.IMPLEMENTADOR, Role.DESARROLLADOR)
   getTendenciasMetricas(
     @Param('id', ParseIntPipe) id: number,
     @Query('semanas') semanas: number = 8,
