@@ -705,6 +705,7 @@ export class TareaService {
     }
 
     // DESARROLLADOR solo puede eliminar tareas en HUs donde está asignado
+    // y realiza hard delete (eliminación permanente)
     if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
       const hu = await this.historiaUsuarioRepository.findOne({
         where: { id: tarea.historiaUsuarioId },
@@ -718,8 +719,24 @@ export class TareaService {
       if (!personal?.id || !asignados.includes(personal.id)) {
         throw new ForbiddenException('Solo puedes eliminar tareas en historias de usuario donde estás asignado como responsable');
       }
+
+      // Hard delete: eliminar asignados, evidencias y la tarea
+      await this.tareaAsignadoRepository.delete({ tareaId: id });
+      await this.evidenciaRepository.delete({ tareaId: id });
+      await this.tareaRepository.remove(tarea);
+
+      if (userId) {
+        await this.historialCambioService.registrarEliminacion(
+          HistorialEntidadTipo.TAREA,
+          id,
+          userId,
+        );
+      }
+
+      return { ...tarea, id } as Tarea;
     }
 
+    // Soft delete para los demás roles
     tarea.activo = false;
     tarea.updatedBy = userId;
 
