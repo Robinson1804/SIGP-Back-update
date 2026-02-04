@@ -556,7 +556,7 @@ export class TareaService {
     }
     // Limpiar fechaCompletado si se mueve fuera de Finalizado
     if (estadoAnterior === TareaEstado.FINALIZADO && cambiarEstadoDto.estado !== TareaEstado.FINALIZADO) {
-      tarea.fechaCompletado = null;
+      tarea.fechaCompletado = null as any;
     }
 
     if (cambiarEstadoDto.horasReales !== undefined) {
