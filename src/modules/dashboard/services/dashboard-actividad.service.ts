@@ -144,9 +144,6 @@ export class DashboardActividadService {
   }
 
   async getThroughput(actividadId: number): Promise<ThroughputSemanalDto[]> {
-    const hace8Semanas = new Date();
-    hace8Semanas.setDate(hace8Semanas.getDate() - 56);
-
     const tareasCompletadas = await this.tareaRepository.find({
       where: {
         actividadId,
@@ -157,32 +154,37 @@ export class DashboardActividadService {
       select: ['id', 'updatedAt', 'fechaCompletado'],
     });
 
-    // Agrupar por semana
+    // Agrupar por semana (últimas 8 semanas incluyendo la actual)
     const semanas: Map<string, number> = new Map();
+    const ahora = new Date();
 
     for (let i = 0; i < 8; i++) {
-      const inicioSemana = new Date();
-      inicioSemana.setDate(inicioSemana.getDate() - (7 * (i + 1)));
-      const finSemana = new Date();
-      finSemana.setDate(finSemana.getDate() - (7 * i));
+      // Semana actual (i=0): desde hace 7 días hasta ahora (incluyendo hoy)
+      // Semana -1 (i=1): desde hace 14 días hasta hace 7 días
+      const finSemana = new Date(ahora);
+      finSemana.setDate(ahora.getDate() - (7 * i));
+      finSemana.setHours(23, 59, 59, 999); // Incluir todo el día
 
-      const semanaKey = `Semana -${i + 1}`;
+      const inicioSemana = new Date(ahora);
+      inicioSemana.setDate(ahora.getDate() - (7 * (i + 1)) + 1);
+      inicioSemana.setHours(0, 0, 0, 0); // Desde inicio del día
+
+      const semanaKey = i === 0 ? 'Esta semana' : `Semana -${i}`;
 
       const completadasEnSemana = tareasCompletadas.filter((t) => {
-        // Usar fechaCompletado si está disponible, sino updatedAt (fallback)
         const fecha = t.fechaCompletado
           ? new Date(t.fechaCompletado)
           : new Date(t.updatedAt);
-        return fecha >= inicioSemana && fecha < finSemana;
+        return fecha >= inicioSemana && fecha <= finSemana;
       }).length;
 
       semanas.set(semanaKey, completadasEnSemana);
     }
 
-    // Convertir a array y ordenar
+    // Convertir a array (de más antigua a más reciente)
     const throughput: ThroughputSemanalDto[] = [];
     for (let i = 7; i >= 0; i--) {
-      const semanaKey = `Semana -${i + 1}`;
+      const semanaKey = i === 0 ? 'Esta semana' : `Semana -${i}`;
       throughput.push({
         semana: semanaKey,
         completadas: semanas.get(semanaKey) || 0,
