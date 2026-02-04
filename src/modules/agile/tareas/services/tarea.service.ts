@@ -27,6 +27,7 @@ import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/histor
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 import { HuEvidenciaPdfService } from '../../historias-usuario/services/hu-evidencia-pdf.service';
+import { Role } from '../../../../common/constants/roles.constant';
 import { MinioService } from '../../../storage/services/minio.service';
 
 // Configuración de WIP limits por defecto por columna
@@ -106,13 +107,28 @@ export class TareaService {
     return undefined;
   }
 
-  async create(createDto: CreateTareaDto, userId?: number): Promise<Tarea> {
+  async create(createDto: CreateTareaDto, userId?: number, userRole?: string): Promise<Tarea> {
     // Validate that either historiaUsuarioId or actividadId is provided based on type
     if (createDto.tipo === TareaTipo.SCRUM && !createDto.historiaUsuarioId) {
       throw new BadRequestException('historiaUsuarioId es requerido para tareas SCRUM');
     }
     if (createDto.tipo === TareaTipo.KANBAN && !createDto.actividadId) {
       throw new BadRequestException('actividadId es requerido para tareas KANBAN');
+    }
+
+    // DESARROLLADOR solo puede crear tareas en HUs donde está asignado como responsable
+    if (userRole === Role.DESARROLLADOR && createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId && userId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: createDto.historiaUsuarioId },
+        select: ['id', 'asignadoA'],
+      });
+      if (!hu) {
+        throw new NotFoundException('Historia de usuario no encontrada');
+      }
+      const asignados = (hu.asignadoA || []).map(id => Number(id));
+      if (!asignados.includes(userId)) {
+        throw new ForbiddenException('Solo puedes crear tareas en historias de usuario donde estás asignado como responsable');
+      }
     }
 
     // Validar fechas de la tarea contra el rango de la HU (solo para tareas SCRUM)

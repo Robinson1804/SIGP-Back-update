@@ -34,9 +34,13 @@ export class TareaController {
   ) {}
 
   @Post()
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
-  create(@Body() createDto: CreateTareaDto, @CurrentUser('id') userId: number) {
-    return this.tareaService.create(createDto, userId);
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
+  create(
+    @Body() createDto: CreateTareaDto,
+    @CurrentUser('id') userId: number,
+    @CurrentUser('rol') userRole: string,
+  ) {
+    return this.tareaService.create(createDto, userId, userRole);
   }
 
   @Get()
