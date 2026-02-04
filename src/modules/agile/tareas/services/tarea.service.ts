@@ -15,6 +15,7 @@ import { Subtarea } from '../../subtareas/entities/subtarea.entity';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Personal } from '../../../rrhh/personal/entities/personal.entity';
 import { CreateTareaDto } from '../dto/create-tarea.dto';
 import { UpdateTareaDto } from '../dto/update-tarea.dto';
 import { CambiarEstadoTareaDto } from '../dto/cambiar-estado-tarea.dto';
@@ -55,6 +56,8 @@ export class TareaService {
     private readonly proyectoRepository: Repository<Proyecto>,
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(Personal)
+    private readonly personalRepository: Repository<Personal>,
     private readonly historialCambioService: HistorialCambioService,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
@@ -117,6 +120,7 @@ export class TareaService {
     }
 
     // DESARROLLADOR solo puede crear tareas en HUs donde está asignado como responsable
+    // asignadoA en la HU guarda IDs de la tabla personal (personalId), no de usuarios (userId)
     if (userRole === Role.DESARROLLADOR && createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId && userId) {
       const hu = await this.historiaUsuarioRepository.findOne({
         where: { id: createDto.historiaUsuarioId },
@@ -125,8 +129,13 @@ export class TareaService {
       if (!hu) {
         throw new NotFoundException('Historia de usuario no encontrada');
       }
+      const personal = await this.personalRepository.findOne({
+        where: { usuarioId: userId },
+        select: ['id'],
+      });
+      const personalId = personal?.id;
       const asignados = (hu.asignadoA || []).map(id => Number(id));
-      if (!asignados.includes(userId)) {
+      if (!personalId || !asignados.includes(personalId)) {
         throw new ForbiddenException('Solo puedes crear tareas en historias de usuario donde estás asignado como responsable');
       }
     }
