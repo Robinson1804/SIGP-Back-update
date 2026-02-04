@@ -205,6 +205,7 @@ export class UsuariosService {
       rol,
       passwordHash: hashedPassword,
       rolesAdicionales: [],
+      requiereCambioPassword: true,
     });
 
     const usuarioGuardado = await this.usuarioRepository.save(usuario);
@@ -430,6 +431,7 @@ export class UsuariosService {
       passwordHash: hashedPassword,
       rolesAdicionales: [],
       telefono: personal.telefono,
+      requiereCambioPassword: true,
     });
 
     const usuarioGuardado = await this.usuarioRepository.save(nuevoUsuario);
@@ -473,6 +475,7 @@ export class UsuariosService {
 
     await this.usuarioRepository.update(usuarioId, {
       passwordHash: hashedPassword,
+      requiereCambioPassword: true,
     });
 
     // TODO: Enviar email con nueva contraseña

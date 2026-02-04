@@ -72,6 +72,9 @@ export class Usuario {
   @Column({ name: 'bloqueado_hasta', type: 'timestamp with time zone', nullable: true })
   bloqueadoHasta: Date | null;
 
+  @Column({ name: 'requiere_cambio_password', default: false })
+  requiereCambioPassword: boolean;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamp with time zone' })
   createdAt: Date;
 

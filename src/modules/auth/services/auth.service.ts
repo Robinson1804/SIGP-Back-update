@@ -118,6 +118,7 @@ export class AuthService {
         rol: usuario.rol,
         avatarUrl: usuario.avatarUrl,
       },
+      requiereCambioPassword: usuario.requiereCambioPassword,
     };
   }
 
@@ -210,6 +211,7 @@ export class AuthService {
 
     await this.usuarioRepository.update(userId, {
       passwordHash: hashedNewPassword,
+      requiereCambioPassword: false,
     });
   }
 

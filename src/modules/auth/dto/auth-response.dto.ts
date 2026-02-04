@@ -39,4 +39,7 @@ export class AuthResponseDto {
 
   @ApiProperty({ type: UserResponseDto })
   user: UserResponseDto;
+
+  @ApiProperty({ description: 'Si el usuario debe cambiar su contraseña' })
+  requiereCambioPassword: boolean;
 }

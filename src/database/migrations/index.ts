@@ -24,3 +24,4 @@ export * from './1768200000000-ChangeTareaCronogramaEstado';
 export * from './1768300000000-ChangeResponsableToAsignadoA';
 export * from './1768400000000-AddGestorIdToActividades';
 export * from './1768500000000-UpdateProyectosEstadoAutomatico';
+export * from './1768600000000-AddRequiereCambioPassword';
