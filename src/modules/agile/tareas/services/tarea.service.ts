@@ -705,7 +705,6 @@ export class TareaService {
     }
 
     // DESARROLLADOR solo puede eliminar tareas en HUs donde está asignado
-    // y realiza hard delete (eliminación permanente)
     if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
       const hu = await this.historiaUsuarioRepository.findOne({
         where: { id: tarea.historiaUsuarioId },
@@ -719,28 +718,31 @@ export class TareaService {
       if (!personal?.id || !asignados.includes(personal.id)) {
         throw new ForbiddenException('Solo puedes eliminar tareas en historias de usuario donde estás asignado como responsable');
       }
-
-      // Hard delete: eliminar asignados, evidencias y la tarea
-      await this.tareaAsignadoRepository.delete({ tareaId: id });
-      await this.evidenciaRepository.delete({ tareaId: id });
-      await this.tareaRepository.remove(tarea);
-
-      if (userId) {
-        await this.historialCambioService.registrarEliminacion(
-          HistorialEntidadTipo.TAREA,
-          id,
-          userId,
-        );
-      }
-
-      return { ...tarea, id } as Tarea;
     }
 
-    // Soft delete para los demás roles
-    tarea.activo = false;
-    tarea.updatedBy = userId;
+    // Hard delete: eliminar subtareas (y sus evidencias), asignados, evidencias y la tarea
+    // 1. Eliminar evidencias de subtareas y luego las subtareas
+    const subtareas = await this.subtareaRepository.find({
+      where: { tareaId: id },
+      select: ['id'],
+    });
+    if (subtareas.length > 0) {
+      const subtareaIds = subtareas.map(s => s.id);
+      await this.subtareaRepository.manager
+        .createQueryBuilder()
+        .delete()
+        .from('agile.evidencias_subtarea')
+        .where('subtarea_id IN (:...ids)', { ids: subtareaIds })
+        .execute();
+    }
+    await this.subtareaRepository.delete({ tareaId: id });
 
-    const tareaEliminada = await this.tareaRepository.save(tarea);
+    // 2. Eliminar asignados y evidencias de la tarea
+    await this.tareaAsignadoRepository.delete({ tareaId: id });
+    await this.evidenciaRepository.delete({ tareaId: id });
+
+    // 3. Eliminar la tarea
+    await this.tareaRepository.remove(tarea);
 
     // Registrar eliminacion en historial
     if (userId) {
@@ -751,7 +753,7 @@ export class TareaService {
       );
     }
 
-    return tareaEliminada;
+    return { ...tarea, id } as Tarea;
   }
 
   // ================================================================

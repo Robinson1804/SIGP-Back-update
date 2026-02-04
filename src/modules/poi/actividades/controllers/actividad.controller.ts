@@ -56,6 +56,11 @@ export class ActividadController {
     });
   }
 
+  @Get(':id/metricas')
+  getMetricas(@Param('id', ParseIntPipe) id: number) {
+    return this.actividadService.getMetricas(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.actividadService.findOne(id);

@@ -15,6 +15,7 @@ import { InformeSprint } from './informes-sprint/entities/informe-sprint.entity'
 import { InformeActividad } from './informes-actividad/entities/informe-actividad.entity';
 import { AccionEstrategica } from '../planning/acciones-estrategicas/entities/accion-estrategica.entity';
 import { Usuario } from '../auth/entities/usuario.entity';
+import { Tarea } from '../agile/tareas/entities/tarea.entity';
 
 // Services
 import { ProyectoService } from './proyectos/services/proyecto.service';
@@ -33,7 +34,7 @@ import {
   ProyectoController,
   AccionEstrategicaProyectosController,
 } from './proyectos/controllers/proyecto.controller';
-import { ActividadController } from './actividades/controllers/actividad.controller';
+import { ActividadController, AccionEstrategicaActividadesController } from './actividades/controllers/actividad.controller';
 import {
   SubproyectoController,
   ProyectoSubproyectosController,
@@ -87,6 +88,7 @@ import {
       InformeActividad,
       AccionEstrategica,
       Usuario,
+      Tarea,
     ]),
   ],
   controllers: [
@@ -95,6 +97,7 @@ import {
     AccionEstrategicaProyectosController,
     // Actividades
     ActividadController,
+    AccionEstrategicaActividadesController,
     // Subproyectos
     SubproyectoController,
     ProyectoSubproyectosController,

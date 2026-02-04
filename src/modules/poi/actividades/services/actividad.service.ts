@@ -5,12 +5,28 @@ import { Actividad } from '../entities/actividad.entity';
 import { CreateActividadDto } from '../dto/create-actividad.dto';
 import { UpdateActividadDto } from '../dto/update-actividad.dto';
 import { ActividadEstado } from '../enums/actividad-estado.enum';
+import { Tarea } from '../../../agile/tareas/entities/tarea.entity';
+import { TareaEstado, TareaTipo } from '../../../agile/tareas/enums/tarea.enum';
+
+export interface ActividadMetricas {
+  leadTime: number | null;       // Días promedio desde creación hasta completado
+  cycleTime: number | null;      // Días promedio desde inicio progreso hasta completado
+  throughput: number;            // Tareas completadas en última semana
+  wipActual: number;             // Tareas actualmente en progreso
+  totalTareas: number;
+  tareasPorHacer: number;
+  tareasEnProgreso: number;
+  tareasCompletadas: number;
+  porcentajeCompletado: number;
+}
 
 @Injectable()
 export class ActividadService {
   constructor(
     @InjectRepository(Actividad)
     private readonly actividadRepository: Repository<Actividad>,
+    @InjectRepository(Tarea)
+    private readonly tareaRepository: Repository<Tarea>,
   ) {}
 
   /**
@@ -146,5 +162,88 @@ export class ActividadService {
       where: { accionEstrategicaId, activo: true },
       order: { codigo: 'ASC' },
     });
+  }
+
+  /**
+   * Calcula métricas Kanban para una actividad
+   * - Lead Time: tiempo promedio desde creación hasta completado
+   * - Cycle Time: tiempo promedio desde inicio de progreso hasta completado
+   * - Throughput: tareas completadas en la última semana
+   * - WIP: tareas actualmente en progreso
+   */
+  async getMetricas(actividadId: number): Promise<ActividadMetricas> {
+    // Verificar que la actividad existe
+    await this.findOne(actividadId);
+
+    // Obtener todas las tareas KANBAN de la actividad
+    const tareas = await this.tareaRepository.find({
+      where: {
+        actividadId,
+        tipo: TareaTipo.KANBAN,
+        activo: true,
+      },
+    });
+
+    const totalTareas = tareas.length;
+    const tareasPorHacer = tareas.filter(t => t.estado === TareaEstado.POR_HACER).length;
+    const tareasEnProgreso = tareas.filter(t => t.estado === TareaEstado.EN_PROGRESO).length;
+    const tareasCompletadas = tareas.filter(t => t.estado === TareaEstado.FINALIZADO).length;
+    const wipActual = tareasEnProgreso;
+
+    // Calcular porcentaje completado
+    const porcentajeCompletado = totalTareas > 0
+      ? Math.round((tareasCompletadas / totalTareas) * 100)
+      : 0;
+
+    // Calcular Lead Time (createdAt -> fechaCompletado)
+    const tareasConLeadTime = tareas.filter(t =>
+      t.estado === TareaEstado.FINALIZADO && t.fechaCompletado && t.createdAt
+    );
+    let leadTime: number | null = null;
+    if (tareasConLeadTime.length > 0) {
+      const totalLeadTimeMs = tareasConLeadTime.reduce((sum, t) => {
+        const completado = new Date(t.fechaCompletado).getTime();
+        const creado = new Date(t.createdAt).getTime();
+        return sum + (completado - creado);
+      }, 0);
+      const avgLeadTimeMs = totalLeadTimeMs / tareasConLeadTime.length;
+      leadTime = Math.round((avgLeadTimeMs / (1000 * 60 * 60 * 24)) * 10) / 10; // días con 1 decimal
+    }
+
+    // Calcular Cycle Time (fechaInicioProgreso -> fechaCompletado)
+    const tareasConCycleTime = tareas.filter(t =>
+      t.estado === TareaEstado.FINALIZADO && t.fechaCompletado && t.fechaInicioProgreso
+    );
+    let cycleTime: number | null = null;
+    if (tareasConCycleTime.length > 0) {
+      const totalCycleTimeMs = tareasConCycleTime.reduce((sum, t) => {
+        const completado = new Date(t.fechaCompletado).getTime();
+        const inicioProg = new Date(t.fechaInicioProgreso).getTime();
+        return sum + (completado - inicioProg);
+      }, 0);
+      const avgCycleTimeMs = totalCycleTimeMs / tareasConCycleTime.length;
+      cycleTime = Math.round((avgCycleTimeMs / (1000 * 60 * 60 * 24)) * 10) / 10; // días con 1 decimal
+    }
+
+    // Calcular Throughput (tareas completadas en última semana)
+    const unaSemanasAtras = new Date();
+    unaSemanasAtras.setDate(unaSemanasAtras.getDate() - 7);
+    const throughput = tareas.filter(t =>
+      t.estado === TareaEstado.FINALIZADO &&
+      t.fechaCompletado &&
+      new Date(t.fechaCompletado) >= unaSemanasAtras
+    ).length;
+
+    return {
+      leadTime,
+      cycleTime,
+      throughput,
+      wipActual,
+      totalTareas,
+      tareasPorHacer,
+      tareasEnProgreso,
+      tareasCompletadas,
+      porcentajeCompletado,
+    };
   }
 }
