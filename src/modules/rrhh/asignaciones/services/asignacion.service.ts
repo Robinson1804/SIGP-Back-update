@@ -176,7 +176,7 @@ export class AsignacionService {
   async findByActividad(actividadId: number): Promise<Asignacion[]> {
     return this.asignacionRepository.find({
       where: { actividadId, activo: true },
-      relations: ['personal'],
+      relations: ['personal', 'personal.usuario'],
       order: { porcentajeDedicacion: 'DESC' },
     });
   }
