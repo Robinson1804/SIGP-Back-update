@@ -1,15 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThanOrEqual } from 'typeorm';
 import { Actividad } from '../../poi/actividades/entities/actividad.entity';
 import { Tarea } from '../../agile/tareas/entities/tarea.entity';
+import { Subtarea } from '../../agile/subtareas/entities/subtarea.entity';
+import { TareaAsignado } from '../../agile/tareas/entities/tarea-asignado.entity';
 import { Asignacion } from '../../rrhh/asignaciones/entities/asignacion.entity';
-import { TareaTipo, TareaEstado } from '../../agile/tareas/enums/tarea.enum';
+import { TareaTipo, TareaEstado, TareaPrioridad } from '../../agile/tareas/enums/tarea.enum';
 import {
   DashboardActividadDto,
   MetricasKanbanDto,
   ThroughputSemanalDto,
   EquipoActividadMiembroDto,
+  TiposTrabajoDto,
+  ResumenPrioridadDto,
+  ActividadRecienteItemDto,
 } from '../dto/dashboard-actividad.dto';
 
 @Injectable()
@@ -19,6 +24,10 @@ export class DashboardActividadService {
     private readonly actividadRepository: Repository<Actividad>,
     @InjectRepository(Tarea)
     private readonly tareaRepository: Repository<Tarea>,
+    @InjectRepository(Subtarea)
+    private readonly subtareaRepository: Repository<Subtarea>,
+    @InjectRepository(TareaAsignado)
+    private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
     @InjectRepository(Asignacion)
     private readonly asignacionRepository: Repository<Asignacion>,
   ) {}
@@ -32,12 +41,15 @@ export class DashboardActividadService {
       throw new NotFoundException(`Actividad con ID ${actividadId} no encontrada`);
     }
 
-    const [metricasKanban, tareasPorEstado, throughputData, equipo] =
+    const [metricasKanban, tareasPorEstado, throughputData, equipo, tiposTrabajo, resumenPrioridad, actividadReciente] =
       await Promise.all([
         this.calcularMetricasKanban(actividadId),
         this.getTareasPorEstado(actividadId),
         this.getThroughput(actividadId),
-        this.getEquipo(actividadId),
+        this.getEquipoConTareas(actividadId),
+        this.getTiposTrabajo(actividadId),
+        this.getResumenPrioridad(actividadId),
+        this.getActividadReciente(actividadId),
       ]);
 
     const totalTareas = Object.values(tareasPorEstado).reduce((a, b) => a + b, 0);
@@ -62,6 +74,9 @@ export class DashboardActividadService {
       tareasPorEstado,
       throughputSemanal,
       equipo,
+      tiposTrabajo,
+      resumenPrioridad,
+      actividadReciente,
     };
   }
 
@@ -234,5 +249,231 @@ export class DashboardActividadService {
       rol: a.rolEquipo || 'Miembro',
       dedicacion: Number(a.porcentajeDedicacion),
     }));
+  }
+
+  private async getEquipoConTareas(actividadId: number): Promise<EquipoActividadMiembroDto[]> {
+    const asignaciones = await this.asignacionRepository.find({
+      where: { actividadId, activo: true },
+      relations: ['personal', 'personal.usuario'],
+    });
+
+    // Obtener todas las tareas de la actividad
+    const tareas = await this.tareaRepository.find({
+      where: { actividadId, tipo: TareaTipo.KANBAN, activo: true },
+      relations: ['asignados'],
+    });
+
+    // Crear mapa de tareas por usuarioId
+    const tareasAsignadasPorUsuario: Record<number, number> = {};
+    const tareasCompletadasPorUsuario: Record<number, number> = {};
+
+    for (const tarea of tareas) {
+      if (tarea.asignados) {
+        for (const asignado of tarea.asignados) {
+          if (asignado.activo) {
+            tareasAsignadasPorUsuario[asignado.usuarioId] = (tareasAsignadasPorUsuario[asignado.usuarioId] || 0) + 1;
+            if (tarea.estado === TareaEstado.FINALIZADO) {
+              tareasCompletadasPorUsuario[asignado.usuarioId] = (tareasCompletadasPorUsuario[asignado.usuarioId] || 0) + 1;
+            }
+          }
+        }
+      }
+    }
+
+    return asignaciones.map((a) => {
+      const usuarioId = a.personal?.usuario?.id;
+      return {
+        personalId: a.personalId,
+        usuarioId,
+        nombre: a.personal
+          ? `${a.personal.nombres} ${a.personal.apellidos}`
+          : 'Sin nombre',
+        rol: a.rolEquipo || 'Miembro',
+        dedicacion: Number(a.porcentajeDedicacion),
+        tareasAsignadas: usuarioId ? tareasAsignadasPorUsuario[usuarioId] || 0 : 0,
+        tareasCompletadas: usuarioId ? tareasCompletadasPorUsuario[usuarioId] || 0 : 0,
+      };
+    });
+  }
+
+  private async getTiposTrabajo(actividadId: number): Promise<TiposTrabajoDto> {
+    // Contar tareas
+    const totalTareas = await this.tareaRepository.count({
+      where: { actividadId, tipo: TareaTipo.KANBAN, activo: true },
+    });
+
+    // Obtener IDs de tareas de la actividad
+    const tareas = await this.tareaRepository.find({
+      where: { actividadId, tipo: TareaTipo.KANBAN, activo: true },
+      select: ['id'],
+    });
+    const tareaIds = tareas.map(t => t.id);
+
+    // Contar subtareas de esas tareas
+    let totalSubtareas = 0;
+    if (tareaIds.length > 0) {
+      totalSubtareas = await this.subtareaRepository
+        .createQueryBuilder('subtarea')
+        .where('subtarea.tareaId IN (:...tareaIds)', { tareaIds })
+        .andWhere('subtarea.activo = :activo', { activo: true })
+        .getCount();
+    }
+
+    return { totalTareas, totalSubtareas };
+  }
+
+  private async getResumenPrioridad(actividadId: number): Promise<ResumenPrioridadDto> {
+    const tareas = await this.tareaRepository.find({
+      where: { actividadId, tipo: TareaTipo.KANBAN, activo: true },
+      select: ['id', 'prioridad'],
+    });
+
+    const resumen: ResumenPrioridadDto = { alta: 0, media: 0, baja: 0 };
+
+    for (const tarea of tareas) {
+      switch (tarea.prioridad) {
+        case TareaPrioridad.ALTA:
+          resumen.alta++;
+          break;
+        case TareaPrioridad.MEDIA:
+          resumen.media++;
+          break;
+        case TareaPrioridad.BAJA:
+          resumen.baja++;
+          break;
+      }
+    }
+
+    return resumen;
+  }
+
+  private async getActividadReciente(actividadId: number): Promise<ActividadRecienteItemDto[]> {
+    const actividades: ActividadRecienteItemDto[] = [];
+    const hace7Dias = new Date();
+    hace7Dias.setDate(hace7Dias.getDate() - 7);
+
+    // 1. Tareas creadas recientemente
+    const tareasRecientes = await this.tareaRepository.find({
+      where: {
+        actividadId,
+        tipo: TareaTipo.KANBAN,
+        activo: true,
+        createdAt: MoreThanOrEqual(hace7Dias),
+      },
+      relations: ['creator'],
+      order: { createdAt: 'DESC' },
+      take: 10,
+    });
+
+    for (const tarea of tareasRecientes) {
+      actividades.push({
+        id: actividades.length + 1,
+        tipo: 'tarea_creada',
+        descripcion: `Nueva tarea creada: ${tarea.nombre}`,
+        fecha: tarea.createdAt,
+        usuarioNombre: tarea.creator
+          ? `${tarea.creator.nombre || ''} ${tarea.creator.apellido || ''}`.trim() || tarea.creator.email
+          : undefined,
+        entidadId: tarea.id,
+        entidadTipo: 'tarea',
+        entidadNombre: tarea.nombre,
+      });
+    }
+
+    // 2. Tareas completadas recientemente
+    const tareasCompletadas = await this.tareaRepository.find({
+      where: {
+        actividadId,
+        tipo: TareaTipo.KANBAN,
+        estado: TareaEstado.FINALIZADO,
+        activo: true,
+      },
+      order: { updatedAt: 'DESC' },
+      take: 10,
+    });
+
+    for (const tarea of tareasCompletadas) {
+      const fechaCompletado = tarea.fechaCompletado || tarea.updatedAt;
+      if (fechaCompletado >= hace7Dias) {
+        actividades.push({
+          id: actividades.length + 1,
+          tipo: 'cambio_estado',
+          descripcion: `Tarea completada: ${tarea.nombre}`,
+          fecha: fechaCompletado,
+          entidadId: tarea.id,
+          entidadTipo: 'tarea',
+          entidadNombre: tarea.nombre,
+          detalles: { estadoAnterior: 'En progreso', estadoNuevo: 'Finalizado' },
+        });
+      }
+    }
+
+    // 3. Asignaciones recientes
+    const asignacionesRecientes = await this.tareaAsignadoRepository.find({
+      where: {
+        activo: true,
+        asignadoEn: MoreThanOrEqual(hace7Dias),
+      },
+      relations: ['tarea', 'usuario'],
+      order: { asignadoEn: 'DESC' },
+      take: 10,
+    });
+
+    for (const asignacion of asignacionesRecientes) {
+      // Verificar que la tarea pertenece a esta actividad
+      if (asignacion.tarea && asignacion.tarea.actividadId === actividadId) {
+        actividades.push({
+          id: actividades.length + 1,
+          tipo: 'asignacion',
+          descripcion: `${asignacion.usuario?.nombre || 'Usuario'} asignado a: ${asignacion.tarea.nombre}`,
+          fecha: asignacion.asignadoEn,
+          usuarioNombre: asignacion.usuario
+            ? `${asignacion.usuario.nombre || ''} ${asignacion.usuario.apellido || ''}`.trim()
+            : undefined,
+          entidadId: asignacion.tarea.id,
+          entidadTipo: 'tarea',
+          entidadNombre: asignacion.tarea.nombre,
+        });
+      }
+    }
+
+    // 4. Subtareas creadas recientemente
+    const tareas = await this.tareaRepository.find({
+      where: { actividadId, tipo: TareaTipo.KANBAN, activo: true },
+      select: ['id'],
+    });
+    const tareaIds = tareas.map(t => t.id);
+
+    if (tareaIds.length > 0) {
+      const subtareasRecientes = await this.subtareaRepository
+        .createQueryBuilder('subtarea')
+        .leftJoinAndSelect('subtarea.tarea', 'tarea')
+        .leftJoinAndSelect('subtarea.creator', 'creator')
+        .where('subtarea.tareaId IN (:...tareaIds)', { tareaIds })
+        .andWhere('subtarea.activo = :activo', { activo: true })
+        .andWhere('subtarea.createdAt >= :fecha', { fecha: hace7Dias })
+        .orderBy('subtarea.createdAt', 'DESC')
+        .take(10)
+        .getMany();
+
+      for (const subtarea of subtareasRecientes) {
+        actividades.push({
+          id: actividades.length + 1,
+          tipo: 'subtarea_creada',
+          descripcion: `Nueva subtarea: ${subtarea.nombre} (en ${subtarea.tarea?.nombre || 'tarea'})`,
+          fecha: subtarea.createdAt,
+          usuarioNombre: subtarea.creator
+            ? `${subtarea.creator.nombre || ''} ${subtarea.creator.apellido || ''}`.trim() || subtarea.creator.email
+            : undefined,
+          entidadId: subtarea.id,
+          entidadTipo: 'subtarea',
+          entidadNombre: subtarea.nombre,
+        });
+      }
+    }
+
+    // Ordenar por fecha descendente y limitar a 20 items
+    actividades.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    return actividades.slice(0, 20);
   }
 }

@@ -7,6 +7,8 @@ import { Actividad } from '../poi/actividades/entities/actividad.entity';
 import { Sprint } from '../agile/sprints/entities/sprint.entity';
 import { HistoriaUsuario } from '../agile/historias-usuario/entities/historia-usuario.entity';
 import { Tarea } from '../agile/tareas/entities/tarea.entity';
+import { Subtarea } from '../agile/subtareas/entities/subtarea.entity';
+import { TareaAsignado } from '../agile/tareas/entities/tarea-asignado.entity';
 import { Asignacion } from '../rrhh/asignaciones/entities/asignacion.entity';
 import { Personal } from '../rrhh/personal/entities/personal.entity';
 import { Pgd } from '../planning/pgd/entities/pgd.entity';
@@ -33,6 +35,8 @@ import { DashboardController } from './controllers/dashboard.controller';
       Sprint,
       HistoriaUsuario,
       Tarea,
+      Subtarea,
+      TareaAsignado,
       // RRHH
       Asignacion,
       Personal,
