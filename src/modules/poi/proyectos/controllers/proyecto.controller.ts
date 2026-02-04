@@ -52,6 +52,7 @@ export class ProyectoController {
     @Query('accionEstrategicaId') accionEstrategicaId?: string,
     @Query('activo') activo?: string,
     @Query('pgdId') pgdId?: string,
+    @Query('responsableUsuarioId') responsableUsuarioId?: string,
   ) {
     return this.proyectoService.findAll({
       estado,
@@ -60,6 +61,7 @@ export class ProyectoController {
       accionEstrategicaId: accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
       pgdId: pgdId ? parseInt(pgdId, 10) : undefined,
+      responsableUsuarioId: responsableUsuarioId ? parseInt(responsableUsuarioId, 10) : undefined,
     });
   }
 

@@ -69,6 +69,7 @@ export class ActividadService {
     accionEstrategicaId?: number;
     activo?: boolean;
     pgdId?: number;
+    responsableUsuarioId?: number;
   }): Promise<Actividad[]> {
     const queryBuilder = this.actividadRepository
       .createQueryBuilder('actividad')
@@ -95,6 +96,16 @@ export class ActividadService {
         .leftJoin('ae.oegd', 'oegd')
         .leftJoin('oegd.ogd', 'ogd')
         .andWhere('ogd.pgdId = :pgdId', { pgdId: filters.pgdId });
+    }
+
+    if (filters?.responsableUsuarioId) {
+      queryBuilder.andWhere(`actividad.id IN (
+        SELECT a.actividad_id FROM rrhh.asignaciones a
+        INNER JOIN rrhh.personal p ON p.id = a.personal_id
+        WHERE p.usuario_id = :responsableUsuarioId
+        AND a.tipo_asignacion = 'Actividad'
+        AND a.activo = true
+      )`, { responsableUsuarioId: filters.responsableUsuarioId });
     }
 
     if (filters?.activo !== undefined) {

@@ -283,6 +283,7 @@ export class ProyectoService {
     accionEstrategicaId?: number;
     activo?: boolean;
     pgdId?: number;
+    responsableUsuarioId?: number;
   }): Promise<Proyecto[]> {
     const queryBuilder = this.proyectoRepository
       .createQueryBuilder('proyecto')
@@ -313,6 +314,16 @@ export class ProyectoService {
         .leftJoin('ae.oegd', 'oegd')
         .leftJoin('oegd.ogd', 'ogd')
         .andWhere('ogd.pgdId = :pgdId', { pgdId: filters.pgdId });
+    }
+
+    if (filters?.responsableUsuarioId) {
+      queryBuilder.andWhere(`proyecto.id IN (
+        SELECT a.proyecto_id FROM rrhh.asignaciones a
+        INNER JOIN rrhh.personal p ON p.id = a.personal_id
+        WHERE p.usuario_id = :responsableUsuarioId
+        AND a.tipo_asignacion = 'Proyecto'
+        AND a.activo = true
+      )`, { responsableUsuarioId: filters.responsableUsuarioId });
     }
 
     if (filters?.activo !== undefined) {

@@ -62,6 +62,50 @@ export class TareaService {
     private readonly configService: ConfigService,
   ) {}
 
+  /**
+   * Genera la urlAccion correcta para notificaciones de tarea según su tipo.
+   * Incluye el ID del proyecto/actividad en la URL para navegación directa sin localStorage.
+   * SCRUM → /poi/proyecto/detalles?id={proyectoId}&tab=Backlog
+   * KANBAN → /poi/actividad/detalles?id={actividadId}&tab=Lista
+   */
+  private async buildTareaUrlAccion(tarea: { tipo: TareaTipo; historiaUsuarioId?: number | null; actividadId?: number | null }): Promise<string> {
+    if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
+      return `/poi/actividad/detalles?id=${tarea.actividadId}&tab=Lista`;
+    }
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: tarea.historiaUsuarioId },
+        select: ['id', 'proyectoId'],
+      });
+      if (hu?.proyectoId) {
+        return `/poi/proyecto/detalles?id=${hu.proyectoId}&tab=Backlog`;
+      }
+    }
+    // Fallback sin ID
+    if (tarea.tipo === TareaTipo.KANBAN) {
+      return '/poi/actividad/detalles?tab=Lista';
+    }
+    return '/poi/proyecto/detalles?tab=Backlog';
+  }
+
+  /**
+   * Obtiene el proyectoId asociado a la tarea para incluir en notificaciones.
+   * SCRUM: proyectoId desde la HU. KANBAN: actividadId.
+   */
+  private async getTareaProyectoId(tarea: { tipo: TareaTipo; historiaUsuarioId?: number | null; actividadId?: number | null }): Promise<number | undefined> {
+    if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: tarea.historiaUsuarioId },
+        select: ['id', 'proyectoId'],
+      });
+      return hu?.proyectoId;
+    }
+    if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
+      return tarea.actividadId;
+    }
+    return undefined;
+  }
+
   async create(createDto: CreateTareaDto, userId?: number): Promise<Tarea> {
     // Validate that either historiaUsuarioId or actividadId is provided based on type
     if (createDto.tipo === TareaTipo.SCRUM && !createDto.historiaUsuarioId) {
@@ -121,6 +165,8 @@ export class TareaService {
       await this.tareaAsignadoRepository.save(asignaciones);
 
       // Notificar a todos los asignados
+      const urlAccionCreate = await this.buildTareaUrlAccion(tareaGuardada);
+      const notifProyectoId = await this.getTareaProyectoId(tareaGuardada);
       for (const usuarioId of asignadosIds) {
         if (usuarioId !== userId) {
           await this.notificacionService.notificar(
@@ -131,13 +177,15 @@ export class TareaService {
               descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
               entidadTipo: 'Tarea',
               entidadId: tareaGuardada.id,
-              urlAccion: `/poi/tareas/${tareaGuardada.id}`,
+              proyectoId: notifProyectoId,
+              urlAccion: urlAccionCreate,
             },
           );
         }
       }
     } else if (asignadoA && asignadoA !== userId) {
       // Compatibilidad: si solo se envió asignadoA, notificar
+      const notifProyectoIdCompat = await this.getTareaProyectoId(tareaGuardada);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         asignadoA,
@@ -146,7 +194,8 @@ export class TareaService {
           descripcion: `Se te ha asignado la tarea "${tareaGuardada.nombre}"`,
           entidadTipo: 'Tarea',
           entidadId: tareaGuardada.id,
-          urlAccion: `/poi/tareas/${tareaGuardada.id}`,
+          proyectoId: notifProyectoIdCompat,
+          urlAccion: await this.buildTareaUrlAccion(tareaGuardada),
         },
       );
     }
@@ -330,6 +379,8 @@ export class TareaService {
       await this.tareaAsignadoRepository.save(asignaciones);
 
       // Notificar a los nuevos asignados
+      const urlAccionUpdate = await this.buildTareaUrlAccion(tarea);
+      const updateProyectoId = await this.getTareaProyectoId(tarea);
       for (const usuarioId of asignadosIds) {
         if (usuarioId !== userId && usuarioId !== valoresAnteriores.asignadoA) {
           await this.notificacionService.notificar(
@@ -340,7 +391,8 @@ export class TareaService {
               descripcion: `Se te ha asignado la tarea "${tarea.nombre}"`,
               entidadTipo: 'Tarea',
               entidadId: tarea.id,
-              urlAccion: `/poi/tareas/${tarea.id}`,
+              proyectoId: updateProyectoId,
+              urlAccion: urlAccionUpdate,
             },
           );
         }
@@ -399,6 +451,7 @@ export class TareaService {
 
     // Notificar si se cambia el asignado
     if (updateDto.asignadoA && updateDto.asignadoA !== valoresAnteriores.asignadoA && updateDto.asignadoA !== userId) {
+      const reassignProyectoId = await this.getTareaProyectoId(tarea);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         updateDto.asignadoA,
@@ -407,7 +460,8 @@ export class TareaService {
           descripcion: `Se te ha asignado la tarea "${tarea.nombre}"`,
           entidadTipo: 'Tarea',
           entidadId: tarea.id,
-          urlAccion: `/poi/tareas/${tarea.id}`,
+          proyectoId: reassignProyectoId,
+          urlAccion: await this.buildTareaUrlAccion(tarea),
         },
       );
     }
@@ -477,6 +531,7 @@ export class TareaService {
         ? 'ha sido completada'
         : `ha sido movida a ${cambiarEstadoDto.estado}`;
 
+      const statusChangeProyectoId = await this.getTareaProyectoId(tarea);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         tarea.asignadoA,
@@ -485,7 +540,8 @@ export class TareaService {
           descripcion: `La tarea "${tarea.nombre}" ${mensajeEstado}`,
           entidadTipo: 'Tarea',
           entidadId: tarea.id,
-          urlAccion: `/poi/tareas/${tarea.id}`,
+          proyectoId: statusChangeProyectoId,
+          urlAccion: await this.buildTareaUrlAccion(tarea),
         },
       );
     }
@@ -552,12 +608,7 @@ export class TareaService {
           : `La tarea "${tarea.nombre}" ha sido rechazada.${validarDto.observacion ? ` Observación: ${validarDto.observacion}` : ''}`;
 
         // Determinar URL según tipo de tarea
-        let urlAccion: string;
-        if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
-          urlAccion = `/poi/actividad/detalles?id=${tarea.actividadId}`;
-        } else {
-          urlAccion = `/poi/proyecto/detalles?tab=Backlog`;
-        }
+        const urlAccion = await this.buildTareaUrlAccion(tarea);
 
         await this.notificacionService.notificar(
           TipoNotificacion.APROBACIONES,
@@ -1081,7 +1132,7 @@ export class TareaService {
                 entidadTipo: 'HistoriaUsuario',
                 entidadId: hu.id,
                 proyectoId: proyecto.id,
-                urlAccion: `/poi/proyecto/detalles?tab=Backlog`,
+                urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}&tab=Backlog`,
               },
             );
             console.log(`[HU-${hu.codigo}] Notificación enviada a SCRUM_MASTER (ID: ${proyecto.scrumMasterId})`);
