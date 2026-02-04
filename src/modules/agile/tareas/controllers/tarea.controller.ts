@@ -75,7 +75,7 @@ export class TareaController {
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateTareaDto,
     @CurrentUser('id') userId: number,
-    @CurrentUser('role') userRole: string,
+    @CurrentUser('rol') userRole: string,
   ) {
     return this.tareaService.update(id, updateDto, userId, userRole);
   }
@@ -111,11 +111,11 @@ export class TareaController {
   }
 
   @Delete(':id')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER, Role.DESARROLLADOR)
   remove(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('id') userId: number,
-    @CurrentUser('role') userRole: string,
+    @CurrentUser('rol') userRole: string,
   ) {
     return this.tareaService.remove(id, userId, userRole);
   }

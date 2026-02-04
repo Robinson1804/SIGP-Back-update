@@ -330,6 +330,22 @@ export class TareaService {
       throw new ForbiddenException('Los implementadores no pueden editar tareas, solo pueden ver detalles');
     }
 
+    // DESARROLLADOR solo puede editar tareas en HUs donde está asignado
+    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: tarea.historiaUsuarioId },
+        select: ['id', 'asignadoA'],
+      });
+      const personal = await this.personalRepository.findOne({
+        where: { usuarioId: userId },
+        select: ['id'],
+      });
+      const asignados = (hu?.asignadoA || []).map(id => Number(id));
+      if (!personal?.id || !asignados.includes(personal.id)) {
+        throw new ForbiddenException('Solo puedes editar tareas en historias de usuario donde estás asignado como responsable');
+      }
+    }
+
     // Si es tarea SCRUM, verificar estado de HU
     if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
       const hu = await this.historiaUsuarioRepository.findOne({
@@ -686,6 +702,22 @@ export class TareaService {
     // IMPLEMENTADOR no puede eliminar tareas
     if (userRole === 'IMPLEMENTADOR') {
       throw new ForbiddenException('Los implementadores no pueden eliminar tareas');
+    }
+
+    // DESARROLLADOR solo puede eliminar tareas en HUs donde está asignado
+    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
+      const hu = await this.historiaUsuarioRepository.findOne({
+        where: { id: tarea.historiaUsuarioId },
+        select: ['id', 'asignadoA'],
+      });
+      const personal = await this.personalRepository.findOne({
+        where: { usuarioId: userId },
+        select: ['id'],
+      });
+      const asignados = (hu?.asignadoA || []).map(id => Number(id));
+      if (!personal?.id || !asignados.includes(personal.id)) {
+        throw new ForbiddenException('Solo puedes eliminar tareas en historias de usuario donde estás asignado como responsable');
+      }
     }
 
     tarea.activo = false;
