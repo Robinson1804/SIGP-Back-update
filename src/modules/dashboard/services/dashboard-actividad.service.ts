@@ -32,7 +32,7 @@ export class DashboardActividadService {
       throw new NotFoundException(`Actividad con ID ${actividadId} no encontrada`);
     }
 
-    const [metricasKanban, tareasPorEstado, throughputSemanal, equipo] =
+    const [metricasKanban, tareasPorEstado, throughputData, equipo] =
       await Promise.all([
         this.calcularMetricasKanban(actividadId),
         this.getTareasPorEstado(actividadId),
@@ -43,6 +43,12 @@ export class DashboardActividadService {
     const totalTareas = Object.values(tareasPorEstado).reduce((a, b) => a + b, 0);
     const tareasCompletadas = tareasPorEstado[TareaEstado.FINALIZADO] || 0;
     const progreso = totalTareas > 0 ? Math.round((tareasCompletadas / totalTareas) * 100) : 0;
+
+    // Convertir nuevo formato a formato legacy para compatibilidad
+    const throughputSemanal = throughputData.periodos.map(p => ({
+      semana: p.periodoLabel,
+      completadas: p.tareasCompletadas,
+    }));
 
     return {
       actividad: {
@@ -143,7 +149,16 @@ export class DashboardActividadService {
     return porEstado;
   }
 
-  async getThroughput(actividadId: number): Promise<ThroughputSemanalDto[]> {
+  async getThroughput(actividadId: number): Promise<{
+    actividadId: number;
+    throughputPromedio: number;
+    periodos: Array<{
+      periodo: string;
+      periodoLabel: string;
+      tareasCompletadas: number;
+      subtareasCompletadas: number;
+    }>;
+  }> {
     const tareasCompletadas = await this.tareaRepository.find({
       where: {
         actividadId,
@@ -155,21 +170,29 @@ export class DashboardActividadService {
     });
 
     // Agrupar por semana (últimas 8 semanas incluyendo la actual)
-    const semanas: Map<string, number> = new Map();
     const ahora = new Date();
+    const periodos: Array<{
+      periodo: string;
+      periodoLabel: string;
+      tareasCompletadas: number;
+      subtareasCompletadas: number;
+    }> = [];
 
-    for (let i = 0; i < 8; i++) {
-      // Semana actual (i=0): desde hace 7 días hasta ahora (incluyendo hoy)
-      // Semana -1 (i=1): desde hace 14 días hasta hace 7 días
+    let totalCompletadas = 0;
+
+    for (let i = 7; i >= 0; i--) {
       const finSemana = new Date(ahora);
       finSemana.setDate(ahora.getDate() - (7 * i));
-      finSemana.setHours(23, 59, 59, 999); // Incluir todo el día
+      finSemana.setHours(23, 59, 59, 999);
 
       const inicioSemana = new Date(ahora);
       inicioSemana.setDate(ahora.getDate() - (7 * (i + 1)) + 1);
-      inicioSemana.setHours(0, 0, 0, 0); // Desde inicio del día
+      inicioSemana.setHours(0, 0, 0, 0);
 
-      const semanaKey = i === 0 ? 'Esta semana' : `Semana -${i}`;
+      // Formato de periodo: año-Wxx
+      const weekNum = Math.ceil((ahora.getDate() - i * 7) / 7);
+      const periodo = `${ahora.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+      const periodoLabel = i === 0 ? 'Esta semana' : `Semana -${i}`;
 
       const completadasEnSemana = tareasCompletadas.filter((t) => {
         const fecha = t.fechaCompletado
@@ -178,20 +201,23 @@ export class DashboardActividadService {
         return fecha >= inicioSemana && fecha <= finSemana;
       }).length;
 
-      semanas.set(semanaKey, completadasEnSemana);
-    }
+      totalCompletadas += completadasEnSemana;
 
-    // Convertir a array (de más antigua a más reciente)
-    const throughput: ThroughputSemanalDto[] = [];
-    for (let i = 7; i >= 0; i--) {
-      const semanaKey = i === 0 ? 'Esta semana' : `Semana -${i}`;
-      throughput.push({
-        semana: semanaKey,
-        completadas: semanas.get(semanaKey) || 0,
+      periodos.push({
+        periodo,
+        periodoLabel,
+        tareasCompletadas: completadasEnSemana,
+        subtareasCompletadas: 0, // TODO: implementar conteo de subtareas
       });
     }
 
-    return throughput;
+    const throughputPromedio = periodos.length > 0 ? totalCompletadas / periodos.length : 0;
+
+    return {
+      actividadId,
+      throughputPromedio: Math.round(throughputPromedio * 10) / 10,
+      periodos,
+    };
   }
 
   private async getEquipo(actividadId: number): Promise<EquipoActividadMiembroDto[]> {
