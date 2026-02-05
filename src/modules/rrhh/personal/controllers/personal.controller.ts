@@ -77,6 +77,15 @@ export class PersonalController {
     return this.personalService.findImplementadores();
   }
 
+  /**
+   * GET /personal/patrocinadores
+   * Obtener personal con rol PATROCINADOR (para asignar como Área Usuaria en Proyectos)
+   */
+  @Get('patrocinadores')
+  getPatrocinadores() {
+    return this.personalService.findPatrocinadores();
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.personalService.findOne(id);

@@ -60,6 +60,11 @@ export class CreateProyectoDto {
   patrocinadorId?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  areaUsuaria?: number[];
+
+  @IsOptional()
   @IsString()
   @MaxLength(100)
   coordinacion?: string;

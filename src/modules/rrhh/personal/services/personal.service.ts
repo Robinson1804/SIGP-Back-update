@@ -213,6 +213,13 @@ export class PersonalService {
     return this.findByUsuarioRol(Role.IMPLEMENTADOR);
   }
 
+  /**
+   * Obtener personal con rol PATROCINADOR
+   */
+  async findPatrocinadores(): Promise<Personal[]> {
+    return this.findByUsuarioRol(Role.PATROCINADOR);
+  }
+
   async update(id: number, updateDto: UpdatePersonalDto, userId?: number): Promise<Personal & { credenciales?: { username: string; passwordTemporal: string; email: string; rol: string } }> {
     // Verificar que existe
     const personal = await this.findOne(id);
