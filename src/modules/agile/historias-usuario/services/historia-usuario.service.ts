@@ -28,6 +28,7 @@ import { HistorialCambioService } from '../../common/services/historial-cambio.s
 import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/historial-cambio.enum';
 import { EpicaService } from '../../epicas/services/epica.service';
 import { Sprint } from '../../sprints/entities/sprint.entity';
+import { SprintEstado } from '../../sprints/enums/sprint.enum';
 import { Tarea } from '../../tareas/entities/tarea.entity';
 import { TareaTipo, TareaEstado } from '../../tareas/enums/tarea.enum';
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
@@ -116,6 +117,66 @@ export class HistoriaUsuarioService {
       if (huInicio > huFin) {
         throw new BadRequestException(
           'La fecha de inicio no puede ser mayor que la fecha de fin',
+        );
+      }
+    }
+  }
+
+  /**
+   * Recalcula y actualiza el estado de un sprint basándose en los estados de sus HUs.
+   * - Sprint "Por hacer" → "En progreso" cuando alguna HU pasa a "En progreso" o "En revisión"
+   * - Sprint "En progreso" → "Finalizado" cuando todas las HU están en "Finalizado"
+   */
+  private async recalcularEstadoSprint(sprintId: number, userId?: number): Promise<void> {
+    const sprint = await this.sprintRepository.findOne({
+      where: { id: sprintId, activo: true },
+    });
+    if (!sprint) return;
+
+    const hus = await this.huRepository.find({
+      where: { sprintId, activo: true },
+    });
+    if (hus.length === 0) return;
+
+    const todasFinalizadas = hus.every(hu => hu.estado === HuEstado.FINALIZADO);
+    const algunaEnProgreso = hus.some(hu =>
+      hu.estado === HuEstado.EN_PROGRESO || hu.estado === HuEstado.EN_REVISION,
+    );
+
+    let nuevoEstado: SprintEstado | null = null;
+
+    if (todasFinalizadas && sprint.estado === SprintEstado.EN_PROGRESO) {
+      nuevoEstado = SprintEstado.FINALIZADO;
+    } else if (algunaEnProgreso && sprint.estado === SprintEstado.POR_HACER) {
+      // Solo auto-iniciar si no hay otro sprint activo en el proyecto
+      const otroActivo = await this.sprintRepository.findOne({
+        where: { proyectoId: sprint.proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
+      });
+      if (!otroActivo) {
+        nuevoEstado = SprintEstado.EN_PROGRESO;
+      }
+    }
+
+    if (nuevoEstado && nuevoEstado !== sprint.estado) {
+      const estadoAnterior = sprint.estado;
+      sprint.estado = nuevoEstado;
+      sprint.updatedBy = userId;
+
+      if (nuevoEstado === SprintEstado.EN_PROGRESO) {
+        sprint.fechaInicioReal = new Date();
+      } else if (nuevoEstado === SprintEstado.FINALIZADO) {
+        sprint.fechaFinReal = new Date();
+      }
+
+      await this.sprintRepository.save(sprint);
+
+      if (userId) {
+        await this.historialCambioService.registrarCambioEstado(
+          HistorialEntidadTipo.SPRINT,
+          sprintId,
+          estadoAnterior,
+          nuevoEstado,
+          userId,
         );
       }
     }
@@ -500,6 +561,11 @@ export class HistoriaUsuarioService {
     // Recalcular estado de la épica si la HU pertenece a una
     if (huActualizada.epicaId) {
       await this.epicaService.recalcularEstado(huActualizada.epicaId, userId);
+    }
+
+    // Recalcular estado del sprint si la HU pertenece a uno
+    if (huActualizada.sprintId) {
+      await this.recalcularEstadoSprint(huActualizada.sprintId, userId);
     }
 
     return huActualizada;
@@ -915,6 +981,11 @@ export class HistoriaUsuarioService {
     // Recalcular estado de la épica si la HU pertenece a una
     if (hu.epicaId) {
       await this.epicaService.recalcularEstado(hu.epicaId, userId);
+    }
+
+    // Recalcular estado del sprint si la HU pertenece a uno
+    if (hu.sprintId) {
+      await this.recalcularEstadoSprint(hu.sprintId, userId);
     }
 
     return this.findOne(id);
