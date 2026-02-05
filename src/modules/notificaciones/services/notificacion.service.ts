@@ -199,6 +199,47 @@ export class NotificacionService {
     }));
   }
 
+  /**
+   * Get notification counts by section for a specific project (PMO view).
+   * Sections: Asignaciones (PROYECTOS), Sprints, Aprobaciones, Validaciones
+   */
+  async getSeccionCountsByProyecto(usuarioId: number, proyectoId: number): Promise<{
+    asignaciones: { total: number; noLeidas: number };
+    sprints: { total: number; noLeidas: number };
+    aprobaciones: { total: number; noLeidas: number };
+    validaciones: { total: number; noLeidas: number };
+  }> {
+    const secciones = [
+      { key: 'asignaciones', tipo: TipoNotificacion.PROYECTOS },
+      { key: 'sprints', tipo: TipoNotificacion.SPRINTS },
+      { key: 'aprobaciones', tipo: TipoNotificacion.APROBACIONES },
+      { key: 'validaciones', tipo: TipoNotificacion.VALIDACIONES },
+    ] as const;
+
+    const result: Record<string, { total: number; noLeidas: number }> = {};
+
+    await Promise.all(
+      secciones.map(async ({ key, tipo }) => {
+        const [total, noLeidas] = await Promise.all([
+          this.notificacionRepository.count({
+            where: { destinatarioId: usuarioId, proyectoId, tipo, activo: true },
+          }),
+          this.notificacionRepository.count({
+            where: { destinatarioId: usuarioId, proyectoId, tipo, activo: true, leida: false },
+          }),
+        ]);
+        result[key] = { total, noLeidas };
+      }),
+    );
+
+    return {
+      asignaciones: result.asignaciones,
+      sprints: result.sprints,
+      aprobaciones: result.aprobaciones,
+      validaciones: result.validaciones,
+    };
+  }
+
   async findGroupedBySprint(usuarioId: number, proyectoId: number): Promise<{
     sprintId: number;
     sprintNombre: string;

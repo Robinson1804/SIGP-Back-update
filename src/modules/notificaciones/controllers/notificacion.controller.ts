@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificacionService } from '../services/notificacion.service';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
 import { BulkDeleteDto, BulkDeleteProyectosDto } from '../dto/bulk-delete.dto';
@@ -72,6 +73,15 @@ export class NotificacionController {
     @Query('tipo') tipo?: TipoNotificacion,
   ) {
     return this.notificacionService.findAll(usuarioId, { tipo });
+  }
+
+  @Get('proyecto/:proyectoId/secciones')
+  @ApiOperation({ summary: 'Obtener conteo de notificaciones por sección para un proyecto' })
+  getSeccionCountsByProyecto(
+    @CurrentUser('id') usuarioId: number,
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+  ) {
+    return this.notificacionService.getSeccionCountsByProyecto(usuarioId, proyectoId);
   }
 
   @Get(':id')
