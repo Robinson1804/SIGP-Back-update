@@ -11,6 +11,8 @@ interface FindAllFilters {
   tipo?: TipoNotificacion;
   page?: number;
   limit?: number;
+  proyectoId?: number;
+  entidadId?: number;
 }
 
 interface NotificarData {
@@ -36,12 +38,13 @@ export class NotificacionService {
     usuarioId: number,
     filters: FindAllFilters = {},
   ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
-    const { leida, tipo, page = 1, limit = 20 } = filters;
+    const { leida, tipo, page = 1, limit = 20, proyectoId, entidadId } = filters;
 
     const queryBuilder = this.notificacionRepository
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.proyecto', 'proyecto')
-      .where('n.destinatarioId = :usuarioId', { usuarioId });
+      .where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.activo = true');
 
     if (leida !== undefined) {
       queryBuilder.andWhere('n.leida = :leida', { leida });
@@ -49,6 +52,14 @@ export class NotificacionService {
 
     if (tipo) {
       queryBuilder.andWhere('n.tipo = :tipo', { tipo });
+    }
+
+    if (proyectoId) {
+      queryBuilder.andWhere('n.proyectoId = :proyectoId', { proyectoId });
+    }
+
+    if (entidadId) {
+      queryBuilder.andWhere('n.entidadId = :entidadId', { entidadId });
     }
 
     queryBuilder
@@ -77,7 +88,7 @@ export class NotificacionService {
 
   async findOne(id: number, usuarioId: number): Promise<Notificacion> {
     const notificacion = await this.notificacionRepository.findOne({
-      where: { id, destinatarioId: usuarioId },
+      where: { id, destinatarioId: usuarioId, activo: true },
     });
 
     if (!notificacion) {
@@ -89,7 +100,7 @@ export class NotificacionService {
 
   async getConteo(usuarioId: number): Promise<ConteoResponseDto> {
     const notificaciones = await this.notificacionRepository.find({
-      where: { destinatarioId: usuarioId, leida: false },
+      where: { destinatarioId: usuarioId, leida: false, activo: true },
       select: ['tipo'],
     });
 
@@ -130,7 +141,7 @@ export class NotificacionService {
 
   async marcarTodasLeidas(usuarioId: number): Promise<{ actualizadas: number }> {
     const result = await this.notificacionRepository.update(
-      { destinatarioId: usuarioId, leida: false },
+      { destinatarioId: usuarioId, leida: false, activo: true },
       { leida: true, fechaLeida: new Date() },
     );
 
@@ -139,7 +150,8 @@ export class NotificacionService {
 
   async remove(id: number, usuarioId: number): Promise<void> {
     const notificacion = await this.findOne(id, usuarioId);
-    await this.notificacionRepository.remove(notificacion);
+    notificacion.activo = false;
+    await this.notificacionRepository.save(notificacion);
   }
 
   async removeAdmin(id: number): Promise<void> {
@@ -147,8 +159,116 @@ export class NotificacionService {
     if (!notificacion) {
       throw new NotFoundException(`Notificación #${id} no encontrada`);
     }
-    await this.notificacionRepository.remove(notificacion);
+    notificacion.activo = false;
+    await this.notificacionRepository.save(notificacion);
   }
+
+  // ==========================================
+  // Agrupación por proyecto y sprint
+  // ==========================================
+
+  async findGroupedByProyecto(usuarioId: number): Promise<{
+    proyectoId: number;
+    proyectoCodigo: string;
+    proyectoNombre: string;
+    total: number;
+    noLeidas: number;
+  }[]> {
+    const results = await this.notificacionRepository
+      .createQueryBuilder('n')
+      .innerJoin('n.proyecto', 'p')
+      .select('p.id', 'proyectoId')
+      .addSelect('p.codigo', 'proyectoCodigo')
+      .addSelect('p.nombre', 'proyectoNombre')
+      .addSelect('COUNT(n.id)', 'total')
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
+      .where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.activo = true')
+      .groupBy('p.id')
+      .addGroupBy('p.codigo')
+      .addGroupBy('p.nombre')
+      .orderBy('MAX(n.createdAt)', 'DESC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      proyectoId: parseInt(r.proyectoId, 10),
+      proyectoCodigo: r.proyectoCodigo,
+      proyectoNombre: r.proyectoNombre,
+      total: parseInt(r.total, 10),
+      noLeidas: parseInt(r.noLeidas, 10),
+    }));
+  }
+
+  async findGroupedBySprint(usuarioId: number, proyectoId: number): Promise<{
+    sprintId: number;
+    sprintNombre: string;
+    total: number;
+    noLeidas: number;
+  }[]> {
+    const results = await this.notificacionRepository
+      .createQueryBuilder('n')
+      .innerJoin('agile.sprints', 's', 's.id = n.entidadId')
+      .select('s.id', 'sprintId')
+      .addSelect('s.nombre', 'sprintNombre')
+      .addSelect('COUNT(n.id)', 'total')
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
+      .where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.proyectoId = :proyectoId', { proyectoId })
+      .andWhere('n.activo = true')
+      .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.SPRINTS })
+      .groupBy('s.id')
+      .addGroupBy('s.nombre')
+      .orderBy('MAX(n.createdAt)', 'DESC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      sprintId: parseInt(r.sprintId, 10),
+      sprintNombre: r.sprintNombre,
+      total: parseInt(r.total, 10),
+      noLeidas: parseInt(r.noLeidas, 10),
+    }));
+  }
+
+  // ==========================================
+  // Soft delete masivo
+  // ==========================================
+
+  async softDeleteBulk(ids: number[], usuarioId: number): Promise<{ eliminadas: number }> {
+    const result = await this.notificacionRepository
+      .createQueryBuilder()
+      .update(Notificacion)
+      .set({ activo: false })
+      .where('id IN (:...ids)', { ids })
+      .andWhere('destinatarioId = :usuarioId', { usuarioId })
+      .execute();
+
+    return { eliminadas: result.affected || 0 };
+  }
+
+  async softDeleteByProyectos(proyectoIds: number[], usuarioId: number): Promise<{ eliminadas: number }> {
+    const result = await this.notificacionRepository
+      .createQueryBuilder()
+      .update(Notificacion)
+      .set({ activo: false })
+      .where('proyectoId IN (:...proyectoIds)', { proyectoIds })
+      .andWhere('destinatarioId = :usuarioId', { usuarioId })
+      .execute();
+
+    return { eliminadas: result.affected || 0 };
+  }
+
+  async marcarTodasLeidasPorProyecto(proyectoId: number, usuarioId: number): Promise<{ actualizadas: number }> {
+    const result = await this.notificacionRepository.update(
+      { destinatarioId: usuarioId, proyectoId, leida: false, activo: true },
+      { leida: true, fechaLeida: new Date() },
+    );
+
+    return { actualizadas: result.affected || 0 };
+  }
+
+  // ==========================================
+  // Métodos de creación de notificaciones
+  // ==========================================
 
   /**
    * Método para crear notificaciones desde otros módulos.

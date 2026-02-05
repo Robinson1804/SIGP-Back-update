@@ -61,6 +61,10 @@ export class Notificacion {
   @Column({ type: 'varchar', length: 500, nullable: true })
   urlAccion: string;
 
+  @Column({ type: 'boolean', default: true })
+  @Index()
+  activo: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   @Index()
   createdAt: Date;

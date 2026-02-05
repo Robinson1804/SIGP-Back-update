@@ -5,11 +5,13 @@ import {
   Delete,
   Param,
   Query,
+  Body,
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
 import { NotificacionService } from '../services/notificacion.service';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
+import { BulkDeleteDto, BulkDeleteProyectosDto } from '../dto/bulk-delete.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -28,18 +30,35 @@ export class NotificacionController {
     @Query('tipo') tipo?: TipoNotificacion,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('proyectoId') proyectoId?: string,
+    @Query('entidadId') entidadId?: string,
   ) {
     return this.notificacionService.findAll(usuarioId, {
       leida: leida !== undefined ? leida === 'true' : undefined,
       tipo,
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
+      proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      entidadId: entidadId ? parseInt(entidadId, 10) : undefined,
     });
   }
 
   @Get('conteo')
   getConteo(@CurrentUser('id') usuarioId: number) {
     return this.notificacionService.getConteo(usuarioId);
+  }
+
+  @Get('agrupadas/proyectos')
+  findGroupedByProyecto(@CurrentUser('id') usuarioId: number) {
+    return this.notificacionService.findGroupedByProyecto(usuarioId);
+  }
+
+  @Get('agrupadas/sprints/:proyectoId')
+  findGroupedBySprint(
+    @CurrentUser('id') usuarioId: number,
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+  ) {
+    return this.notificacionService.findGroupedBySprint(usuarioId, proyectoId);
   }
 
   /**
@@ -74,6 +93,30 @@ export class NotificacionController {
   @Patch('leer-todas')
   marcarTodasLeidas(@CurrentUser('id') usuarioId: number) {
     return this.notificacionService.marcarTodasLeidas(usuarioId);
+  }
+
+  @Patch('leer-todas/proyecto/:proyectoId')
+  marcarTodasLeidasPorProyecto(
+    @CurrentUser('id') usuarioId: number,
+    @Param('proyectoId', ParseIntPipe) proyectoId: number,
+  ) {
+    return this.notificacionService.marcarTodasLeidasPorProyecto(proyectoId, usuarioId);
+  }
+
+  @Delete('bulk')
+  softDeleteBulk(
+    @CurrentUser('id') usuarioId: number,
+    @Body() dto: BulkDeleteDto,
+  ) {
+    return this.notificacionService.softDeleteBulk(dto.ids, usuarioId);
+  }
+
+  @Delete('bulk/proyectos')
+  softDeleteByProyectos(
+    @CurrentUser('id') usuarioId: number,
+    @Body() dto: BulkDeleteProyectosDto,
+  ) {
+    return this.notificacionService.softDeleteByProyectos(dto.proyectoIds, usuarioId);
   }
 
   /**
