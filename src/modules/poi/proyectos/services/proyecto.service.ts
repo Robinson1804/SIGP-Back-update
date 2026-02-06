@@ -325,6 +325,7 @@ export class ProyectoService {
     activo?: boolean;
     pgdId?: number;
     responsableUsuarioId?: number;
+    areaUsuariaUserId?: number;
   }): Promise<Proyecto[]> {
     const queryBuilder = this.proyectoRepository
       .createQueryBuilder('proyecto')
@@ -365,6 +366,12 @@ export class ProyectoService {
         AND a.tipo_asignacion = 'Proyecto'
         AND a.activo = true
       )`, { responsableUsuarioId: filters.responsableUsuarioId });
+    }
+
+    if (filters?.areaUsuariaUserId) {
+      queryBuilder.andWhere('proyecto.area_usuaria @> ARRAY[:areaUsuariaUserId]::integer[]', {
+        areaUsuariaUserId: filters.areaUsuariaUserId,
+      });
     }
 
     if (filters?.activo !== undefined) {

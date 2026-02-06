@@ -72,6 +72,7 @@ export class ProyectoController {
       activo: activo !== undefined ? activo === 'true' : undefined,
       pgdId: pgdId ? parseInt(pgdId, 10) : undefined,
       responsableUsuarioId: responsableUsuarioId ? parseInt(responsableUsuarioId, 10) : undefined,
+      areaUsuariaUserId: user.rol === Role.PATROCINADOR ? user.id : undefined,
     });
   }
 
