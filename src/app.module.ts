@@ -10,6 +10,9 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import appConfig from './config/app.config';
 
+// Migrations
+import * as migrations from './database/migrations';
+
 // Module imports
 import { CommonModule } from './common/common.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -74,6 +77,9 @@ import { StorageModule } from './modules/storage/storage.module';
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          migrations: Object.values(migrations),
+          migrationsRun: true,
+          migrationsTableName: 'typeorm_migrations',
         };
       },
     }),

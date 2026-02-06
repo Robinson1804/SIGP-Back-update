@@ -27,3 +27,4 @@ export * from './1768500000000-UpdateProyectosEstadoAutomatico';
 export * from './1768600000000-AddRequiereCambioPassword';
 export * from './1768700000000-AddAreaUsuariaToProyectos';
 export * from './1768800000000-AddActivoToNotificaciones';
+export * from './1768900000000-AddActividadIdToNotificaciones';
