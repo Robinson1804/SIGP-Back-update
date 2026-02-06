@@ -39,16 +39,28 @@ export class ActividadController {
 
   @Get()
   findAll(
+    @CurrentUser() user: { id: number; rol: string },
     @Query('estado') estado?: ActividadEstado,
     @Query('coordinadorId') coordinadorId?: string,
+    @Query('gestorId') gestorId?: string,
     @Query('accionEstrategicaId') accionEstrategicaId?: string,
     @Query('activo') activo?: string,
     @Query('pgdId') pgdId?: string,
     @Query('responsableUsuarioId') responsableUsuarioId?: string,
   ) {
+    let effectiveGestorId = gestorId ? parseInt(gestorId, 10) : undefined;
+    let effectiveCoordinadorId = coordinadorId ? parseInt(coordinadorId, 10) : undefined;
+
+    if (user.rol === Role.SCRUM_MASTER) {
+      effectiveGestorId = user.id;
+    } else if (user.rol === Role.COORDINADOR) {
+      effectiveCoordinadorId = user.id;
+    }
+
     return this.actividadService.findAll({
       estado,
-      coordinadorId: coordinadorId ? parseInt(coordinadorId, 10) : undefined,
+      coordinadorId: effectiveCoordinadorId,
+      gestorId: effectiveGestorId,
       accionEstrategicaId: accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
       pgdId: pgdId ? parseInt(pgdId, 10) : undefined,

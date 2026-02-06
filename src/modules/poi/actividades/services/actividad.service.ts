@@ -82,6 +82,7 @@ export class ActividadService {
   async findAll(filters?: {
     estado?: ActividadEstado;
     coordinadorId?: number;
+    gestorId?: number;
     accionEstrategicaId?: number;
     activo?: boolean;
     pgdId?: number;
@@ -100,6 +101,10 @@ export class ActividadService {
 
     if (filters?.coordinadorId) {
       queryBuilder.andWhere('actividad.coordinadorId = :coordinadorId', { coordinadorId: filters.coordinadorId });
+    }
+
+    if (filters?.gestorId) {
+      queryBuilder.andWhere('actividad.gestorId = :gestorId', { gestorId: filters.gestorId });
     }
 
     if (filters?.accionEstrategicaId) {

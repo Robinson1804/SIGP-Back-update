@@ -46,6 +46,7 @@ export class ProyectoController {
 
   @Get()
   findAll(
+    @CurrentUser() user: { id: number; rol: string },
     @Query('estado') estado?: ProyectoEstado,
     @Query('coordinadorId') coordinadorId?: string,
     @Query('scrumMasterId') scrumMasterId?: string,
@@ -54,10 +55,19 @@ export class ProyectoController {
     @Query('pgdId') pgdId?: string,
     @Query('responsableUsuarioId') responsableUsuarioId?: string,
   ) {
+    let effectiveScrumMasterId = scrumMasterId ? parseInt(scrumMasterId, 10) : undefined;
+    let effectiveCoordinadorId = coordinadorId ? parseInt(coordinadorId, 10) : undefined;
+
+    if (user.rol === Role.SCRUM_MASTER) {
+      effectiveScrumMasterId = user.id;
+    } else if (user.rol === Role.COORDINADOR) {
+      effectiveCoordinadorId = user.id;
+    }
+
     return this.proyectoService.findAll({
       estado,
-      coordinadorId: coordinadorId ? parseInt(coordinadorId, 10) : undefined,
-      scrumMasterId: scrumMasterId ? parseInt(scrumMasterId, 10) : undefined,
+      coordinadorId: effectiveCoordinadorId,
+      scrumMasterId: effectiveScrumMasterId,
       accionEstrategicaId: accionEstrategicaId ? parseInt(accionEstrategicaId, 10) : undefined,
       activo: activo !== undefined ? activo === 'true' : undefined,
       pgdId: pgdId ? parseInt(pgdId, 10) : undefined,
