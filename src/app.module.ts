@@ -10,8 +10,6 @@ import jwtConfig from './config/jwt.config';
 import redisConfig from './config/redis.config';
 import appConfig from './config/app.config';
 
-// Migrations
-import * as migrations from './database/migrations';
 
 // Module imports
 import { CommonModule } from './common/common.module';
@@ -73,13 +71,10 @@ import { StorageModule } from './modules/storage/storage.module';
           password: config.get('database.password'),
           database: config.get('database.database'),
           autoLoadEntities: true,
-          synchronize: config.get('database.synchronize'),
+          synchronize: true, // TEMP: sync actividadId column, revert after deploy
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          migrations: Object.values(migrations),
-          migrationsRun: true,
-          migrationsTableName: 'typeorm_migrations',
         };
       },
     }),
