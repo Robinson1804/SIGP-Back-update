@@ -254,6 +254,7 @@ export class TareaService {
     tipo?: TareaTipo;
     historiaUsuarioId?: number;
     actividadId?: number;
+    sprintId?: number;
     estado?: TareaEstado;
     prioridad?: TareaPrioridad;
     asignadoA?: number;
@@ -278,6 +279,12 @@ export class TareaService {
     if (filters?.actividadId) {
       queryBuilder.andWhere('tarea.actividadId = :actividadId', {
         actividadId: filters.actividadId,
+      });
+    }
+
+    if (filters?.sprintId) {
+      queryBuilder.innerJoin('tarea.historiaUsuario', 'hu', 'hu.sprintId = :sprintId', {
+        sprintId: filters.sprintId,
       });
     }
 
