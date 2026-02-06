@@ -52,8 +52,14 @@ export class NotificacionController {
   }
 
   @Get('agrupadas/proyectos')
-  findGroupedByProyecto(@CurrentUser('id') usuarioId: number) {
-    return this.notificacionService.findGroupedByProyecto(usuarioId);
+  findGroupedByProyecto(
+    @CurrentUser('id') usuarioId: number,
+    @Query('pgdId') pgdId?: string,
+  ) {
+    return this.notificacionService.findGroupedByProyecto(
+      usuarioId,
+      pgdId ? parseInt(pgdId, 10) : undefined,
+    );
   }
 
   @Get('agrupadas/sprints/:proyectoId')
@@ -66,8 +72,14 @@ export class NotificacionController {
 
   @Get('agrupadas/actividades')
   @ApiOperation({ summary: 'Obtener notificaciones agrupadas por actividad' })
-  findGroupedByActividad(@CurrentUser('id') usuarioId: number) {
-    return this.notificacionService.findGroupedByActividad(usuarioId);
+  findGroupedByActividad(
+    @CurrentUser('id') usuarioId: number,
+    @Query('pgdId') pgdId?: string,
+  ) {
+    return this.notificacionService.findGroupedByActividad(
+      usuarioId,
+      pgdId ? parseInt(pgdId, 10) : undefined,
+    );
   }
 
   @Get('actividad/:actividadId/secciones')

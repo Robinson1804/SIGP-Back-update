@@ -183,14 +183,14 @@ export class NotificacionService {
   // Agrupación por proyecto y sprint
   // ==========================================
 
-  async findGroupedByProyecto(usuarioId: number): Promise<{
+  async findGroupedByProyecto(usuarioId: number, pgdId?: number): Promise<{
     proyectoId: number;
     proyectoCodigo: string;
     proyectoNombre: string;
     total: number;
     noLeidas: number;
   }[]> {
-    const results = await this.notificacionRepository
+    const qb = this.notificacionRepository
       .createQueryBuilder('n')
       .innerJoin('n.proyecto', 'p')
       .select('p.id', 'proyectoId')
@@ -199,7 +199,16 @@ export class NotificacionService {
       .addSelect('COUNT(n.id)', 'total')
       .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
       .where('n.destinatarioId = :usuarioId', { usuarioId })
-      .andWhere('n.activo = true')
+      .andWhere('n.activo = true');
+
+    if (pgdId) {
+      qb.innerJoin('p.accionEstrategica', 'ae')
+        .innerJoin('ae.oegd', 'oegd')
+        .innerJoin('oegd.ogd', 'ogd')
+        .andWhere('ogd.pgdId = :pgdId', { pgdId });
+    }
+
+    const results = await qb
       .groupBy('p.id')
       .addGroupBy('p.codigo')
       .addGroupBy('p.nombre')
@@ -259,14 +268,14 @@ export class NotificacionService {
   /**
    * Group notifications by activity (PMO view - Actividades tab).
    */
-  async findGroupedByActividad(usuarioId: number): Promise<{
+  async findGroupedByActividad(usuarioId: number, pgdId?: number): Promise<{
     actividadId: number;
     actividadCodigo: string;
     actividadNombre: string;
     total: number;
     noLeidas: number;
   }[]> {
-    const results = await this.notificacionRepository
+    const qb = this.notificacionRepository
       .createQueryBuilder('n')
       .innerJoin('n.actividad', 'a')
       .select('a.id', 'actividadId')
@@ -276,7 +285,16 @@ export class NotificacionService {
       .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
       .where('n.destinatarioId = :usuarioId', { usuarioId })
       .andWhere('n.activo = true')
-      .andWhere('n.actividadId IS NOT NULL')
+      .andWhere('n.actividadId IS NOT NULL');
+
+    if (pgdId) {
+      qb.innerJoin('a.accionEstrategica', 'ae')
+        .innerJoin('ae.oegd', 'oegd')
+        .innerJoin('oegd.ogd', 'ogd')
+        .andWhere('ogd.pgdId = :pgdId', { pgdId });
+    }
+
+    const results = await qb
       .groupBy('a.id')
       .addGroupBy('a.codigo')
       .addGroupBy('a.nombre')
