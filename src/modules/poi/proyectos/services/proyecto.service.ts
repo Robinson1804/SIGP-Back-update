@@ -25,6 +25,26 @@ export class ProyectoService {
   ) {}
 
   /**
+   * Verifica si todos los campos requeridos del proyecto están completos
+   * para considerar la transición automática de estado.
+   */
+  private camposRequeridosCompletos(proyecto: Proyecto): boolean {
+    return Boolean(
+      proyecto.nombre?.trim() &&
+      proyecto.descripcion?.trim() &&
+      proyecto.clasificacion &&
+      proyecto.accionEstrategicaId &&
+      proyecto.coordinadorId &&
+      proyecto.scrumMasterId &&
+      (proyecto.coordinacion || proyecto.areaResponsable) &&
+      proyecto.areasFinancieras?.length > 0 &&
+      proyecto.fechaInicio &&
+      proyecto.fechaFin &&
+      proyecto.anios?.length > 0,
+    );
+  }
+
+  /**
    * Convierte una fecha string (YYYY-MM-DD) a Date evitando problemas de timezone.
    * Crea la fecha a las 12:00:00 hora local para evitar que la conversión UTC
    * desplace la fecha al día anterior.
@@ -458,6 +478,53 @@ export class ProyectoService {
 
     // Recargar el proyecto con las relaciones actualizadas
     const saved = await this.findOne(id);
+
+    // Auto-transición de estado: Pendiente → En planificación / En desarrollo
+    if (saved.estado === ProyectoEstado.PENDIENTE && this.camposRequeridosCompletos(saved)) {
+      try {
+        // Verificar si ya existen sprints para este proyecto
+        const sprintCount = await this.proyectoRepository.manager
+          .createQueryBuilder()
+          .select('COUNT(*)', 'count')
+          .from('agile.sprints', 's')
+          .where('s.proyecto_id = :proyectoId', { proyectoId: id })
+          .andWhere('s.activo = true')
+          .getRawOne();
+
+        const hasSprints = parseInt(sprintCount?.count || '0', 10) > 0;
+        const nuevoEstado = hasSprints ? ProyectoEstado.EN_DESARROLLO : ProyectoEstado.EN_PLANIFICACION;
+
+        await this.proyectoRepository.update(id, { estado: nuevoEstado });
+        saved.estado = nuevoEstado;
+
+        // Notificar al equipo sobre el cambio de estado automático
+        const destinatarios: number[] = [];
+        if (saved.coordinadorId && saved.coordinadorId !== userId) {
+          destinatarios.push(saved.coordinadorId);
+        }
+        if (saved.scrumMasterId && saved.scrumMasterId !== userId && saved.scrumMasterId !== saved.coordinadorId) {
+          destinatarios.push(saved.scrumMasterId);
+        }
+
+        if (destinatarios.length > 0) {
+          await this.notificacionService.notificarMultiples(
+            TipoNotificacion.PROYECTOS,
+            destinatarios,
+            {
+              titulo: `Estado de proyecto actualizado: ${saved.codigo}`,
+              descripcion: `El proyecto "${saved.nombre}" ha cambiado automáticamente a estado ${nuevoEstado}`,
+              entidadTipo: 'Proyecto',
+              entidadId: saved.id,
+              proyectoId: saved.id,
+              urlAccion: `/poi/proyecto/detalles?id=${saved.id}`,
+            },
+          );
+        }
+      } catch (error) {
+        // No fallar la actualización por error en auto-transición
+        console.error('Error en auto-transición de estado del proyecto:', error);
+      }
+    }
 
     // Notificar al nuevo coordinador si cambió
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {

@@ -12,7 +12,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { NotificacionService } from '../services/notificacion.service';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
-import { BulkDeleteDto, BulkDeleteProyectosDto } from '../dto/bulk-delete.dto';
+import { BulkDeleteDto, BulkDeleteProyectosDto, BulkDeleteActividadesDto } from '../dto/bulk-delete.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
@@ -32,6 +32,7 @@ export class NotificacionController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('proyectoId') proyectoId?: string,
+    @Query('actividadId') actividadId?: string,
     @Query('entidadId') entidadId?: string,
   ) {
     return this.notificacionService.findAll(usuarioId, {
@@ -40,6 +41,7 @@ export class NotificacionController {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
       entidadId: entidadId ? parseInt(entidadId, 10) : undefined,
     });
   }
@@ -60,6 +62,21 @@ export class NotificacionController {
     @Param('proyectoId', ParseIntPipe) proyectoId: number,
   ) {
     return this.notificacionService.findGroupedBySprint(usuarioId, proyectoId);
+  }
+
+  @Get('agrupadas/actividades')
+  @ApiOperation({ summary: 'Obtener notificaciones agrupadas por actividad' })
+  findGroupedByActividad(@CurrentUser('id') usuarioId: number) {
+    return this.notificacionService.findGroupedByActividad(usuarioId);
+  }
+
+  @Get('actividad/:actividadId/secciones')
+  @ApiOperation({ summary: 'Obtener conteo de notificaciones por sección para una actividad' })
+  getSeccionCountsByActividad(
+    @CurrentUser('id') usuarioId: number,
+    @Param('actividadId', ParseIntPipe) actividadId: number,
+  ) {
+    return this.notificacionService.getSeccionCountsByActividad(usuarioId, actividadId);
   }
 
   /**
@@ -113,6 +130,15 @@ export class NotificacionController {
     return this.notificacionService.marcarTodasLeidasPorProyecto(proyectoId, usuarioId);
   }
 
+  @Patch('leer-todas/actividad/:actividadId')
+  @ApiOperation({ summary: 'Marcar todas las notificaciones de una actividad como leídas' })
+  marcarTodasLeidasPorActividad(
+    @CurrentUser('id') usuarioId: number,
+    @Param('actividadId', ParseIntPipe) actividadId: number,
+  ) {
+    return this.notificacionService.marcarTodasLeidasPorActividad(actividadId, usuarioId);
+  }
+
   @Delete('bulk')
   softDeleteBulk(
     @CurrentUser('id') usuarioId: number,
@@ -127,6 +153,15 @@ export class NotificacionController {
     @Body() dto: BulkDeleteProyectosDto,
   ) {
     return this.notificacionService.softDeleteByProyectos(dto.proyectoIds, usuarioId);
+  }
+
+  @Delete('bulk/actividades')
+  @ApiOperation({ summary: 'Eliminar notificaciones de actividades específicas' })
+  softDeleteByActividades(
+    @CurrentUser('id') usuarioId: number,
+    @Body() dto: BulkDeleteActividadesDto,
+  ) {
+    return this.notificacionService.softDeleteByActividades(dto.actividadIds, usuarioId);
   }
 
   /**

@@ -13,3 +13,10 @@ export class BulkDeleteProyectosDto {
   @IsInt({ each: true })
   proyectoIds: number[];
 }
+
+export class BulkDeleteActividadesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsInt({ each: true })
+  actividadIds: number[];
+}

@@ -12,6 +12,7 @@ interface FindAllFilters {
   page?: number;
   limit?: number;
   proyectoId?: number;
+  actividadId?: number;
   entidadId?: number;
 }
 
@@ -38,11 +39,12 @@ export class NotificacionService {
     usuarioId: number,
     filters: FindAllFilters = {},
   ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
-    const { leida, tipo, page = 1, limit = 20, proyectoId, entidadId } = filters;
+    const { leida, tipo, page = 1, limit = 20, proyectoId, actividadId, entidadId } = filters;
 
     const queryBuilder = this.notificacionRepository
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.proyecto', 'proyecto')
+      .leftJoinAndSelect('n.actividad', 'actividad')
       .where('n.destinatarioId = :usuarioId', { usuarioId })
       .andWhere('n.activo = true');
 
@@ -58,6 +60,10 @@ export class NotificacionService {
       queryBuilder.andWhere('n.proyectoId = :proyectoId', { proyectoId });
     }
 
+    if (actividadId) {
+      queryBuilder.andWhere('n.actividadId = :actividadId', { actividadId });
+    }
+
     if (entidadId) {
       queryBuilder.andWhere('n.entidadId = :entidadId', { entidadId });
     }
@@ -69,7 +75,7 @@ export class NotificacionService {
 
     const [notificaciones, total] = await queryBuilder.getManyAndCount();
 
-    // Enriquecer notificaciones con datos actuales del proyecto
+    // Enriquecer notificaciones con datos actuales del proyecto/actividad
     const data = notificaciones.map((n) => {
       const result: any = { ...n };
       // Si hay proyecto asociado, agregar nombre y código actual
@@ -78,8 +84,17 @@ export class NotificacionService {
         result.proyectoCodigo = n.proyecto.codigo;
         result.proyectoNombre = n.proyecto.nombre;
       }
-      // Limpiar el objeto proyecto para no enviar datos innecesarios
+      // Si hay actividad asociada, agregar nombre y código actual
+      if ((n as any).actividad) {
+        result.actividadCodigo = (n as any).actividad.codigo;
+        result.actividadNombre = (n as any).actividad.nombre;
+        if (!result.entidadNombre) {
+          result.entidadNombre = (n as any).actividad.nombre;
+        }
+      }
+      // Limpiar los objetos para no enviar datos innecesarios
       delete result.proyecto;
+      delete result.actividad;
       return result;
     });
 
@@ -238,6 +253,98 @@ export class NotificacionService {
       aprobaciones: result.aprobaciones,
       validaciones: result.validaciones,
     };
+  }
+
+  /**
+   * Group notifications by activity (PMO view - Actividades tab).
+   */
+  async findGroupedByActividad(usuarioId: number): Promise<{
+    actividadId: number;
+    actividadCodigo: string;
+    actividadNombre: string;
+    total: number;
+    noLeidas: number;
+  }[]> {
+    const results = await this.notificacionRepository
+      .createQueryBuilder('n')
+      .innerJoin('poi.actividades', 'a', 'a.id = n.actividadId')
+      .select('a.id', 'actividadId')
+      .addSelect('a.codigo', 'actividadCodigo')
+      .addSelect('a.nombre', 'actividadNombre')
+      .addSelect('COUNT(n.id)', 'total')
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
+      .where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.activo = true')
+      .andWhere('n.actividadId IS NOT NULL')
+      .groupBy('a.id')
+      .addGroupBy('a.codigo')
+      .addGroupBy('a.nombre')
+      .orderBy('MAX(n.createdAt)', 'DESC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      actividadId: parseInt(r.actividadId, 10),
+      actividadCodigo: r.actividadCodigo,
+      actividadNombre: r.actividadNombre,
+      total: parseInt(r.total, 10),
+      noLeidas: parseInt(r.noLeidas, 10),
+    }));
+  }
+
+  /**
+   * Get notification counts by section for a specific activity (PMO view).
+   * Sections: Asignaciones (activity assignments), Tareas (task notifications)
+   */
+  async getSeccionCountsByActividad(usuarioId: number, actividadId: number): Promise<{
+    asignaciones: { total: number; noLeidas: number };
+    tareas: { total: number; noLeidas: number };
+  }> {
+    const secciones = [
+      { key: 'asignaciones', tipo: TipoNotificacion.PROYECTOS }, // Activity assignments use PROYECTOS type
+      { key: 'tareas', tipo: TipoNotificacion.TAREAS },
+    ] as const;
+
+    const result: Record<string, { total: number; noLeidas: number }> = {};
+
+    await Promise.all(
+      secciones.map(async ({ key, tipo }) => {
+        const [total, noLeidas] = await Promise.all([
+          this.notificacionRepository.count({
+            where: { destinatarioId: usuarioId, actividadId, tipo, activo: true },
+          }),
+          this.notificacionRepository.count({
+            where: { destinatarioId: usuarioId, actividadId, tipo, activo: true, leida: false },
+          }),
+        ]);
+        result[key] = { total, noLeidas };
+      }),
+    );
+
+    return {
+      asignaciones: result.asignaciones,
+      tareas: result.tareas,
+    };
+  }
+
+  async marcarTodasLeidasPorActividad(actividadId: number, usuarioId: number): Promise<{ actualizadas: number }> {
+    const result = await this.notificacionRepository.update(
+      { destinatarioId: usuarioId, actividadId, leida: false, activo: true },
+      { leida: true, fechaLeida: new Date() },
+    );
+
+    return { actualizadas: result.affected || 0 };
+  }
+
+  async softDeleteByActividades(actividadIds: number[], usuarioId: number): Promise<{ eliminadas: number }> {
+    const result = await this.notificacionRepository
+      .createQueryBuilder()
+      .update(Notificacion)
+      .set({ activo: false })
+      .where('actividadId IN (:...actividadIds)', { actividadIds })
+      .andWhere('destinatarioId = :usuarioId', { usuarioId })
+      .execute();
+
+    return { eliminadas: result.affected || 0 };
   }
 
   async findGroupedBySprint(usuarioId: number, proyectoId: number): Promise<{

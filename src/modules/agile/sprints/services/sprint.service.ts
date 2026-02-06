@@ -24,6 +24,8 @@ import { HistorialCambioService } from '../../common/services/historial-cambio.s
 import { HistorialEntidadTipo, HistorialAccion } from '../../common/enums/historial-cambio.enum';
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { ProyectoEstado } from '../../../poi/proyectos/enums/proyecto-estado.enum';
 
 @Injectable()
 export class SprintService {
@@ -32,6 +34,8 @@ export class SprintService {
     private readonly sprintRepository: Repository<Sprint>,
     @InjectRepository(HistoriaUsuario)
     private readonly huRepository: Repository<HistoriaUsuario>,
+    @InjectRepository(Proyecto)
+    private readonly proyectoRepository: Repository<Proyecto>,
     private readonly historialCambioService: HistorialCambioService,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
@@ -61,6 +65,46 @@ export class SprintService {
         userId,
         { nombre: sprintGuardado.nombre },
       );
+    }
+
+    // Auto-transición: En planificación → En desarrollo al crear primer sprint
+    try {
+      const proyecto = await this.proyectoRepository.findOne({
+        where: { id: createDto.proyectoId },
+      });
+
+      if (proyecto && proyecto.estado === ProyectoEstado.EN_PLANIFICACION) {
+        proyecto.estado = ProyectoEstado.EN_DESARROLLO;
+        proyecto.updatedBy = userId;
+        await this.proyectoRepository.save(proyecto);
+
+        // Notificar al equipo sobre el cambio de estado
+        const destinatarios: number[] = [];
+        if (proyecto.coordinadorId && proyecto.coordinadorId !== userId) {
+          destinatarios.push(proyecto.coordinadorId);
+        }
+        if (proyecto.scrumMasterId && proyecto.scrumMasterId !== userId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+          destinatarios.push(proyecto.scrumMasterId);
+        }
+
+        if (destinatarios.length > 0) {
+          await this.notificacionService.notificarMultiples(
+            TipoNotificacion.PROYECTOS,
+            destinatarios,
+            {
+              titulo: `Proyecto en desarrollo: ${proyecto.codigo}`,
+              descripcion: `El proyecto "${proyecto.nombre}" ha pasado a estado "En desarrollo" al crear el sprint "${sprintGuardado.nombre}"`,
+              entidadTipo: 'Proyecto',
+              entidadId: proyecto.id,
+              proyectoId: proyecto.id,
+              urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+            },
+          );
+        }
+      }
+    } catch (error) {
+      // No fallar la creación del sprint por error en auto-transición
+      console.error('Error en auto-transición de estado del proyecto:', error);
     }
 
     return sprintGuardado;

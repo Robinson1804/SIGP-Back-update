@@ -40,6 +40,13 @@ export class Notificacion {
   @JoinColumn({ name: 'proyectoId' })
   proyecto: Proyecto;
 
+  @Column({ type: 'int', nullable: true })
+  actividadId: number;
+
+  @ManyToOne('Actividad', { nullable: true })
+  @JoinColumn({ name: 'actividadId' })
+  actividad: any;
+
   @Column({ type: 'int' })
   @Index()
   destinatarioId: number;

@@ -13,6 +13,8 @@ import { Repository, Not } from 'typeorm';
 import { Tarea, EvidenciaTarea, TareaAsignado } from '../entities';
 import { Subtarea } from '../../subtareas/entities/subtarea.entity';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
+import { Sprint } from '../../sprints/entities/sprint.entity';
+import { SprintEstado } from '../../sprints/enums/sprint.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { Personal } from '../../../rrhh/personal/entities/personal.entity';
@@ -52,6 +54,8 @@ export class TareaService {
     private readonly subtareaRepository: Repository<Subtarea>,
     @InjectRepository(HistoriaUsuario)
     private readonly historiaUsuarioRepository: Repository<HistoriaUsuario>,
+    @InjectRepository(Sprint)
+    private readonly sprintRepository: Repository<Sprint>,
     @InjectRepository(Proyecto)
     private readonly proyectoRepository: Repository<Proyecto>,
     @InjectRepository(Usuario)
@@ -1230,6 +1234,11 @@ export class TareaService {
         }
 
         console.log(`[HU-${hu.codigo}] Todas las tareas finalizadas con evidencias. Estado cambiado a "En revisión".`);
+
+        // Recalcular estado del sprint (auto-start si estaba en Por hacer)
+        if (hu.sprintId) {
+          await this.recalcularEstadoSprintDesdeTarea(hu.sprintId, userId);
+        }
         return;
       }
     }
@@ -1256,6 +1265,73 @@ export class TareaService {
       }
 
       console.log(`[HU-${hu.codigo}] Tarea finalizada. Estado cambiado a "En progreso".`);
+
+      // Recalcular estado del sprint (auto-start si estaba en Por hacer)
+      if (hu.sprintId) {
+        await this.recalcularEstadoSprintDesdeTarea(hu.sprintId, userId);
+      }
+    }
+  }
+
+  /**
+   * Recalcula el estado de un sprint basándose en los estados de sus HUs.
+   * Réplica de la lógica en HistoriaUsuarioService.recalcularEstadoSprint
+   * para poder llamarla desde actualizarEstadoHUSegunTareas.
+   */
+  private async recalcularEstadoSprintDesdeTarea(sprintId: number, userId?: number): Promise<void> {
+    const sprint = await this.sprintRepository.findOne({
+      where: { id: sprintId, activo: true },
+    });
+    if (!sprint) return;
+
+    const hus = await this.historiaUsuarioRepository.find({
+      where: { sprintId, activo: true },
+    });
+    if (hus.length === 0) return;
+
+    const todasFinalizadas = hus.every(hu => hu.estado === HuEstado.FINALIZADO);
+    const algunaEnProgreso = hus.some(hu =>
+      hu.estado === HuEstado.EN_PROGRESO || hu.estado === HuEstado.EN_REVISION,
+    );
+
+    let nuevoEstado: SprintEstado | null = null;
+
+    if (todasFinalizadas && sprint.estado === SprintEstado.EN_PROGRESO) {
+      nuevoEstado = SprintEstado.FINALIZADO;
+    } else if (algunaEnProgreso && sprint.estado === SprintEstado.POR_HACER) {
+      // Solo auto-iniciar si no hay otro sprint activo en el proyecto
+      const otroActivo = await this.sprintRepository.findOne({
+        where: { proyectoId: sprint.proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
+      });
+      if (!otroActivo) {
+        nuevoEstado = SprintEstado.EN_PROGRESO;
+      }
+    }
+
+    if (nuevoEstado && nuevoEstado !== sprint.estado) {
+      const estadoAnterior = sprint.estado;
+      sprint.estado = nuevoEstado;
+      sprint.updatedBy = userId;
+
+      if (nuevoEstado === SprintEstado.EN_PROGRESO) {
+        sprint.fechaInicioReal = new Date();
+      } else if (nuevoEstado === SprintEstado.FINALIZADO) {
+        sprint.fechaFinReal = new Date();
+      }
+
+      await this.sprintRepository.save(sprint);
+
+      if (userId) {
+        await this.historialCambioService.registrarCambioEstado(
+          HistorialEntidadTipo.SPRINT,
+          sprintId,
+          estadoAnterior,
+          nuevoEstado,
+          userId,
+        );
+      }
+
+      console.log(`[Sprint ${sprint.nombre}] Estado cambiado automáticamente: ${estadoAnterior} → ${nuevoEstado}`);
     }
   }
 }
