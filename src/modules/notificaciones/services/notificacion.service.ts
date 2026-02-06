@@ -268,7 +268,7 @@ export class NotificacionService {
   }[]> {
     const results = await this.notificacionRepository
       .createQueryBuilder('n')
-      .innerJoin('poi.actividades', 'a', 'a.id = n.actividadId')
+      .innerJoin('n.actividad', 'a')
       .select('a.id', 'actividadId')
       .addSelect('a.codigo', 'actividadCodigo')
       .addSelect('a.nombre', 'actividadNombre')
