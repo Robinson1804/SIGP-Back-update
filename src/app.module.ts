@@ -71,7 +71,7 @@ import { StorageModule } from './modules/storage/storage.module';
           password: config.get('database.password'),
           database: config.get('database.database'),
           autoLoadEntities: true,
-          synchronize: true, // TEMP: sync actividadId column, revert after deploy
+          synchronize: config.get('database.synchronize'),
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
