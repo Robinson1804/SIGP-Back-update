@@ -108,6 +108,10 @@ export class TareaService {
       });
       return hu?.proyectoId;
     }
+    return undefined;
+  }
+
+  private getTareaActividadId(tarea: { tipo: TareaTipo; actividadId?: number | null }): number | undefined {
     if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
       return tarea.actividadId;
     }
@@ -196,6 +200,7 @@ export class TareaService {
       // Notificar a todos los asignados
       const urlAccionCreate = await this.buildTareaUrlAccion(tareaGuardada);
       const notifProyectoId = await this.getTareaProyectoId(tareaGuardada);
+      const notifActividadId = this.getTareaActividadId(tareaGuardada);
       for (const usuarioId of asignadosIds) {
         if (usuarioId !== userId) {
           await this.notificacionService.notificar(
@@ -207,6 +212,7 @@ export class TareaService {
               entidadTipo: 'Tarea',
               entidadId: tareaGuardada.id,
               proyectoId: notifProyectoId,
+              actividadId: notifActividadId,
               urlAccion: urlAccionCreate,
             },
           );
@@ -215,6 +221,7 @@ export class TareaService {
     } else if (asignadoA && asignadoA !== userId) {
       // Compatibilidad: si solo se envió asignadoA, notificar
       const notifProyectoIdCompat = await this.getTareaProyectoId(tareaGuardada);
+      const notifActividadIdCompat = this.getTareaActividadId(tareaGuardada);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         asignadoA,
@@ -224,6 +231,7 @@ export class TareaService {
           entidadTipo: 'Tarea',
           entidadId: tareaGuardada.id,
           proyectoId: notifProyectoIdCompat,
+          actividadId: notifActividadIdCompat,
           urlAccion: await this.buildTareaUrlAccion(tareaGuardada),
         },
       );
@@ -426,6 +434,7 @@ export class TareaService {
       // Notificar a los nuevos asignados
       const urlAccionUpdate = await this.buildTareaUrlAccion(tarea);
       const updateProyectoId = await this.getTareaProyectoId(tarea);
+      const updateActividadId = this.getTareaActividadId(tarea);
       for (const usuarioId of asignadosIds) {
         if (usuarioId !== userId && usuarioId !== valoresAnteriores.asignadoA) {
           await this.notificacionService.notificar(
@@ -437,6 +446,7 @@ export class TareaService {
               entidadTipo: 'Tarea',
               entidadId: tarea.id,
               proyectoId: updateProyectoId,
+              actividadId: updateActividadId,
               urlAccion: urlAccionUpdate,
             },
           );
@@ -497,6 +507,7 @@ export class TareaService {
     // Notificar si se cambia el asignado
     if (updateDto.asignadoA && updateDto.asignadoA !== valoresAnteriores.asignadoA && updateDto.asignadoA !== userId) {
       const reassignProyectoId = await this.getTareaProyectoId(tarea);
+      const reassignActividadId = this.getTareaActividadId(tarea);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         updateDto.asignadoA,
@@ -506,6 +517,7 @@ export class TareaService {
           entidadTipo: 'Tarea',
           entidadId: tarea.id,
           proyectoId: reassignProyectoId,
+          actividadId: reassignActividadId,
           urlAccion: await this.buildTareaUrlAccion(tarea),
         },
       );
@@ -589,6 +601,7 @@ export class TareaService {
         : `ha sido movida a ${cambiarEstadoDto.estado}`;
 
       const statusChangeProyectoId = await this.getTareaProyectoId(tarea);
+      const statusChangeActividadId = this.getTareaActividadId(tarea);
       await this.notificacionService.notificar(
         TipoNotificacion.TAREAS,
         tarea.asignadoA,
@@ -598,6 +611,7 @@ export class TareaService {
           entidadTipo: 'Tarea',
           entidadId: tarea.id,
           proyectoId: statusChangeProyectoId,
+          actividadId: statusChangeActividadId,
           urlAccion: await this.buildTareaUrlAccion(tarea),
         },
       );
@@ -676,6 +690,7 @@ export class TareaService {
             entidadTipo: 'Tarea',
             entidadId: tarea.id,
             proyectoId: tarea.tipo === TareaTipo.SCRUM ? tarea.historiaUsuario?.proyecto?.id : undefined,
+            actividadId: this.getTareaActividadId(tarea),
             urlAccion,
           },
         );

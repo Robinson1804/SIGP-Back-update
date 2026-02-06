@@ -22,6 +22,7 @@ interface NotificarData {
   entidadTipo?: string;
   entidadId?: number;
   proyectoId?: number;
+  actividadId?: number;
   urlAccion?: string;
   observacion?: string; // Observación/comentario de PMO o PATROCINADOR
 }
@@ -449,6 +450,7 @@ export class NotificacionService {
       entidadTipo: data.entidadTipo,
       entidadId: data.entidadId,
       proyectoId: data.proyectoId,
+      actividadId: data.actividadId,
       urlAccion: data.urlAccion,
       observacion: data.observacion,
     });
@@ -483,6 +485,7 @@ export class NotificacionService {
         entidadTipo: data.entidadTipo,
         entidadId: data.entidadId,
         proyectoId: data.proyectoId,
+        actividadId: data.actividadId,
         urlAccion: data.urlAccion,
       }),
     );
