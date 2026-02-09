@@ -1038,11 +1038,11 @@ export class HistoriaUsuarioService {
         const destinatarios = hu.asignadoA.map(a => parseInt(a.toString(), 10)).filter(n => !isNaN(n));
         if (destinatarios.length > 0) {
           await this.notificacionService.notificarMultiples(
-            TipoNotificacion.APROBACIONES,
+            TipoNotificacion.VALIDACIONES,
             destinatarios,
             {
-              titulo: `HU Aprobada: ${hu.codigo}`,
-              descripcion: `La Historia de Usuario "${hu.titulo}" ha sido aprobada y marcada como Finalizada.`,
+              titulo: `HU Validada: ${hu.codigo}`,
+              descripcion: `La Historia de Usuario "${hu.titulo}" ha sido validada y marcada como Finalizada.`,
               entidadTipo: 'HistoriaUsuario',
               entidadId: hu.id,
               proyectoId: hu.proyectoId,
@@ -1102,7 +1102,7 @@ export class HistoriaUsuarioService {
         const destinatarios = hu.asignadoA.map(a => parseInt(a.toString(), 10)).filter(n => !isNaN(n));
         if (destinatarios.length > 0) {
           await this.notificacionService.notificarMultiples(
-            TipoNotificacion.APROBACIONES,
+            TipoNotificacion.VALIDACIONES,
             destinatarios,
             {
               titulo: `HU Rechazada: ${hu.codigo}`,
