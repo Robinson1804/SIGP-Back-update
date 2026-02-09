@@ -4,6 +4,8 @@ import { NotificacionesModule } from '../notificaciones';
 import { StorageModule } from '../storage/storage.module';
 import { Personal } from '../rrhh/personal/entities/personal.entity';
 import { Proyecto } from '../poi/proyectos/entities/proyecto.entity';
+import { Actividad } from '../poi/actividades/entities/actividad.entity';
+import { Requerimiento } from '../poi/requerimientos/entities/requerimiento.entity';
 import { Archivo } from '../storage/entities/archivo.entity';
 import { Usuario } from '../auth/entities/usuario.entity';
 
@@ -126,8 +128,10 @@ import {
       HistorialCambio,
       // RRHH (para relación asignado en HU)
       Personal,
-      // POI (para relación proyecto)
+      // POI (para relación proyecto, actividad, y validación de requerimientos)
       Proyecto,
+      Actividad,
+      Requerimiento,
       // Storage (para obtener archivos de evidencias)
       Archivo,
       // Auth (para obtener nombres de usuarios en historial)

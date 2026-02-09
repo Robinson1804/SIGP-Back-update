@@ -77,4 +77,13 @@ export class ProyectoRequerimientosController {
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.requerimientoService.findByProyecto(proyectoId);
   }
+
+  @Get('funcionales')
+  findFuncionalesByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
+    return this.requerimientoService.findAll({
+      proyectoId,
+      tipo: RequerimientoTipo.FUNCIONAL,
+      activo: true,
+    });
+  }
 }

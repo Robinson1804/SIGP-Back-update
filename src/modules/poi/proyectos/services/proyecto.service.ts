@@ -10,6 +10,8 @@ import { NotificacionService } from '../../../notificaciones/services/notificaci
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 import { AccionEstrategica } from '../../../planning/acciones-estrategicas/entities/accion-estrategica.entity';
 import { CronogramaService } from '../../cronogramas/services/cronograma.service';
+import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Role } from '../../../../common/constants/roles.constant';
 
 @Injectable()
 export class ProyectoService {
@@ -18,11 +20,24 @@ export class ProyectoService {
     private readonly proyectoRepository: Repository<Proyecto>,
     @InjectRepository(AccionEstrategica)
     private readonly accionEstrategicaRepository: Repository<AccionEstrategica>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
     @Inject(forwardRef(() => CronogramaService))
     private readonly cronogramaService: CronogramaService,
   ) {}
+
+  /**
+   * Obtiene los IDs de todos los usuarios con rol PMO activos
+   */
+  private async getPmoUserIds(): Promise<number[]> {
+    const pmoUsers = await this.usuarioRepository.find({
+      where: { rol: Role.PMO, activo: true },
+      select: ['id'],
+    });
+    return pmoUsers.map(u => u.id);
+  }
 
   /**
    * Verifica si todos los campos requeridos del proyecto están completos
@@ -261,14 +276,24 @@ export class ProyectoService {
       // No lanzamos error - el proyecto se creó correctamente
     }
 
-    // Notificar al coordinador si se le asigna el proyecto
+    // Notificar al coordinador y PMOs si se le asigna el proyecto
     if (createDto.coordinadorId && createDto.coordinadorId !== userId) {
-      await this.notificacionService.notificar(
+      const destinatariosCoord: number[] = [createDto.coordinadorId];
+
+      // Agregar PMOs para que vean la asignación
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
+          destinatariosCoord.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        createDto.coordinadorId,
+        destinatariosCoord,
         {
           titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
-          descripcion: `Se te ha asignado como Coordinador del proyecto "${proyectoGuardado.nombre}"`,
+          descripcion: `Se ha asignado como Coordinador del proyecto "${proyectoGuardado.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyectoGuardado.id,
           proyectoId: proyectoGuardado.id,
@@ -277,14 +302,24 @@ export class ProyectoService {
       );
     }
 
-    // Notificar al Scrum Master si se le asigna
+    // Notificar al Scrum Master y PMOs si se le asigna
     if (createDto.scrumMasterId && createDto.scrumMasterId !== userId && createDto.scrumMasterId !== createDto.coordinadorId) {
-      await this.notificacionService.notificar(
+      const destinatariosSM: number[] = [createDto.scrumMasterId];
+
+      // Agregar PMOs
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosSM.includes(pmoId)) {
+          destinatariosSM.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        createDto.scrumMasterId,
+        destinatariosSM,
         {
           titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
-          descripcion: `Se te ha asignado como Scrum Master del proyecto "${proyectoGuardado.nombre}"`,
+          descripcion: `Se ha asignado como Scrum Master del proyecto "${proyectoGuardado.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyectoGuardado.id,
           proyectoId: proyectoGuardado.id,
@@ -533,14 +568,24 @@ export class ProyectoService {
       }
     }
 
-    // Notificar al nuevo coordinador si cambió
+    // Notificar al nuevo coordinador y PMOs si cambió
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
-      await this.notificacionService.notificar(
+      const destinatariosCoord: number[] = [updateDto.coordinadorId];
+
+      // Agregar PMOs para que vean la asignación
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
+          destinatariosCoord.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        updateDto.coordinadorId,
+        destinatariosCoord,
         {
           titulo: `Asignado como Coordinador: ${proyecto.codigo}`,
-          descripcion: `Se te ha asignado como Coordinador del proyecto "${proyecto.nombre}"`,
+          descripcion: `Se ha asignado como Coordinador del proyecto "${proyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
@@ -549,14 +594,24 @@ export class ProyectoService {
       );
     }
 
-    // Notificar al nuevo Scrum Master si cambió
+    // Notificar al nuevo Scrum Master y PMOs si cambió
     if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && updateDto.scrumMasterId !== userId) {
-      await this.notificacionService.notificar(
+      const destinatariosSM: number[] = [updateDto.scrumMasterId];
+
+      // Agregar PMOs
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosSM.includes(pmoId)) {
+          destinatariosSM.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        updateDto.scrumMasterId,
+        destinatariosSM,
         {
           titulo: `Asignado como Scrum Master: ${proyecto.codigo}`,
-          descripcion: `Se te ha asignado como Scrum Master del proyecto "${proyecto.nombre}"`,
+          descripcion: `Se ha asignado como Scrum Master del proyecto "${proyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
@@ -613,13 +668,23 @@ export class ProyectoService {
     proyecto.updatedBy = userId;
     const proyectoActualizado = await this.proyectoRepository.save(proyecto);
 
-    // Notificar al equipo sobre el cambio de estado
+    // Notificar al equipo sobre el cambio de estado (incluyendo PMO)
     const destinatarios: number[] = [];
+
+    // Agregar coordinador y scrum master
     if (proyecto.coordinadorId && proyecto.coordinadorId !== userId) {
       destinatarios.push(proyecto.coordinadorId);
     }
     if (proyecto.scrumMasterId && proyecto.scrumMasterId !== userId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
       destinatarios.push(proyecto.scrumMasterId);
+    }
+
+    // Agregar todos los PMOs (ellos ven TODOS los cambios de estado)
+    const pmoIds = await this.getPmoUserIds();
+    for (const pmoId of pmoIds) {
+      if (pmoId !== userId && !destinatarios.includes(pmoId)) {
+        destinatarios.push(pmoId);
+      }
     }
 
     if (destinatarios.length > 0) {

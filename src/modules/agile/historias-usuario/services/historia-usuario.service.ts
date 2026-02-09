@@ -8,7 +8,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
+import { Repository, IsNull, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { HistoriaUsuario } from '../entities/historia-usuario.entity';
 import { CriterioAceptacion } from '../entities/criterio-aceptacion.entity';
@@ -35,6 +35,8 @@ import { NotificacionService } from '../../../notificaciones/services/notificaci
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 import { HuEvidenciaPdfService } from './hu-evidencia-pdf.service';
 import { MinioService } from '../../../storage/services/minio.service';
+import { Requerimiento } from '../../../poi/requerimientos/entities/requerimiento.entity';
+import { RequerimientoTipo } from '../../../poi/requerimientos/enums/requerimiento.enum';
 
 @Injectable()
 export class HistoriaUsuarioService {
@@ -53,6 +55,8 @@ export class HistoriaUsuarioService {
     private readonly sprintRepository: Repository<Sprint>,
     @InjectRepository(Tarea)
     private readonly tareaRepository: Repository<Tarea>,
+    @InjectRepository(Requerimiento)
+    private readonly requerimientoRepository: Repository<Requerimiento>,
     private readonly historialCambioService: HistorialCambioService,
     private readonly epicaService: EpicaService,
     @Inject(forwardRef(() => NotificacionService))
@@ -61,6 +65,26 @@ export class HistoriaUsuarioService {
     private readonly minioService: MinioService,
     private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Valida que existan requerimientos funcionales en el proyecto antes de crear HU
+   */
+  private async validarRequerimientosFuncionales(proyectoId: number): Promise<void> {
+    const countFuncionales = await this.requerimientoRepository.count({
+      where: {
+        proyectoId,
+        tipo: RequerimientoTipo.FUNCIONAL,
+        activo: true,
+      },
+    });
+
+    if (countFuncionales === 0) {
+      throw new BadRequestException(
+        'Debe crear al menos un requerimiento funcional antes de crear una Historia de Usuario. ' +
+        'Por favor, vaya al módulo de Requerimientos y cree los requerimientos funcionales necesarios.',
+      );
+    }
+  }
 
   /**
    * Valida que las fechas de la HU estén dentro del rango del sprint
@@ -179,6 +203,121 @@ export class HistoriaUsuarioService {
           userId,
         );
       }
+
+      this.logger.log(`[Sprint ${sprint.nombre}] Estado cambiado automáticamente: ${estadoAnterior} → ${nuevoEstado}`);
+
+      // Notificar equipo sobre cambio de estado automático del sprint
+      await this.notificarAutoTransicionSprint(sprint, nuevoEstado);
+
+      // Si sprint se finalizó, verificar si todos los sprints del proyecto están completos
+      if (nuevoEstado === SprintEstado.FINALIZADO) {
+        await this.verificarSprintsCompletadosDesdeHU(sprint.proyectoId);
+      }
+    }
+  }
+
+  /**
+   * Notifica al Coordinador y Scrum Master sobre auto-transiciones de sprint.
+   */
+  private async notificarAutoTransicionSprint(sprint: Sprint, nuevoEstado: SprintEstado): Promise<void> {
+    try {
+      // Obtener proyecto usando el manager ya que no tenemos ProyectoRepository inyectado
+      const proyecto = await this.sprintRepository.manager
+        .createQueryBuilder()
+        .select(['p.id', 'p.nombre', 'p.codigo', 'p.coordinador_id', 'p.scrum_master_id'])
+        .from('poi.proyectos', 'p')
+        .where('p.id = :proyectoId', { proyectoId: sprint.proyectoId })
+        .getRawOne();
+
+      if (!proyecto) return;
+
+      const destinatarios: number[] = [];
+      if (proyecto.p_coordinador_id) destinatarios.push(proyecto.p_coordinador_id);
+      if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
+        destinatarios.push(proyecto.p_scrum_master_id);
+      }
+      if (destinatarios.length === 0) return;
+
+      const accion = nuevoEstado === SprintEstado.EN_PROGRESO ? 'iniciado' : 'finalizado';
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.SPRINTS,
+        destinatarios,
+        {
+          titulo: `Sprint ${accion} automáticamente: ${sprint.nombre}`,
+          descripcion: `El sprint "${sprint.nombre}" del proyecto "${proyecto.p_nombre}" ha sido ${accion} automáticamente.`,
+          entidadTipo: 'Sprint',
+          entidadId: sprint.id,
+          proyectoId: sprint.proyectoId,
+          urlAccion: `/poi/proyecto/detalles?id=${sprint.proyectoId}&tab=Backlog`,
+        },
+      );
+
+      this.logger.log(`[Sprint ${sprint.nombre}] Notificación de auto-transición enviada (${accion})`);
+    } catch (error) {
+      this.logger.error(`[Sprint ${sprint.nombre}] Error enviando notificación de auto-transición:`, error);
+    }
+  }
+
+  /**
+   * Verifica si todos los sprints del proyecto están finalizados
+   * y notifica al equipo para que considere finalizar el proyecto.
+   */
+  private async verificarSprintsCompletadosDesdeHU(proyectoId: number): Promise<void> {
+    try {
+      const sprintsNoFinalizados = await this.sprintRepository.count({
+        where: {
+          proyectoId,
+          estado: In([SprintEstado.POR_HACER, SprintEstado.EN_PROGRESO]),
+          activo: true,
+        },
+      });
+
+      if (sprintsNoFinalizados > 0) return;
+
+      const sprintsFinalizados = await this.sprintRepository.count({
+        where: {
+          proyectoId,
+          estado: SprintEstado.FINALIZADO,
+          activo: true,
+        },
+      });
+
+      if (sprintsFinalizados === 0) return;
+
+      const proyecto = await this.sprintRepository.manager
+        .createQueryBuilder()
+        .select(['p.id', 'p.codigo', 'p.nombre', 'p.coordinador_id', 'p.scrum_master_id', 'p.estado'])
+        .from('poi.proyectos', 'p')
+        .where('p.id = :proyectoId', { proyectoId })
+        .getRawOne();
+
+      if (!proyecto || proyecto.p_estado === 'Finalizado') return;
+
+      const destinatarios: number[] = [];
+      if (proyecto.p_coordinador_id) destinatarios.push(proyecto.p_coordinador_id);
+      if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
+        destinatarios.push(proyecto.p_scrum_master_id);
+      }
+
+      if (destinatarios.length === 0) return;
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `¿Finalizar proyecto ${proyecto.p_codigo}?`,
+          descripcion: `Todos los sprints del proyecto "${proyecto.p_nombre}" han sido completados. ¿Desea marcar el proyecto como Finalizado?`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoId,
+          proyectoId: proyectoId,
+          urlAccion: `/poi/proyecto/detalles?id=${proyectoId}&tab=Backlog`,
+        },
+      );
+
+      this.logger.log(`[Proyecto ${proyecto.p_codigo}] Todos los sprints finalizados. Notificación enviada.`);
+    } catch (error) {
+      this.logger.error(`[Proyecto ID:${proyectoId}] Error verificando sprints completados:`, error);
     }
   }
 
@@ -215,6 +354,9 @@ export class HistoriaUsuarioService {
         `Ya existe una HU con el código ${createDto.codigo} en este proyecto`,
       );
     }
+
+    // Validar que existan requerimientos funcionales
+    await this.validarRequerimientosFuncionales(createDto.proyectoId);
 
     // Validar fechas contra rango del sprint (si aplica)
     await this.validarFechasContraSprint(

@@ -27,6 +27,7 @@ export class NotificacionController {
   @Get()
   findAll(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Query('leida') leida?: string,
     @Query('tipo') tipo?: TipoNotificacion,
     @Query('page') page?: string,
@@ -43,7 +44,7 @@ export class NotificacionController {
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
       actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
       entidadId: entidadId ? parseInt(entidadId, 10) : undefined,
-    });
+    }, userRole);
   }
 
   @Get('conteo')
@@ -54,31 +55,36 @@ export class NotificacionController {
   @Get('agrupadas/proyectos')
   findGroupedByProyecto(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Query('pgdId') pgdId?: string,
   ) {
     return this.notificacionService.findGroupedByProyecto(
       usuarioId,
       pgdId ? parseInt(pgdId, 10) : undefined,
+      userRole,
     );
   }
 
   @Get('agrupadas/sprints/:proyectoId')
   findGroupedBySprint(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Param('proyectoId', ParseIntPipe) proyectoId: number,
   ) {
-    return this.notificacionService.findGroupedBySprint(usuarioId, proyectoId);
+    return this.notificacionService.findGroupedBySprint(usuarioId, proyectoId, userRole);
   }
 
   @Get('agrupadas/actividades')
   @ApiOperation({ summary: 'Obtener notificaciones agrupadas por actividad' })
   findGroupedByActividad(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Query('pgdId') pgdId?: string,
   ) {
     return this.notificacionService.findGroupedByActividad(
       usuarioId,
       pgdId ? parseInt(pgdId, 10) : undefined,
+      userRole,
     );
   }
 
@@ -86,9 +92,10 @@ export class NotificacionController {
   @ApiOperation({ summary: 'Obtener conteo de notificaciones por sección para una actividad' })
   getSeccionCountsByActividad(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Param('actividadId', ParseIntPipe) actividadId: number,
   ) {
-    return this.notificacionService.getSeccionCountsByActividad(usuarioId, actividadId);
+    return this.notificacionService.getSeccionCountsByActividad(usuarioId, actividadId, userRole);
   }
 
   /**
@@ -108,9 +115,10 @@ export class NotificacionController {
   @ApiOperation({ summary: 'Obtener conteo de notificaciones por sección para un proyecto' })
   getSeccionCountsByProyecto(
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
     @Param('proyectoId', ParseIntPipe) proyectoId: number,
   ) {
-    return this.notificacionService.getSeccionCountsByProyecto(usuarioId, proyectoId);
+    return this.notificacionService.getSeccionCountsByProyecto(usuarioId, proyectoId, userRole);
   }
 
   @Get(':id')

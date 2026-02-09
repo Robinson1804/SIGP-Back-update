@@ -5,6 +5,7 @@ import { Notificacion } from '../entities/notificacion.entity';
 import { TipoNotificacion } from '../enums/tipo-notificacion.enum';
 import { ConteoResponseDto } from '../dto/conteo-response.dto';
 import { NotificacionesGateway } from '../gateways/notificaciones.gateway';
+import { Role } from '../../../common/constants/roles.constant';
 
 interface FindAllFilters {
   leida?: boolean;
@@ -39,21 +40,30 @@ export class NotificacionService {
   async findAll(
     usuarioId: number,
     filters: FindAllFilters = {},
+    userRole?: string,
   ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     const { leida, tipo, page = 1, limit = 20, proyectoId, actividadId, entidadId } = filters;
 
     const queryBuilder = this.notificacionRepository
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.proyecto', 'proyecto')
-      .leftJoinAndSelect('n.actividad', 'actividad')
-      .where('n.destinatarioId = :usuarioId', { usuarioId })
-      .andWhere('n.activo = true');
+      .leftJoinAndSelect('n.actividad', 'actividad');
+
+    // PMO sees all notifications, others see only their own
+    if (userRole !== Role.PMO) {
+      queryBuilder.where('n.destinatarioId = :usuarioId', { usuarioId });
+    }
+
+    queryBuilder.andWhere('n.activo = true');
 
     if (leida !== undefined) {
       queryBuilder.andWhere('n.leida = :leida', { leida });
     }
 
-    if (tipo) {
+    // DESARROLLADOR only sees TAREAS notifications (forced filter)
+    if (userRole === Role.DESARROLLADOR) {
+      queryBuilder.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
+    } else if (tipo) {
       queryBuilder.andWhere('n.tipo = :tipo', { tipo });
     }
 
@@ -183,7 +193,7 @@ export class NotificacionService {
   // Agrupación por proyecto y sprint
   // ==========================================
 
-  async findGroupedByProyecto(usuarioId: number, pgdId?: number): Promise<{
+  async findGroupedByProyecto(usuarioId: number, pgdId?: number, userRole?: string): Promise<{
     proyectoId: number;
     proyectoCodigo: string;
     proyectoNombre: string;
@@ -197,9 +207,31 @@ export class NotificacionService {
       .addSelect('p.codigo', 'proyectoCodigo')
       .addSelect('p.nombre', 'proyectoNombre')
       .addSelect('COUNT(n.id)', 'total')
-      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
-      .where('n.destinatarioId = :usuarioId', { usuarioId })
-      .andWhere('n.activo = true');
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas');
+
+    // PMO sees all active projects with notifications
+    if (userRole === Role.PMO) {
+      qb.where('n.activo = true')
+        .andWhere('p.activo = true');
+    } else if (userRole === Role.COORDINADOR) {
+      // COORDINADOR sees projects where they are coordinador or scrum_master
+      qb.where('n.activo = true')
+        .andWhere('p.activo = true')
+        .andWhere('(p.coordinador_id = :usuarioId OR p.scrum_master_id = :usuarioId)', { usuarioId });
+    } else if (userRole === Role.SCRUM_MASTER) {
+      // SCRUM_MASTER sees projects where they are scrum_master
+      qb.where('n.activo = true')
+        .andWhere('p.activo = true')
+        .andWhere('p.scrum_master_id = :usuarioId', { usuarioId });
+    } else {
+      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+        .andWhere('n.activo = true');
+
+      // DESARROLLADOR only sees TAREAS notifications
+      if (userRole === Role.DESARROLLADOR) {
+        qb.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
+      }
+    }
 
     if (pgdId) {
       qb.innerJoin('p.accionEstrategica', 'ae')
@@ -228,7 +260,7 @@ export class NotificacionService {
    * Get notification counts by section for a specific project (PMO view).
    * Sections: Asignaciones (PROYECTOS), Sprints, Aprobaciones, Validaciones
    */
-  async getSeccionCountsByProyecto(usuarioId: number, proyectoId: number): Promise<{
+  async getSeccionCountsByProyecto(usuarioId: number, proyectoId: number, userRole?: string): Promise<{
     asignaciones: { total: number; noLeidas: number };
     sprints: { total: number; noLeidas: number };
     aprobaciones: { total: number; noLeidas: number };
@@ -245,13 +277,18 @@ export class NotificacionService {
 
     await Promise.all(
       secciones.map(async ({ key, tipo }) => {
+        // PMO, COORDINADOR, and SCRUM_MASTER see all notifications for the project
+        const whereTotal = (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER)
+          ? { proyectoId, tipo, activo: true }
+          : { destinatarioId: usuarioId, proyectoId, tipo, activo: true };
+
+        const whereNoLeidas = (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER)
+          ? { proyectoId, tipo, activo: true, leida: false }
+          : { destinatarioId: usuarioId, proyectoId, tipo, activo: true, leida: false };
+
         const [total, noLeidas] = await Promise.all([
-          this.notificacionRepository.count({
-            where: { destinatarioId: usuarioId, proyectoId, tipo, activo: true },
-          }),
-          this.notificacionRepository.count({
-            where: { destinatarioId: usuarioId, proyectoId, tipo, activo: true, leida: false },
-          }),
+          this.notificacionRepository.count({ where: whereTotal }),
+          this.notificacionRepository.count({ where: whereNoLeidas }),
         ]);
         result[key] = { total, noLeidas };
       }),
@@ -268,7 +305,7 @@ export class NotificacionService {
   /**
    * Group notifications by activity (PMO view - Actividades tab).
    */
-  async findGroupedByActividad(usuarioId: number, pgdId?: number): Promise<{
+  async findGroupedByActividad(usuarioId: number, pgdId?: number, userRole?: string): Promise<{
     actividadId: number;
     actividadCodigo: string;
     actividadNombre: string;
@@ -282,10 +319,24 @@ export class NotificacionService {
       .addSelect('a.codigo', 'actividadCodigo')
       .addSelect('a.nombre', 'actividadNombre')
       .addSelect('COUNT(n.id)', 'total')
-      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
-      .where('n.destinatarioId = :usuarioId', { usuarioId })
-      .andWhere('n.activo = true')
-      .andWhere('n.actividadId IS NOT NULL');
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas');
+
+    // PMO sees all active activities with notifications
+    if (userRole === Role.PMO) {
+      qb.where('n.activo = true')
+        .andWhere('n.actividadId IS NOT NULL')
+        .andWhere('a.activo = true');
+    } else if (userRole === Role.COORDINADOR) {
+      // COORDINADOR sees activities where they are coordinador or gestor
+      qb.where('n.activo = true')
+        .andWhere('n.actividadId IS NOT NULL')
+        .andWhere('a.activo = true')
+        .andWhere('(a.coordinador_id = :usuarioId OR a.gestor_id = :usuarioId)', { usuarioId });
+    } else {
+      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+        .andWhere('n.activo = true')
+        .andWhere('n.actividadId IS NOT NULL');
+    }
 
     if (pgdId) {
       qb.innerJoin('a.accionEstrategica', 'ae')
@@ -314,7 +365,7 @@ export class NotificacionService {
    * Get notification counts by section for a specific activity (PMO view).
    * Sections: Asignaciones (activity assignments), Tareas (task notifications)
    */
-  async getSeccionCountsByActividad(usuarioId: number, actividadId: number): Promise<{
+  async getSeccionCountsByActividad(usuarioId: number, actividadId: number, userRole?: string): Promise<{
     asignaciones: { total: number; noLeidas: number };
     tareas: { total: number; noLeidas: number };
   }> {
@@ -327,13 +378,18 @@ export class NotificacionService {
 
     await Promise.all(
       secciones.map(async ({ key, tipo }) => {
+        // PMO and COORDINADOR see all notifications for the activity
+        const whereTotal = (userRole === Role.PMO || userRole === Role.COORDINADOR)
+          ? { actividadId, tipo, activo: true }
+          : { destinatarioId: usuarioId, actividadId, tipo, activo: true };
+
+        const whereNoLeidas = (userRole === Role.PMO || userRole === Role.COORDINADOR)
+          ? { actividadId, tipo, activo: true, leida: false }
+          : { destinatarioId: usuarioId, actividadId, tipo, activo: true, leida: false };
+
         const [total, noLeidas] = await Promise.all([
-          this.notificacionRepository.count({
-            where: { destinatarioId: usuarioId, actividadId, tipo, activo: true },
-          }),
-          this.notificacionRepository.count({
-            where: { destinatarioId: usuarioId, actividadId, tipo, activo: true, leida: false },
-          }),
+          this.notificacionRepository.count({ where: whereTotal }),
+          this.notificacionRepository.count({ where: whereNoLeidas }),
         ]);
         result[key] = { total, noLeidas };
       }),
@@ -366,23 +422,33 @@ export class NotificacionService {
     return { eliminadas: result.affected || 0 };
   }
 
-  async findGroupedBySprint(usuarioId: number, proyectoId: number): Promise<{
+  async findGroupedBySprint(usuarioId: number, proyectoId: number, userRole?: string): Promise<{
     sprintId: number;
     sprintNombre: string;
     total: number;
     noLeidas: number;
   }[]> {
-    const results = await this.notificacionRepository
+    const qb = this.notificacionRepository
       .createQueryBuilder('n')
       .innerJoin('agile.sprints', 's', 's.id = n.entidadId')
       .select('s.id', 'sprintId')
       .addSelect('s.nombre', 'sprintNombre')
       .addSelect('COUNT(n.id)', 'total')
-      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas')
-      .where('n.destinatarioId = :usuarioId', { usuarioId })
-      .andWhere('n.proyectoId = :proyectoId', { proyectoId })
-      .andWhere('n.activo = true')
-      .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.SPRINTS })
+      .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas');
+
+    // PMO sees all sprint notifications for the project
+    if (userRole === Role.PMO) {
+      qb.where('n.proyectoId = :proyectoId', { proyectoId })
+        .andWhere('n.activo = true')
+        .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.SPRINTS });
+    } else {
+      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+        .andWhere('n.proyectoId = :proyectoId', { proyectoId })
+        .andWhere('n.activo = true')
+        .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.SPRINTS });
+    }
+
+    const results = await qb
       .groupBy('s.id')
       .addGroupBy('s.nombre')
       .orderBy('MAX(n.createdAt)', 'DESC')

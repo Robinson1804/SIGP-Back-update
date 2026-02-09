@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Actividad } from '../entities/actividad.entity';
@@ -7,6 +7,10 @@ import { UpdateActividadDto } from '../dto/update-actividad.dto';
 import { ActividadEstado } from '../enums/actividad-estado.enum';
 import { Tarea } from '../../../agile/tareas/entities/tarea.entity';
 import { TareaEstado, TareaTipo } from '../../../agile/tareas/enums/tarea.enum';
+import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
+import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Role } from '../../../../common/constants/roles.constant';
 
 export interface ActividadMetricas {
   leadTime: number | null;       // Días promedio desde creación hasta completado
@@ -27,7 +31,22 @@ export class ActividadService {
     private readonly actividadRepository: Repository<Actividad>,
     @InjectRepository(Tarea)
     private readonly tareaRepository: Repository<Tarea>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
+    @Inject(forwardRef(() => NotificacionService))
+    private readonly notificacionService: NotificacionService,
   ) {}
+
+  /**
+   * Obtiene los IDs de todos los usuarios con rol PMO activos
+   */
+  private async getPmoUserIds(): Promise<number[]> {
+    const pmoUsers = await this.usuarioRepository.find({
+      where: { rol: Role.PMO, activo: true },
+      select: ['id'],
+    });
+    return pmoUsers.map(u => u.id);
+  }
 
   /**
    * Genera el siguiente código de actividad disponible (ACT N°X)
@@ -76,7 +95,61 @@ export class ActividadService {
       updatedBy: userId,
     });
 
-    return this.actividadRepository.save(actividad);
+    const actividadGuardada = await this.actividadRepository.save(actividad);
+
+    // Notificar al coordinador y PMOs si se le asigna la actividad
+    if (createDto.coordinadorId && createDto.coordinadorId !== userId) {
+      const destinatariosCoord: number[] = [createDto.coordinadorId];
+
+      // Agregar PMOs para que vean la asignación
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
+          destinatariosCoord.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        destinatariosCoord,
+        {
+          titulo: `Actividad asignada ${actividadGuardada.codigo}: ${actividadGuardada.nombre}`,
+          descripcion: `Se ha asignado como Coordinador de la actividad "${actividadGuardada.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: actividadGuardada.id,
+          actividadId: actividadGuardada.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividadGuardada.id}`,
+        },
+      );
+    }
+
+    // Notificar al gestor y PMOs si se le asigna
+    if (createDto.gestorId && createDto.gestorId !== userId && createDto.gestorId !== createDto.coordinadorId) {
+      const destinatariosGestor: number[] = [createDto.gestorId];
+
+      // Agregar PMOs
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosGestor.includes(pmoId)) {
+          destinatariosGestor.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        destinatariosGestor,
+        {
+          titulo: `Actividad asignada ${actividadGuardada.codigo}: ${actividadGuardada.nombre}`,
+          descripcion: `Se ha asignado como Gestor de la actividad "${actividadGuardada.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: actividadGuardada.id,
+          actividadId: actividadGuardada.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividadGuardada.id}`,
+        },
+      );
+    }
+
+    return actividadGuardada;
   }
 
   async findAll(filters?: {
@@ -151,8 +224,67 @@ export class ActividadService {
 
   async update(id: number, updateDto: UpdateActividadDto, userId?: number): Promise<Actividad> {
     const actividad = await this.findOne(id);
+
+    // Capturar valores anteriores para notificaciones
+    const coordinadorAnterior = actividad.coordinadorId;
+    const gestorAnterior = actividad.gestorId;
+
     Object.assign(actividad, updateDto, { updatedBy: userId });
-    return this.actividadRepository.save(actividad);
+    const actividadActualizada = await this.actividadRepository.save(actividad);
+
+    // Notificar al nuevo coordinador y PMOs si cambió
+    if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
+      const destinatariosCoord: number[] = [updateDto.coordinadorId];
+
+      // Agregar PMOs para que vean la asignación
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
+          destinatariosCoord.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        destinatariosCoord,
+        {
+          titulo: `Actividad asignada ${actividadActualizada.codigo}: ${actividadActualizada.nombre}`,
+          descripcion: `Se ha asignado como Coordinador de la actividad "${actividadActualizada.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: actividadActualizada.id,
+          actividadId: actividadActualizada.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividadActualizada.id}`,
+        },
+      );
+    }
+
+    // Notificar al nuevo gestor y PMOs si cambió
+    if (updateDto.gestorId && updateDto.gestorId !== gestorAnterior && updateDto.gestorId !== userId) {
+      const destinatariosGestor: number[] = [updateDto.gestorId];
+
+      // Agregar PMOs
+      const pmoIds = await this.getPmoUserIds();
+      for (const pmoId of pmoIds) {
+        if (pmoId !== userId && !destinatariosGestor.includes(pmoId)) {
+          destinatariosGestor.push(pmoId);
+        }
+      }
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        destinatariosGestor,
+        {
+          titulo: `Actividad asignada ${actividadActualizada.codigo}: ${actividadActualizada.nombre}`,
+          descripcion: `Se ha asignado como Gestor de la actividad "${actividadActualizada.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: actividadActualizada.id,
+          actividadId: actividadActualizada.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividadActualizada.id}`,
+        },
+      );
+    }
+
+    return actividadActualizada;
   }
 
   async remove(id: number, userId?: number): Promise<Actividad> {

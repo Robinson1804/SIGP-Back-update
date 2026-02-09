@@ -9,13 +9,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository, Not } from 'typeorm';
+import { Repository, Not, In } from 'typeorm';
 import { Tarea, EvidenciaTarea, TareaAsignado } from '../entities';
 import { Subtarea } from '../../subtareas/entities/subtarea.entity';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 import { Sprint } from '../../sprints/entities/sprint.entity';
 import { SprintEstado } from '../../sprints/enums/sprint.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { Personal } from '../../../rrhh/personal/entities/personal.entity';
 import { CreateTareaDto } from '../dto/create-tarea.dto';
@@ -58,6 +59,8 @@ export class TareaService {
     private readonly sprintRepository: Repository<Sprint>,
     @InjectRepository(Proyecto)
     private readonly proyectoRepository: Repository<Proyecto>,
+    @InjectRepository(Actividad)
+    private readonly actividadRepository: Repository<Actividad>,
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
     @InjectRepository(Personal)
@@ -145,6 +148,15 @@ export class TareaService {
       const asignados = (hu.asignadoA || []).map(id => Number(id));
       if (!personalId || !asignados.includes(personalId)) {
         throw new ForbiddenException('Solo puedes crear tareas en historias de usuario donde estás asignado como responsable');
+      }
+
+      // DESARROLLADOR solo puede asignarse a sí mismo
+      if (createDto.asignadosIds && createDto.asignadosIds.length > 0) {
+        if (createDto.asignadosIds.some(id => id !== userId)) {
+          throw new ForbiddenException('Como Desarrollador, solo puedes asignarte a ti mismo');
+        }
+      } else if (createDto.asignadoA && createDto.asignadoA !== userId) {
+        throw new ForbiddenException('Como Desarrollador, solo puedes asignarte a ti mismo');
       }
     }
 
@@ -237,6 +249,45 @@ export class TareaService {
       );
     }
 
+    // Notificar al coordinador/gestor cuando se crea una tarea KANBAN en su actividad
+    if (tareaGuardada.tipo === TareaTipo.KANBAN && tareaGuardada.actividadId) {
+      const actividad = await this.actividadRepository.findOne({
+        where: { id: tareaGuardada.actividadId },
+        select: ['id', 'codigo', 'nombre', 'coordinadorId', 'gestorId'],
+      });
+
+      if (actividad) {
+        const urlAccionKanban = await this.buildTareaUrlAccion(tareaGuardada);
+        const destinatariosGestores: number[] = [];
+
+        // Agregar coordinador si existe y no es el creador ni el asignado
+        if (actividad.coordinadorId && actividad.coordinadorId !== userId && actividad.coordinadorId !== asignadoPrincipal) {
+          destinatariosGestores.push(actividad.coordinadorId);
+        }
+
+        // Agregar gestor si existe y no es el creador ni el asignado ni el coordinador
+        if (actividad.gestorId && actividad.gestorId !== userId && actividad.gestorId !== asignadoPrincipal && actividad.gestorId !== actividad.coordinadorId) {
+          destinatariosGestores.push(actividad.gestorId);
+        }
+
+        // Notificar a coordinador/gestor
+        if (destinatariosGestores.length > 0) {
+          await this.notificacionService.notificarMultiples(
+            TipoNotificacion.TAREAS,
+            destinatariosGestores,
+            {
+              titulo: `Nueva tarea creada ${tareaGuardada.codigo}: ${tareaGuardada.nombre}`,
+              descripcion: `Se ha creado una nueva tarea en la actividad "${actividad.nombre}" - Estado: ${tareaGuardada.estado}`,
+              entidadTipo: 'Tarea',
+              entidadId: tareaGuardada.id,
+              actividadId: tareaGuardada.actividadId,
+              urlAccion: urlAccionKanban,
+            },
+          );
+        }
+      }
+    }
+
     // Registrar creacion en historial
     if (userId) {
       await this.historialCambioService.registrarCreacion(
@@ -245,6 +296,11 @@ export class TareaService {
         userId,
         { codigo: tareaGuardada.codigo, nombre: tareaGuardada.nombre },
       );
+    }
+
+    // Auto-transition: HU pasa a "En progreso" cuando se crea una tarea SCRUM
+    if (tareaGuardada.tipo === TareaTipo.SCRUM && tareaGuardada.historiaUsuarioId) {
+      await this.autoTransicionHUAlCrearTarea(tareaGuardada.historiaUsuarioId, userId);
     }
 
     return tareaGuardada;
@@ -349,19 +405,19 @@ export class TareaService {
       throw new ForbiddenException('Los implementadores no pueden editar tareas, solo pueden ver detalles');
     }
 
-    // DESARROLLADOR solo puede editar tareas en HUs donde está asignado
-    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
-      const hu = await this.historiaUsuarioRepository.findOne({
-        where: { id: tarea.historiaUsuarioId },
-        select: ['id', 'asignadoA'],
-      });
-      const personal = await this.personalRepository.findOne({
-        where: { usuarioId: userId },
-        select: ['id'],
-      });
-      const asignados = (hu?.asignadoA || []).map(id => Number(id));
-      if (!personal?.id || !asignados.includes(personal.id)) {
-        throw new ForbiddenException('Solo puedes editar tareas en historias de usuario donde estás asignado como responsable');
+    // DESARROLLADOR solo puede editar tareas donde es el responsable
+    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && userId) {
+      if (tarea.asignadoA !== userId) {
+        throw new ForbiddenException('Solo puedes editar tareas donde eres el responsable');
+      }
+
+      // DESARROLLADOR no puede reasignar a otra persona
+      if (updateDto.asignadosIds && updateDto.asignadosIds.length > 0) {
+        if (updateDto.asignadosIds.some(id => id !== userId)) {
+          throw new ForbiddenException('Como Desarrollador, no puedes reasignar tareas a otras personas');
+        }
+      } else if (updateDto.asignadoA !== undefined && updateDto.asignadoA !== userId) {
+        throw new ForbiddenException('Como Desarrollador, no puedes reasignar tareas a otras personas');
       }
     }
 
@@ -624,6 +680,48 @@ export class TareaService {
       );
     }
 
+    // Notificar al coordinador/gestor cuando una tarea KANBAN cambia de estado
+    if (estadoAnterior !== cambiarEstadoDto.estado && tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
+      const actividad = await this.actividadRepository.findOne({
+        where: { id: tarea.actividadId },
+        select: ['id', 'codigo', 'nombre', 'coordinadorId', 'gestorId'],
+      });
+
+      if (actividad) {
+        const mensajeEstadoGestores = cambiarEstadoDto.estado === TareaEstado.FINALIZADO
+          ? 'ha sido completada'
+          : `ha sido movida a ${cambiarEstadoDto.estado}`;
+
+        const destinatariosGestoresEstado: number[] = [];
+
+        // Agregar coordinador si existe y no es el que cambió el estado ni el asignado
+        if (actividad.coordinadorId && actividad.coordinadorId !== userId && actividad.coordinadorId !== tarea.asignadoA) {
+          destinatariosGestoresEstado.push(actividad.coordinadorId);
+        }
+
+        // Agregar gestor si existe y no es el que cambió el estado ni el asignado ni el coordinador
+        if (actividad.gestorId && actividad.gestorId !== userId && actividad.gestorId !== tarea.asignadoA && actividad.gestorId !== actividad.coordinadorId) {
+          destinatariosGestoresEstado.push(actividad.gestorId);
+        }
+
+        // Notificar a coordinador/gestor
+        if (destinatariosGestoresEstado.length > 0) {
+          await this.notificacionService.notificarMultiples(
+            TipoNotificacion.TAREAS,
+            destinatariosGestoresEstado,
+            {
+              titulo: `Tarea ${tarea.codigo}: ${tarea.nombre} ha sido modificada`,
+              descripcion: `La tarea "${tarea.nombre}" ${mensajeEstadoGestores} - Estado: ${cambiarEstadoDto.estado}`,
+              entidadTipo: 'Tarea',
+              entidadId: tarea.id,
+              actividadId: tarea.actividadId,
+              urlAccion: await this.buildTareaUrlAccion(tarea),
+            },
+          );
+        }
+      }
+    }
+
     // Emitir evento WebSocket para actualizar tableros
     const proyectoId = tarea.historiaUsuario?.proyecto?.id || tarea.actividad?.id;
     if (proyectoId) {
@@ -742,19 +840,10 @@ export class TareaService {
       throw new ForbiddenException('Los implementadores no pueden eliminar tareas');
     }
 
-    // DESARROLLADOR solo puede eliminar tareas en HUs donde está asignado
-    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId && userId) {
-      const hu = await this.historiaUsuarioRepository.findOne({
-        where: { id: tarea.historiaUsuarioId },
-        select: ['id', 'asignadoA'],
-      });
-      const personal = await this.personalRepository.findOne({
-        where: { usuarioId: userId },
-        select: ['id'],
-      });
-      const asignados = (hu?.asignadoA || []).map(id => Number(id));
-      if (!personal?.id || !asignados.includes(personal.id)) {
-        throw new ForbiddenException('Solo puedes eliminar tareas en historias de usuario donde estás asignado como responsable');
+    // DESARROLLADOR solo puede eliminar tareas donde es el responsable
+    if (userRole === Role.DESARROLLADOR && tarea.tipo === TareaTipo.SCRUM && userId) {
+      if (tarea.asignadoA !== userId) {
+        throw new ForbiddenException('Solo puedes eliminar tareas donde eres el responsable');
       }
     }
 
@@ -1120,11 +1209,51 @@ export class TareaService {
   }
 
   /**
+   * Auto-transición de HU al crear una tarea SCRUM:
+   * Si la HU está en "Por hacer", pasa a "En progreso" automáticamente.
+   */
+  private async autoTransicionHUAlCrearTarea(historiaUsuarioId: number, userId?: number): Promise<void> {
+    const hu = await this.historiaUsuarioRepository.findOne({
+      where: { id: historiaUsuarioId, activo: true },
+    });
+
+    if (!hu) return;
+
+    // Solo transicionar si está en "Por hacer"
+    if (hu.estado !== HuEstado.POR_HACER) return;
+
+    const estadoAnterior = hu.estado;
+
+    await this.historiaUsuarioRepository.update(historiaUsuarioId, {
+      estado: HuEstado.EN_PROGRESO,
+      updatedBy: userId,
+    });
+
+    // Registrar cambio de estado en historial
+    if (userId) {
+      await this.historialCambioService.registrarCambioEstado(
+        HistorialEntidadTipo.HISTORIA_USUARIO,
+        historiaUsuarioId,
+        estadoAnterior,
+        HuEstado.EN_PROGRESO,
+        userId,
+      );
+    }
+
+    console.log(`[HU-${hu.codigo}] Tarea creada → Estado cambiado automáticamente a "En progreso".`);
+
+    // Recalcular estado del sprint (puede auto-iniciar si estaba en "Por hacer")
+    if (hu.sprintId) {
+      await this.recalcularEstadoSprintDesdeTarea(hu.sprintId, userId);
+    }
+  }
+
+  /**
    * Actualiza el estado de la Historia de Usuario según el estado de sus tareas
    * Lógica:
    * - Si alguna tarea pasa a "Finalizado" → HU pasa a "En progreso" (si tiene más de 1 tarea)
-   * - Si TODAS las tareas están "Finalizado" con evidencias → HU pasa a "En revisión" y se genera PDF
-   * - Si solo tiene 1 tarea y está "Finalizado" con evidencia → HU pasa a "En revisión" y se genera PDF
+   * - Si TODAS las tareas están "Finalizado" → HU pasa a "En revisión" y se genera PDF
+   * - Si solo tiene 1 tarea y está "Finalizado" → HU pasa a "En revisión" y se genera PDF
    */
   async actualizarEstadoHUSegunTareas(historiaUsuarioId: number, userId?: number): Promise<void> {
     // Obtener la HU
@@ -1153,116 +1282,102 @@ export class TareaService {
     const tareasFinalizadas = tareas.filter(t => t.estado === TareaEstado.FINALIZADO);
     const todasFinalizadas = tareasFinalizadas.length === tareas.length;
 
-    // Si todas las tareas están finalizadas, verificar si todas tienen evidencias
+    // Si todas las tareas están finalizadas → HU pasa a "En revisión"
+    // (Las tareas SCRUM ya requieren evidencia para finalizarse, no es necesario verificar de nuevo)
     if (todasFinalizadas) {
-      let todasConEvidencia = true;
+      const estadoAnterior = hu.estado;
 
-      for (const tarea of tareas) {
-        const evidencias = await this.evidenciaRepository.count({
-          where: { tareaId: tarea.id },
+      // Obtener proyecto para el PDF y notificación
+      const proyecto = await this.proyectoRepository.findOne({
+        where: { id: hu.proyectoId },
+      });
+
+      // Obtener sprint (si existe) para el PDF
+      let sprintNombre: string | null = null;
+      if (hu.sprintId) {
+        const huConSprint = await this.historiaUsuarioRepository.findOne({
+          where: { id: historiaUsuarioId },
+          relations: ['sprint'],
         });
-        if (evidencias === 0) {
-          todasConEvidencia = false;
-          break;
-        }
+        sprintNombre = huConSprint?.sprint?.nombre || null;
       }
 
-      if (todasConEvidencia) {
-        // Todas las tareas finalizadas con evidencias → HU pasa a "En revisión"
-        const estadoAnterior = hu.estado;
+      // Generar PDF consolidado de evidencias
+      let pdfUrl = '';
+      try {
+        const pdfBuffer = await this.huEvidenciaPdfService.generateEvidenciasPdf(
+          historiaUsuarioId,
+          { codigo: proyecto?.codigo || '', nombre: proyecto?.nombre || '' },
+          sprintNombre ? { nombre: sprintNombre } : null,
+        );
 
-        // Obtener proyecto para el PDF y notificación
-        const proyecto = await this.proyectoRepository.findOne({
-          where: { id: hu.proyectoId },
-        });
+        // Subir PDF a MinIO
+        const bucketName = this.configService.get('minio.buckets.documentos', 'sigp-documentos');
+        const objectKey = `evidencias/hu/${hu.codigo}_evidencias_${Date.now()}.pdf`;
 
-        // Obtener sprint (si existe) para el PDF
-        let sprintNombre: string | null = null;
-        if (hu.sprintId) {
-          const huConSprint = await this.historiaUsuarioRepository.findOne({
-            where: { id: historiaUsuarioId },
-            relations: ['sprint'],
-          });
-          sprintNombre = huConSprint?.sprint?.nombre || null;
-        }
+        await this.minioService.putObject(
+          bucketName,
+          objectKey,
+          pdfBuffer,
+          pdfBuffer.length,
+          { 'Content-Type': 'application/pdf' },
+        );
 
-        // Generar PDF consolidado de evidencias
-        let pdfUrl = '';
+        // Generar URL de descarga
+        pdfUrl = await this.minioService.getPresignedGetUrl(bucketName, objectKey, 7 * 24 * 60 * 60); // 7 días
+
+        console.log(`[HU-${hu.codigo}] PDF de evidencias generado: ${objectKey}`);
+      } catch (error) {
+        console.error(`[HU-${hu.codigo}] Error generando PDF de evidencias:`, error);
+        // Continuar aunque falle la generación del PDF
+      }
+
+      // Actualizar HU con estado "En revisión" y URL del PDF
+      await this.historiaUsuarioRepository.update(historiaUsuarioId, {
+        estado: HuEstado.EN_REVISION,
+        updatedBy: userId,
+        documentoEvidenciasUrl: pdfUrl || null,
+      });
+
+      // Registrar cambio de estado en historial
+      if (userId) {
+        await this.historialCambioService.registrarCambioEstado(
+          HistorialEntidadTipo.HISTORIA_USUARIO,
+          historiaUsuarioId,
+          estadoAnterior,
+          HuEstado.EN_REVISION,
+          userId,
+        );
+      }
+
+      // Enviar notificación al SCRUM_MASTER del proyecto
+      if (proyecto?.scrumMasterId) {
         try {
-          const pdfBuffer = await this.huEvidenciaPdfService.generateEvidenciasPdf(
-            historiaUsuarioId,
-            { codigo: proyecto?.codigo || '', nombre: proyecto?.nombre || '' },
-            sprintNombre ? { nombre: sprintNombre } : null,
+          await this.notificacionService.notificar(
+            TipoNotificacion.VALIDACIONES,
+            proyecto.scrumMasterId,
+            {
+              titulo: `HU en Revisión: ${hu.codigo}`,
+              descripcion: `La Historia de Usuario "${hu.titulo}" del proyecto "${proyecto.nombre}" tiene todas sus tareas finalizadas y está pendiente de validación.`,
+              entidadTipo: 'HistoriaUsuario',
+              entidadId: hu.id,
+              proyectoId: proyecto.id,
+              urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}&tab=Backlog`,
+            },
           );
-
-          // Subir PDF a MinIO
-          const bucketName = this.configService.get('minio.buckets.documentos', 'sigp-documentos');
-          const objectKey = `evidencias/hu/${hu.codigo}_evidencias_${Date.now()}.pdf`;
-
-          await this.minioService.putObject(
-            bucketName,
-            objectKey,
-            pdfBuffer,
-            pdfBuffer.length,
-            { 'Content-Type': 'application/pdf' },
-          );
-
-          // Generar URL de descarga
-          pdfUrl = await this.minioService.getPresignedGetUrl(bucketName, objectKey, 7 * 24 * 60 * 60); // 7 días
-
-          console.log(`[HU-${hu.codigo}] PDF de evidencias generado: ${objectKey}`);
+          console.log(`[HU-${hu.codigo}] Notificación enviada a SCRUM_MASTER (ID: ${proyecto.scrumMasterId})`);
         } catch (error) {
-          console.error(`[HU-${hu.codigo}] Error generando PDF de evidencias:`, error);
-          // Continuar aunque falle la generación del PDF
+          console.error(`[HU-${hu.codigo}] Error enviando notificación a SCRUM_MASTER:`, error);
         }
-
-        // Actualizar HU con estado "En revisión" y URL del PDF
-        await this.historiaUsuarioRepository.update(historiaUsuarioId, {
-          estado: HuEstado.EN_REVISION,
-          updatedBy: userId,
-          documentoEvidenciasUrl: pdfUrl || null,
-        });
-
-        // Registrar cambio de estado en historial
-        if (userId) {
-          await this.historialCambioService.registrarCambioEstado(
-            HistorialEntidadTipo.HISTORIA_USUARIO,
-            historiaUsuarioId,
-            estadoAnterior,
-            HuEstado.EN_REVISION,
-            userId,
-          );
-        }
-
-        // Enviar notificación al SCRUM_MASTER del proyecto
-        if (proyecto?.scrumMasterId) {
-          try {
-            await this.notificacionService.notificar(
-              TipoNotificacion.VALIDACIONES,
-              proyecto.scrumMasterId,
-              {
-                titulo: `HU en Revisión: ${hu.codigo}`,
-                descripcion: `La Historia de Usuario "${hu.titulo}" del proyecto "${proyecto.nombre}" tiene todas sus tareas finalizadas con evidencias y está pendiente de validación.`,
-                entidadTipo: 'HistoriaUsuario',
-                entidadId: hu.id,
-                proyectoId: proyecto.id,
-                urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}&tab=Backlog`,
-              },
-            );
-            console.log(`[HU-${hu.codigo}] Notificación enviada a SCRUM_MASTER (ID: ${proyecto.scrumMasterId})`);
-          } catch (error) {
-            console.error(`[HU-${hu.codigo}] Error enviando notificación a SCRUM_MASTER:`, error);
-          }
-        }
-
-        console.log(`[HU-${hu.codigo}] Todas las tareas finalizadas con evidencias. Estado cambiado a "En revisión".`);
-
-        // Recalcular estado del sprint (auto-start si estaba en Por hacer)
-        if (hu.sprintId) {
-          await this.recalcularEstadoSprintDesdeTarea(hu.sprintId, userId);
-        }
-        return;
       }
+
+      console.log(`[HU-${hu.codigo}] Todas las tareas finalizadas. Estado cambiado a "En revisión".`);
+
+      // Recalcular estado del sprint (auto-start si estaba en Por hacer)
+      if (hu.sprintId) {
+        await this.recalcularEstadoSprintDesdeTarea(hu.sprintId, userId);
+      }
+      return;
     }
 
     // Si hay alguna tarea finalizada pero no todas, y la HU está en "Por hacer"
@@ -1354,6 +1469,111 @@ export class TareaService {
       }
 
       console.log(`[Sprint ${sprint.nombre}] Estado cambiado automáticamente: ${estadoAnterior} → ${nuevoEstado}`);
+
+      // Notificar equipo sobre cambio de estado automático del sprint
+      await this.notificarAutoTransicionSprint(sprint, nuevoEstado);
+
+      // Si sprint se finalizó, verificar si todos los sprints del proyecto están completos
+      if (nuevoEstado === SprintEstado.FINALIZADO) {
+        await this.verificarSprintsCompletadosDesdeAutoTransicion(sprint.proyectoId);
+      }
+    }
+  }
+
+  /**
+   * Notifica al Coordinador y Scrum Master sobre auto-transiciones de sprint.
+   */
+  private async notificarAutoTransicionSprint(sprint: Sprint, nuevoEstado: SprintEstado): Promise<void> {
+    try {
+      const proyecto = await this.proyectoRepository.findOne({
+        where: { id: sprint.proyectoId },
+      });
+      if (!proyecto) return;
+
+      const destinatarios: number[] = [];
+      if (proyecto.coordinadorId) destinatarios.push(proyecto.coordinadorId);
+      if (proyecto.scrumMasterId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+        destinatarios.push(proyecto.scrumMasterId);
+      }
+      if (destinatarios.length === 0) return;
+
+      const accion = nuevoEstado === SprintEstado.EN_PROGRESO ? 'iniciado' : 'finalizado';
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.SPRINTS,
+        destinatarios,
+        {
+          titulo: `Sprint ${accion} automáticamente: ${sprint.nombre}`,
+          descripcion: `El sprint "${sprint.nombre}" del proyecto "${proyecto.nombre}" ha sido ${accion} automáticamente.`,
+          entidadTipo: 'Sprint',
+          entidadId: sprint.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}&tab=Backlog`,
+        },
+      );
+
+      console.log(`[Sprint ${sprint.nombre}] Notificación de auto-transición enviada (${accion})`);
+    } catch (error) {
+      console.error(`[Sprint ${sprint.nombre}] Error enviando notificación de auto-transición:`, error);
+    }
+  }
+
+  /**
+   * Verifica si todos los sprints del proyecto están finalizados
+   * y notifica al equipo para que considere finalizar el proyecto.
+   */
+  private async verificarSprintsCompletadosDesdeAutoTransicion(proyectoId: number): Promise<void> {
+    try {
+      const sprintsNoFinalizados = await this.sprintRepository.count({
+        where: {
+          proyectoId,
+          estado: In([SprintEstado.POR_HACER, SprintEstado.EN_PROGRESO]),
+          activo: true,
+        },
+      });
+
+      if (sprintsNoFinalizados > 0) return;
+
+      const sprintsFinalizados = await this.sprintRepository.count({
+        where: {
+          proyectoId,
+          estado: SprintEstado.FINALIZADO,
+          activo: true,
+        },
+      });
+
+      if (sprintsFinalizados === 0) return;
+
+      const proyecto = await this.proyectoRepository.findOne({
+        where: { id: proyectoId },
+      });
+
+      if (!proyecto || proyecto.estado === 'Finalizado') return;
+
+      const destinatarios: number[] = [];
+      if (proyecto.coordinadorId) destinatarios.push(proyecto.coordinadorId);
+      if (proyecto.scrumMasterId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+        destinatarios.push(proyecto.scrumMasterId);
+      }
+
+      if (destinatarios.length === 0) return;
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `¿Finalizar proyecto ${proyecto.codigo}?`,
+          descripcion: `Todos los sprints del proyecto "${proyecto.nombre}" han sido completados. ¿Desea marcar el proyecto como Finalizado?`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoId,
+          proyectoId: proyectoId,
+          urlAccion: `/poi/proyecto/detalles?id=${proyectoId}&tab=Backlog`,
+        },
+      );
+
+      console.log(`[Proyecto ${proyecto.codigo}] Todos los sprints finalizados. Notificación enviada.`);
+    } catch (error) {
+      console.error(`[Proyecto ID:${proyectoId}] Error verificando sprints completados:`, error);
     }
   }
 }
