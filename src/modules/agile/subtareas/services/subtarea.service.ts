@@ -15,6 +15,8 @@ import { CreateSubtareaDto } from '../dto/create-subtarea.dto';
 import { UpdateSubtareaDto } from '../dto/update-subtarea.dto';
 import { CreateEvidenciaSubtareaDto } from '../dto/create-evidencia-subtarea.dto';
 import { TareaTipo, TareaEstado } from '../../tareas/enums/tarea.enum';
+import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
+import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 
 @Injectable()
 export class SubtareaService {
@@ -27,6 +29,7 @@ export class SubtareaService {
     private readonly evidenciaSubtareaRepository: Repository<EvidenciaSubtarea>,
     @InjectRepository(TareaAsignado)
     private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
+    private readonly notificacionService: NotificacionService,
   ) {}
 
   // ================================================================
@@ -142,7 +145,25 @@ export class SubtareaService {
       updatedBy: userId,
     });
 
-    return this.subtareaRepository.save(subtarea);
+    const savedSubtarea = await this.subtareaRepository.save(subtarea);
+
+    // Crear notificación si se asignó un responsable
+    if (createDto.responsableId && tarea.actividadId) {
+      await this.notificacionService.crear({
+        tipo: TipoNotificacion.TAREAS,
+        titulo: 'Nueva subtarea asignada',
+        mensaje: `Se te ha asignado la subtarea: ${savedSubtarea.nombre}`,
+        destinatarioId: createDto.responsableId,
+        actividadId: tarea.actividadId,
+        metadata: {
+          subtareaId: savedSubtarea.id,
+          tareaId: tarea.id,
+          codigo: savedSubtarea.codigo,
+        },
+      });
+    }
+
+    return savedSubtarea;
   }
 
   async findAll(tareaId?: number): Promise<Subtarea[]> {
@@ -229,9 +250,49 @@ export class SubtareaService {
       }
     }
 
+    // Guardar valores anteriores para detectar cambios
+    const responsableAnterior = subtarea.responsableId;
+    const estadoAnterior = subtarea.estado;
+
     Object.assign(subtarea, updateDto, { updatedBy: userId });
 
-    return this.subtareaRepository.save(subtarea);
+    const updatedSubtarea = await this.subtareaRepository.save(subtarea);
+
+    // Crear notificaciones si cambió el responsable
+    if (updateDto.responsableId && updateDto.responsableId !== responsableAnterior && tareaPadre?.actividadId) {
+      await this.notificacionService.crear({
+        tipo: TipoNotificacion.TAREAS,
+        titulo: 'Nueva subtarea asignada',
+        mensaje: `Se te ha asignado la subtarea: ${updatedSubtarea.nombre}`,
+        destinatarioId: updateDto.responsableId,
+        actividadId: tareaPadre.actividadId,
+        metadata: {
+          subtareaId: updatedSubtarea.id,
+          tareaId: tareaPadre.id,
+          codigo: updatedSubtarea.codigo,
+        },
+      });
+    }
+
+    // Crear notificación si cambió el estado y hay responsable
+    if (updateDto.estado && updateDto.estado !== estadoAnterior && updatedSubtarea.responsableId && tareaPadre?.actividadId) {
+      await this.notificacionService.crear({
+        tipo: TipoNotificacion.TAREAS,
+        titulo: 'Estado de subtarea actualizado',
+        mensaje: `La subtarea "${updatedSubtarea.nombre}" cambió a estado: ${updateDto.estado}`,
+        destinatarioId: updatedSubtarea.responsableId,
+        actividadId: tareaPadre.actividadId,
+        metadata: {
+          subtareaId: updatedSubtarea.id,
+          tareaId: tareaPadre.id,
+          codigo: updatedSubtarea.codigo,
+          estadoAnterior,
+          estadoNuevo: updateDto.estado,
+        },
+      });
+    }
+
+    return updatedSubtarea;
   }
 
   async remove(id: number, userId?: number, userRole?: string): Promise<void> {
