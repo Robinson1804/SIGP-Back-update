@@ -41,7 +41,7 @@ export class NotificacionService {
     usuarioId: number,
     filters: FindAllFilters = {},
     userRole?: string,
-  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+  ): Promise<{ data: any[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
     const { leida, tipo, page = 1, limit = 20, proyectoId, actividadId, entidadId } = filters;
 
     const queryBuilder = this.notificacionRepository
