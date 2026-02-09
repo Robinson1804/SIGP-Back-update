@@ -82,4 +82,27 @@ export class SubproyectoService {
     subproyecto.updatedBy = userId;
     return this.subproyectoRepository.save(subproyecto);
   }
+
+  /**
+   * Genera el siguiente código de subproyecto disponible para un proyecto
+   * Formato: SUB-001, SUB-002, etc. (secuencial por proyecto, se reinicia para cada proyecto)
+   */
+  async getNextCodigo(proyectoPadreId: number): Promise<string> {
+    const subproyectos = await this.subproyectoRepository.find({
+      where: { proyectoPadreId },
+      select: ['codigo'],
+    });
+
+    let maxNum = 0;
+    for (const subproyecto of subproyectos) {
+      // Buscar patrón SUB-###
+      const match = subproyecto.codigo.match(/SUB-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+
+    return `SUB-${String(maxNum + 1).padStart(3, '0')}`;
+  }
 }

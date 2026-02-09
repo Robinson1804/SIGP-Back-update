@@ -12,6 +12,7 @@ import { AccionEstrategica } from '../../../planning/acciones-estrategicas/entit
 import { CronogramaService } from '../../cronogramas/services/cronograma.service';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { Role } from '../../../../common/constants/roles.constant';
+import { Subproyecto } from '../../subproyectos/entities/subproyecto.entity';
 
 @Injectable()
 export class ProyectoService {
@@ -22,6 +23,8 @@ export class ProyectoService {
     private readonly accionEstrategicaRepository: Repository<AccionEstrategica>,
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(Subproyecto)
+    private readonly subproyectoRepository: Repository<Subproyecto>,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
     @Inject(forwardRef(() => CronogramaService))
@@ -648,6 +651,28 @@ export class ProyectoService {
   async cambiarEstado(id: number, cambiarEstadoDto: CambiarEstadoProyectoDto, userId?: number): Promise<Proyecto> {
     const proyecto = await this.findOne(id);
     const estadoAnterior = proyecto.estado;
+
+    // Validar que todos los subproyectos estén finalizados antes de finalizar el proyecto
+    if (cambiarEstadoDto.estado === ProyectoEstado.FINALIZADO) {
+      const subproyectos = await this.subproyectoRepository.find({
+        where: { proyectoPadreId: id, activo: true },
+        select: ['id', 'codigo', 'nombre', 'estado'],
+      });
+
+      const subproyectosNoFinalizados = subproyectos.filter(
+        sp => sp.estado !== 'Finalizado',
+      );
+
+      if (subproyectosNoFinalizados.length > 0) {
+        const listaSubproyectos = subproyectosNoFinalizados
+          .map(sp => `${sp.codigo} - ${sp.nombre}`)
+          .join(', ');
+
+        throw new BadRequestException(
+          `No se puede finalizar el proyecto. Los siguientes subproyectos aún no están finalizados: ${listaSubproyectos}`,
+        );
+      }
+    }
 
     // Validar transiciones de estado permitidas
     const transicionesPermitidas: Record<ProyectoEstado, ProyectoEstado[]> = {

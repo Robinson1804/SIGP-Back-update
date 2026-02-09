@@ -68,6 +68,12 @@ export class SubproyectoController {
 export class ProyectoSubproyectosController {
   constructor(private readonly subproyectoService: SubproyectoService) {}
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  getNextCodigo(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
+    return this.subproyectoService.getNextCodigo(proyectoId);
+  }
+
   @Get()
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.subproyectoService.findByProyecto(proyectoId);
