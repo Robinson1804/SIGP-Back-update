@@ -48,8 +48,11 @@ export class NotificacionController {
   }
 
   @Get('conteo')
-  getConteo(@CurrentUser('id') usuarioId: number) {
-    return this.notificacionService.getConteo(usuarioId);
+  getConteo(
+    @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
+  ) {
+    return this.notificacionService.getConteo(usuarioId, userRole);
   }
 
   @Get('agrupadas/proyectos')

@@ -60,9 +60,12 @@ export class NotificacionService {
       queryBuilder.andWhere('n.leida = :leida', { leida });
     }
 
-    // DESARROLLADOR only sees TAREAS notifications (forced filter)
+    // DESARROLLADOR sees TAREAS, IMPLEMENTADOR only sees subtasks
     if (userRole === Role.DESARROLLADOR) {
       queryBuilder.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
+    } else if (userRole === Role.IMPLEMENTADOR) {
+      queryBuilder.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
+      queryBuilder.andWhere('n.entidadTipo = :entidadTipo', { entidadTipo: 'subtarea' });
     } else if (tipo) {
       queryBuilder.andWhere('n.tipo = :tipo', { tipo });
     }
@@ -124,9 +127,19 @@ export class NotificacionService {
     return notificacion;
   }
 
-  async getConteo(usuarioId: number): Promise<ConteoResponseDto> {
+  async getConteo(usuarioId: number, userRole?: string): Promise<ConteoResponseDto> {
+    const where: any = { destinatarioId: usuarioId, leida: false, activo: true };
+
+    // DESARROLLADOR sees all TAREAS, IMPLEMENTADOR only sees subtasks
+    if (userRole === Role.DESARROLLADOR) {
+      where.tipo = TipoNotificacion.TAREAS;
+    } else if (userRole === Role.IMPLEMENTADOR) {
+      where.tipo = TipoNotificacion.TAREAS;
+      where.entidadTipo = 'subtarea';
+    }
+
     const notificaciones = await this.notificacionRepository.find({
-      where: { destinatarioId: usuarioId, leida: false, activo: true },
+      where,
       select: ['tipo'],
     });
 
@@ -332,6 +345,13 @@ export class NotificacionService {
         .andWhere('n.actividadId IS NOT NULL')
         .andWhere('a.activo = true')
         .andWhere('(a.coordinador_id = :usuarioId OR a.gestor_id = :usuarioId)', { usuarioId });
+    } else if (userRole === Role.IMPLEMENTADOR) {
+      // IMPLEMENTADOR only sees subtask notifications (not regular tasks)
+      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+        .andWhere('n.activo = true')
+        .andWhere('n.actividadId IS NOT NULL')
+        .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS })
+        .andWhere('n.entidadTipo = :entidadTipo', { entidadTipo: 'subtarea' });
     } else {
       qb.where('n.destinatarioId = :usuarioId', { usuarioId })
         .andWhere('n.activo = true')
