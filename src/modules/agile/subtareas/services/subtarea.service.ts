@@ -149,18 +149,17 @@ export class SubtareaService {
 
     // Crear notificación si se asignó un responsable
     if (createDto.responsableId && tarea.actividadId) {
-      await this.notificacionService.crear({
-        tipo: TipoNotificacion.TAREAS,
-        titulo: 'Nueva subtarea asignada',
-        mensaje: `Se te ha asignado la subtarea: ${savedSubtarea.nombre}`,
-        destinatarioId: createDto.responsableId,
-        actividadId: tarea.actividadId,
-        metadata: {
-          subtareaId: savedSubtarea.id,
-          tareaId: tarea.id,
-          codigo: savedSubtarea.codigo,
-        },
-      });
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        createDto.responsableId,
+        {
+          titulo: 'Nueva subtarea asignada',
+          descripcion: `Se te ha asignado la subtarea: ${savedSubtarea.nombre}`,
+          actividadId: tarea.actividadId,
+          entidadTipo: 'subtarea',
+          entidadId: savedSubtarea.id,
+        }
+      );
     }
 
     return savedSubtarea;
@@ -260,36 +259,32 @@ export class SubtareaService {
 
     // Crear notificaciones si cambió el responsable
     if (updateDto.responsableId && updateDto.responsableId !== responsableAnterior && tareaPadre?.actividadId) {
-      await this.notificacionService.crear({
-        tipo: TipoNotificacion.TAREAS,
-        titulo: 'Nueva subtarea asignada',
-        mensaje: `Se te ha asignado la subtarea: ${updatedSubtarea.nombre}`,
-        destinatarioId: updateDto.responsableId,
-        actividadId: tareaPadre.actividadId,
-        metadata: {
-          subtareaId: updatedSubtarea.id,
-          tareaId: tareaPadre.id,
-          codigo: updatedSubtarea.codigo,
-        },
-      });
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        updateDto.responsableId,
+        {
+          titulo: 'Nueva subtarea asignada',
+          descripcion: `Se te ha asignado la subtarea: ${updatedSubtarea.nombre}`,
+          actividadId: tareaPadre.actividadId,
+          entidadTipo: 'subtarea',
+          entidadId: updatedSubtarea.id,
+        }
+      );
     }
 
     // Crear notificación si cambió el estado y hay responsable
     if (updateDto.estado && updateDto.estado !== estadoAnterior && updatedSubtarea.responsableId && tareaPadre?.actividadId) {
-      await this.notificacionService.crear({
-        tipo: TipoNotificacion.TAREAS,
-        titulo: 'Estado de subtarea actualizado',
-        mensaje: `La subtarea "${updatedSubtarea.nombre}" cambió a estado: ${updateDto.estado}`,
-        destinatarioId: updatedSubtarea.responsableId,
-        actividadId: tareaPadre.actividadId,
-        metadata: {
-          subtareaId: updatedSubtarea.id,
-          tareaId: tareaPadre.id,
-          codigo: updatedSubtarea.codigo,
-          estadoAnterior,
-          estadoNuevo: updateDto.estado,
-        },
-      });
+      await this.notificacionService.notificar(
+        TipoNotificacion.TAREAS,
+        updatedSubtarea.responsableId,
+        {
+          titulo: 'Estado de subtarea actualizado',
+          descripcion: `La subtarea "${updatedSubtarea.nombre}" cambió de "${estadoAnterior}" a "${updateDto.estado}"`,
+          actividadId: tareaPadre.actividadId,
+          entidadTipo: 'subtarea',
+          entidadId: updatedSubtarea.id,
+        }
+      );
     }
 
     return updatedSubtarea;
