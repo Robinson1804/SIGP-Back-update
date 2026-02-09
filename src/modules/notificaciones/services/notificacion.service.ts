@@ -112,7 +112,10 @@ export class NotificacionService {
       return result;
     });
 
-    return { data, total, page, limit };
+    return {
+      data,
+      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
+    };
   }
 
   async findOne(id: number, usuarioId: number): Promise<Notificacion> {
