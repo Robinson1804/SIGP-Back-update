@@ -97,7 +97,7 @@ export class ProyectoController {
   }
 
   @Post(':id/cambiar-estado')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
   cambiarEstado(
     @Param('id', ParseIntPipe) id: number,
     @Body() cambiarEstadoDto: CambiarEstadoProyectoDto,
