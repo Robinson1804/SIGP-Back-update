@@ -130,6 +130,11 @@ export class TareaService {
       throw new BadRequestException('actividadId es requerido para tareas KANBAN');
     }
 
+    // IMPLEMENTADOR no puede crear tareas en actividades (solo subtareas)
+    if (userRole === Role.IMPLEMENTADOR && createDto.tipo === TareaTipo.KANBAN) {
+      throw new ForbiddenException('Los implementadores no pueden crear tareas en actividades. Solo pueden crear subtareas en tareas donde estén asignados.');
+    }
+
     // DESARROLLADOR solo puede crear tareas en HUs donde está asignado como responsable
     // asignadoA en la HU guarda IDs de la tabla personal (personalId), no de usuarios (userId)
     if (userRole === Role.DESARROLLADOR && createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId && userId) {
@@ -1574,6 +1579,381 @@ export class TareaService {
       console.log(`[Proyecto ${proyecto.codigo}] Todos los sprints finalizados. Notificación enviada.`);
     } catch (error) {
       console.error(`[Proyecto ID:${proyectoId}] Error verificando sprints completados:`, error);
+    }
+  }
+
+  // ================================================================
+  // Métodos de Recálculo de Estado KANBAN
+  // ================================================================
+
+  /**
+   * Recalcula el estado de una tarea KANBAN basándose en el estado de sus subtareas.
+   * Lógica:
+   * - Sin subtareas activas → "Por hacer"
+   * - Todas finalizadas → Generar PDF de evidencias y marcar como "Finalizado"
+   * - Alguna subtarea activa pero no todas finalizadas → "En progreso"
+   *
+   * Este método es público para que SubtareaService pueda llamarlo.
+   */
+  async recalcularEstadoTareaKanban(tareaId: number, userId?: number): Promise<void> {
+    const tarea = await this.tareaRepository.findOne({
+      where: { id: tareaId },
+    });
+
+    if (!tarea || tarea.tipo !== TareaTipo.KANBAN) {
+      console.log(`[KANBAN] recalcularEstadoTareaKanban: Tarea ${tareaId} no es KANBAN o no existe. Ignorando.`);
+      return;
+    }
+
+    const subtareas = await this.subtareaRepository.find({
+      where: { tareaId, activo: true },
+    });
+
+    console.log(`[KANBAN Tarea ${tarea.codigo}] Recalculando estado. Subtareas activas: ${subtareas.length}`);
+
+    if (subtareas.length === 0) {
+      // Sin subtareas → "Por hacer"
+      if (tarea.estado !== TareaEstado.POR_HACER) {
+        const estadoAnterior = tarea.estado;
+        tarea.estado = TareaEstado.POR_HACER;
+        tarea.updatedBy = userId;
+        await this.tareaRepository.save(tarea);
+
+        console.log(`[KANBAN Tarea ${tarea.codigo}] Sin subtareas → Estado: "${estadoAnterior}" → "Por hacer"`);
+
+        if (userId) {
+          await this.historialCambioService.registrarCambioEstado(
+            HistorialEntidadTipo.TAREA,
+            tareaId,
+            estadoAnterior,
+            TareaEstado.POR_HACER,
+            userId,
+          );
+        }
+      }
+      return;
+    }
+
+    const todasFinalizadas = subtareas.every(s => s.estado === TareaEstado.FINALIZADO);
+
+    if (todasFinalizadas) {
+      console.log(`[KANBAN Tarea ${tarea.codigo}] Todas las subtareas finalizadas. Generando documento de evidencias...`);
+
+      // Generar PDF de evidencias consolidado
+      await this.generarDocumentoEvidenciasKanban(tareaId);
+
+      // Marcar tarea como finalizada
+      if (tarea.estado !== TareaEstado.FINALIZADO) {
+        const estadoAnterior = tarea.estado;
+        tarea.estado = TareaEstado.FINALIZADO;
+        tarea.fechaCompletado = new Date();
+        tarea.updatedBy = userId;
+        await this.tareaRepository.save(tarea);
+
+        console.log(`[KANBAN Tarea ${tarea.codigo}] Todas subtareas finalizadas → Estado: "${estadoAnterior}" → "Finalizado"`);
+
+        if (userId) {
+          await this.historialCambioService.registrarCambioEstado(
+            HistorialEntidadTipo.TAREA,
+            tareaId,
+            estadoAnterior,
+            TareaEstado.FINALIZADO,
+            userId,
+          );
+        }
+
+        // Notificar al coordinador/gestor de la actividad
+        if (tarea.actividadId) {
+          await this.notificarTareaKanbanFinalizada(tarea, userId);
+        }
+      }
+    } else {
+      // Hay subtareas pero no todas finalizadas → "En progreso"
+      if (tarea.estado !== TareaEstado.EN_PROGRESO) {
+        const estadoAnterior = tarea.estado;
+        tarea.estado = TareaEstado.EN_PROGRESO;
+        tarea.updatedBy = userId;
+        if (!tarea.fechaInicioProgreso) {
+          tarea.fechaInicioProgreso = new Date();
+        }
+        await this.tareaRepository.save(tarea);
+
+        console.log(`[KANBAN Tarea ${tarea.codigo}] Subtareas parciales → Estado: "${estadoAnterior}" → "En progreso"`);
+
+        if (userId) {
+          await this.historialCambioService.registrarCambioEstado(
+            HistorialEntidadTipo.TAREA,
+            tareaId,
+            estadoAnterior,
+            TareaEstado.EN_PROGRESO,
+            userId,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Genera un documento PDF consolidado con las evidencias de todas las subtareas
+   * de una tarea KANBAN. El PDF se sube a MinIO y la URL se guarda en la tarea.
+   *
+   * Reutiliza el HuEvidenciaPdfService transformando las subtareas en un formato
+   * compatible con "tareas + evidencias" que el servicio espera.
+   */
+  private async generarDocumentoEvidenciasKanban(tareaId: number): Promise<void> {
+    try {
+      const tarea = await this.tareaRepository.findOne({
+        where: { id: tareaId },
+        relations: ['asignado'],
+      });
+
+      if (!tarea) return;
+
+      // Obtener subtareas activas
+      const subtareas = await this.subtareaRepository.find({
+        where: { tareaId, activo: true },
+        relations: ['responsable'],
+        order: { orden: 'ASC', codigo: 'ASC' },
+      });
+
+      if (subtareas.length === 0) return;
+
+      // Cargar evidencias de cada subtarea desde la tabla evidencias_subtarea
+      const evidenciaSubtareaRepo = this.subtareaRepository.manager.getRepository('agile.evidencias_subtarea');
+
+      // Construir datos compatibles con HuEvidenciaPdfService
+      // Cada subtarea se mapea como si fuera una "tarea" con sus "evidencias"
+      const tareasConEvidencias: Array<{ tarea: any; evidencias: any[] }> = [];
+      for (const subtarea of subtareas) {
+        const evidencias = await this.subtareaRepository.manager
+          .query(
+            `SELECT es.*, u.nombre as usuario_nombre, u.apellido as usuario_apellido
+             FROM agile.evidencias_subtarea es
+             LEFT JOIN usuarios u ON u.id = es.subido_por
+             WHERE es.subtarea_id = $1
+             ORDER BY es.created_at ASC`,
+            [subtarea.id],
+          );
+
+        tareasConEvidencias.push({
+          tarea: {
+            id: subtarea.id,
+            codigo: subtarea.codigo,
+            nombre: subtarea.nombre,
+            descripcion: subtarea.descripcion,
+            estado: subtarea.estado,
+            prioridad: subtarea.prioridad,
+            fechaFin: subtarea.fechaFin,
+            asignado: subtarea.responsable || tarea.asignado,
+          },
+          evidencias: evidencias.map((ev: any) => ({
+            id: ev.id,
+            nombre: ev.nombre,
+            descripcion: ev.descripcion,
+            url: ev.url,
+            tipo: ev.tipo,
+            tamanoBytes: ev.tamano_bytes,
+            createdAt: ev.created_at,
+            usuario: ev.usuario_nombre ? {
+              nombre: ev.usuario_nombre,
+              apellido: ev.usuario_apellido,
+            } : null,
+          })),
+        });
+      }
+
+      // Obtener info de la actividad para el nombre del archivo
+      let actividadCodigo = 'ACT';
+      let actividadNombre = '';
+      if (tarea.actividadId) {
+        const actividad = await this.actividadRepository.findOne({
+          where: { id: tarea.actividadId },
+          select: ['id', 'codigo', 'nombre'],
+        });
+        if (actividad) {
+          actividadCodigo = actividad.codigo;
+          actividadNombre = actividad.nombre;
+        }
+      }
+
+      // Verificar que hay al menos una evidencia tipo imagen
+      const totalEvidencias = tareasConEvidencias.reduce((sum, t) => sum + t.evidencias.length, 0);
+      if (totalEvidencias === 0) {
+        console.log(`[KANBAN Tarea ${tarea.codigo}] No hay evidencias en subtareas, omitiendo generación de PDF.`);
+        return;
+      }
+
+      // Generar un PDF simple con pdfmake directamente (sin depender de HuEvidenciaPdfService
+      // que requiere un historiaUsuarioId válido)
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const PdfPrinter = require('pdfmake/src/printer');
+      const fonts = {
+        Helvetica: {
+          normal: 'Helvetica',
+          bold: 'Helvetica-Bold',
+          italics: 'Helvetica-Oblique',
+          bolditalics: 'Helvetica-BoldOblique',
+        },
+      };
+      const printer = new PdfPrinter(fonts);
+
+      // Construir contenido del PDF
+      const content: any[] = [
+        {
+          text: `Evidencias - Tarea ${tarea.codigo}`,
+          fontSize: 16,
+          bold: true,
+          alignment: 'center',
+          margin: [0, 0, 0, 10],
+        },
+        {
+          text: tarea.nombre,
+          fontSize: 12,
+          alignment: 'center',
+          margin: [0, 0, 0, 5],
+        },
+        {
+          text: actividadNombre ? `Actividad: ${actividadCodigo} - ${actividadNombre}` : '',
+          fontSize: 10,
+          alignment: 'center',
+          color: '#666666',
+          margin: [0, 0, 0, 15],
+        },
+      ];
+
+      // Agregar resumen de subtareas
+      for (const { tarea: sub, evidencias } of tareasConEvidencias) {
+        content.push({
+          text: `${sub.codigo} - ${sub.nombre}`,
+          fontSize: 11,
+          bold: true,
+          margin: [0, 10, 0, 3],
+        });
+
+        if (sub.descripcion) {
+          content.push({
+            text: sub.descripcion,
+            fontSize: 9,
+            italics: true,
+            margin: [0, 0, 0, 3],
+          });
+        }
+
+        content.push({
+          text: `Estado: ${sub.estado} | Evidencias: ${evidencias.length}`,
+          fontSize: 9,
+          color: '#666666',
+          margin: [0, 0, 0, 5],
+        });
+
+        // Listar evidencias
+        for (const ev of evidencias) {
+          content.push({
+            text: `  - ${ev.nombre}${ev.descripcion ? ': ' + ev.descripcion : ''}`,
+            fontSize: 9,
+            margin: [10, 0, 0, 2],
+          });
+        }
+      }
+
+      content.push({
+        text: `\nGenerado el ${new Date().toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
+        fontSize: 8,
+        color: '#999999',
+        alignment: 'right',
+        margin: [0, 20, 0, 0],
+      });
+
+      const docDefinition = {
+        pageSize: 'A4',
+        pageMargins: [40, 40, 40, 40],
+        content,
+        defaultStyle: { font: 'Helvetica' },
+      };
+
+      // Generar PDF buffer
+      const pdfBuffer: Buffer = await new Promise((resolve, reject) => {
+        try {
+          const pdfDoc = printer.createPdfKitDocument(docDefinition);
+          const chunks: Buffer[] = [];
+          pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));
+          pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+          pdfDoc.on('error', (err: Error) => reject(err));
+          pdfDoc.end();
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      // Subir PDF a MinIO
+      const bucketName = this.configService.get('minio.buckets.documentos', 'sigp-documentos');
+      const objectKey = `evidencias/kanban/${tarea.codigo}_evidencias_${Date.now()}.pdf`;
+
+      await this.minioService.putObject(
+        bucketName,
+        objectKey,
+        pdfBuffer,
+        pdfBuffer.length,
+        { 'Content-Type': 'application/pdf' },
+      );
+
+      // Generar URL de descarga (7 días)
+      const pdfUrl = await this.minioService.getPresignedGetUrl(bucketName, objectKey, 7 * 24 * 60 * 60);
+
+      // Actualizar tarea con la URL del documento
+      await this.tareaRepository.update(tareaId, {
+        documentoEvidenciasUrl: pdfUrl,
+      });
+
+      console.log(`[KANBAN Tarea ${tarea.codigo}] PDF de evidencias generado: ${objectKey}`);
+    } catch (error) {
+      console.error(`[KANBAN Tarea ID:${tareaId}] Error generando documento de evidencias:`, error);
+      // No fallar la operación principal por un error en la generación del PDF
+    }
+  }
+
+  /**
+   * Notifica al coordinador/gestor de la actividad cuando una tarea KANBAN
+   * se finaliza automáticamente por tener todas sus subtareas completadas.
+   */
+  private async notificarTareaKanbanFinalizada(tarea: Tarea, userId?: number): Promise<void> {
+    try {
+      const actividad = await this.actividadRepository.findOne({
+        where: { id: tarea.actividadId },
+        select: ['id', 'codigo', 'nombre', 'coordinadorId', 'gestorId'],
+      });
+
+      if (!actividad) return;
+
+      const destinatarios: number[] = [];
+
+      if (actividad.coordinadorId && actividad.coordinadorId !== userId) {
+        destinatarios.push(actividad.coordinadorId);
+      }
+      if (actividad.gestorId && actividad.gestorId !== userId && actividad.gestorId !== actividad.coordinadorId) {
+        destinatarios.push(actividad.gestorId);
+      }
+
+      if (destinatarios.length === 0) return;
+
+      const urlAccion = await this.buildTareaUrlAccion(tarea);
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.TAREAS,
+        destinatarios,
+        {
+          titulo: `Tarea completada: ${tarea.codigo}`,
+          descripcion: `La tarea "${tarea.nombre}" de la actividad "${actividad.nombre}" ha sido finalizada automáticamente. Todas sus subtareas están completas.`,
+          entidadTipo: 'Tarea',
+          entidadId: tarea.id,
+          actividadId: tarea.actividadId,
+          urlAccion,
+        },
+      );
+
+      console.log(`[KANBAN Tarea ${tarea.codigo}] Notificación de finalización enviada a gestores.`);
+    } catch (error) {
+      console.error(`[KANBAN Tarea ${tarea.codigo}] Error enviando notificación de finalización:`, error);
     }
   }
 }

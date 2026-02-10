@@ -4,6 +4,8 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +19,7 @@ import { CreateEvidenciaSubtareaDto } from '../dto/create-evidencia-subtarea.dto
 import { TareaTipo, TareaEstado } from '../../tareas/enums/tarea.enum';
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+import { TareaService } from '../../tareas/services/tarea.service';
 
 @Injectable()
 export class SubtareaService {
@@ -30,6 +33,8 @@ export class SubtareaService {
     @InjectRepository(TareaAsignado)
     private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
     private readonly notificacionService: NotificacionService,
+    @Inject(forwardRef(() => TareaService))
+    private readonly tareaService: TareaService,
   ) {}
 
   // ================================================================
@@ -146,6 +151,11 @@ export class SubtareaService {
     });
 
     const savedSubtarea = await this.subtareaRepository.save(subtarea);
+
+    console.log(`[KANBAN Subtarea ${savedSubtarea.codigo}] Creada en tarea ${tarea.codigo}. Recalculando estado de tarea padre...`);
+
+    // Recalcular estado de la tarea padre KANBAN
+    await this.tareaService.recalcularEstadoTareaKanban(createDto.tareaId, userId);
 
     // Crear notificación si se asignó un responsable
     if (createDto.responsableId && tarea.actividadId) {
@@ -287,6 +297,12 @@ export class SubtareaService {
       );
     }
 
+    // Recalcular estado de la tarea padre KANBAN si cambió el estado de la subtarea
+    if (updatedSubtarea.estado !== estadoAnterior) {
+      console.log(`[KANBAN Subtarea ${updatedSubtarea.codigo || updatedSubtarea.id}] Estado: "${estadoAnterior}" → "${updatedSubtarea.estado}". Recalculando tarea padre...`);
+      await this.tareaService.recalcularEstadoTareaKanban(subtarea.tareaId, userId);
+    }
+
     return updatedSubtarea;
   }
 
@@ -321,8 +337,10 @@ export class SubtareaService {
     // Eliminar la subtarea permanentemente de la base de datos
     await this.subtareaRepository.remove(subtarea);
 
-    // Actualizar el estado de la tarea padre
-    await this.actualizarEstadoTareaPadre(tareaId, userId);
+    console.log(`[KANBAN Subtarea ${subtarea.codigo || id}] Eliminada de tarea ${tareaId}. Recalculando estado de tarea padre...`);
+
+    // Recalcular estado de la tarea padre KANBAN
+    await this.tareaService.recalcularEstadoTareaKanban(tareaId, userId);
   }
 
   async getEstadisticasByTarea(tareaId: number): Promise<{
@@ -439,13 +457,16 @@ export class SubtareaService {
     const savedEvidencia = await this.evidenciaSubtareaRepository.save(evidencia);
 
     // Marcar la subtarea como "Finalizado" al adjuntar evidencia
+    const estadoAnterior = subtarea.estado;
     await this.subtareaRepository.update(subtareaId, {
       estado: TareaEstado.FINALIZADO,
       updatedBy: userId,
     });
 
-    // Actualizar el estado de la tarea padre
-    await this.actualizarEstadoTareaPadre(subtarea.tareaId, userId);
+    console.log(`[KANBAN Subtarea ${subtarea.codigo || subtareaId}] Evidencia adjuntada → Estado: "${estadoAnterior}" → "Finalizado". Recalculando tarea padre...`);
+
+    // Recalcular estado de la tarea padre KANBAN (incluye generación de PDF si todas finalizadas)
+    await this.tareaService.recalcularEstadoTareaKanban(subtarea.tareaId, userId);
 
     return savedEvidencia;
   }
@@ -465,7 +486,9 @@ export class SubtareaService {
   }
 
   /**
-   * Eliminar una evidencia de una subtarea
+   * Eliminar una evidencia de una subtarea.
+   * Si la subtarea queda sin evidencias y estaba en "Finalizado",
+   * se revierte a "En progreso" y se recalcula el estado de la tarea padre.
    */
   async eliminarEvidencia(
     subtareaId: number,
@@ -473,7 +496,7 @@ export class SubtareaService {
     userId: number,
   ): Promise<void> {
     // Verificar que la subtarea existe
-    await this.findOne(subtareaId);
+    const subtarea = await this.findOne(subtareaId);
 
     const evidencia = await this.evidenciaSubtareaRepository.findOne({
       where: { id: evidenciaId, subtareaId },
@@ -486,6 +509,24 @@ export class SubtareaService {
     }
 
     await this.evidenciaSubtareaRepository.remove(evidencia);
+
+    // Verificar si la subtarea queda sin evidencias
+    const evidenciasRestantes = await this.evidenciaSubtareaRepository.count({
+      where: { subtareaId },
+    });
+
+    // Si no quedan evidencias y la subtarea estaba finalizada, revertir a "En progreso"
+    if (evidenciasRestantes === 0 && subtarea.estado === TareaEstado.FINALIZADO) {
+      await this.subtareaRepository.update(subtareaId, {
+        estado: TareaEstado.EN_PROGRESO,
+        updatedBy: userId,
+      });
+
+      console.log(`[KANBAN Subtarea ${subtarea.codigo || subtareaId}] Última evidencia eliminada → Estado revertido a "En progreso". Recalculando tarea padre...`);
+
+      // Recalcular estado de la tarea padre (puede revertir de Finalizado a En progreso)
+      await this.tareaService.recalcularEstadoTareaKanban(subtarea.tareaId, userId);
+    }
   }
 
   /**
