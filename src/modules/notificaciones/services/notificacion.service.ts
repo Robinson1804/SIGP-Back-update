@@ -291,14 +291,9 @@ export class NotificacionService {
 
     await Promise.all(
       secciones.map(async ({ key, tipo }) => {
-        // PMO, COORDINADOR, and SCRUM_MASTER see all notifications for the project
-        const whereTotal = (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER)
-          ? { proyectoId, tipo, activo: true }
-          : { destinatarioId: usuarioId, proyectoId, tipo, activo: true };
-
-        const whereNoLeidas = (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER)
-          ? { proyectoId, tipo, activo: true, leida: false }
-          : { destinatarioId: usuarioId, proyectoId, tipo, activo: true, leida: false };
+        // All users see only their own notifications
+        const whereTotal = { destinatarioId: usuarioId, proyectoId, tipo, activo: true };
+        const whereNoLeidas = { destinatarioId: usuarioId, proyectoId, tipo, activo: true, leida: false };
 
         const [total, noLeidas] = await Promise.all([
           this.notificacionRepository.count({ where: whereTotal }),
