@@ -11,8 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SubproyectoService } from '../services/subproyecto.service';
-import { CreateSubproyectoDto } from '../dto/create-subproyecto.dto';
-import { UpdateSubproyectoDto } from '../dto/update-subproyecto.dto';
+import { CreateSubproyectoDto, UpdateSubproyectoDto, CambiarEstadoSubproyectoDto } from '../dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../common/guards/roles.guard';
 import { Roles } from '../../../../common/decorators/roles.decorator';
@@ -32,18 +31,40 @@ export class SubproyectoController {
 
   @Get()
   findAll(
+    @CurrentUser('id') userId: number,
+    @CurrentUser('rol') userRole: string,
     @Query('proyectoPadreId') proyectoPadreId?: string,
+    @Query('coordinadorId') coordinadorId?: string,
+    @Query('scrumMasterId') scrumMasterId?: string,
+    @Query('estado') estado?: string,
     @Query('activo') activo?: string,
   ) {
     return this.subproyectoService.findAll(
-      proyectoPadreId ? parseInt(proyectoPadreId, 10) : undefined,
-      activo !== undefined ? activo === 'true' : undefined,
+      {
+        proyectoPadreId: proyectoPadreId ? parseInt(proyectoPadreId, 10) : undefined,
+        coordinadorId: coordinadorId ? parseInt(coordinadorId, 10) : undefined,
+        scrumMasterId: scrumMasterId ? parseInt(scrumMasterId, 10) : undefined,
+        estado: estado as any,
+        activo: activo !== undefined ? activo === 'true' : undefined,
+      },
+      userRole,
+      userId,
     );
   }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.subproyectoService.findOne(id);
+  }
+
+  @Post(':id/cambiar-estado')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  cambiarEstado(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CambiarEstadoSubproyectoDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.subproyectoService.cambiarEstado(id, dto, userId);
   }
 
   @Patch(':id')
