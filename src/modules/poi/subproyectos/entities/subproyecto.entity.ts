@@ -9,7 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { ProyectoEstado } from '../../proyectos/enums/proyecto-estado.enum';
+import { ProyectoEstado, Clasificacion } from '../../proyectos/enums/proyecto-estado.enum';
 
 @Entity('subproyectos', { schema: 'poi' })
 export class Subproyecto {
@@ -33,16 +33,63 @@ export class Subproyecto {
   @Column({ type: 'text', nullable: true })
   descripcion: string;
 
+  // ==========================================
+  // CLASIFICACIÓN
+  // ==========================================
+
+  @Column({ type: 'varchar', length: 50, nullable: true, enum: Clasificacion })
+  clasificacion?: Clasificacion;
+
+  // ==========================================
+  // STAKEHOLDERS
+  // ==========================================
+
+  @Index()
+  @Column({ name: 'coordinador_id', nullable: true })
+  coordinadorId?: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'coordinador_id' })
+  coordinador?: any;
+
+  @Index()
+  @Column({ name: 'patrocinador_id', nullable: true })
+  patrocinadorId?: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'patrocinador_id' })
+  patrocinador?: any;
+
+  @Column({ name: 'area_usuaria', type: 'int', array: true, nullable: true })
+  areaUsuaria?: number[];
+
+  // ==========================================
+  // ADMINISTRATIVO
+  // ==========================================
+
+  @Column({ length: 100, nullable: true })
+  coordinacion?: string;
+
+  @Column({ name: 'area_responsable', length: 100, nullable: true })
+  areaResponsable?: string;
+
+  // ==========================================
+  // FINANCIERO
+  // ==========================================
+
   @Column({ type: 'decimal', precision: 15, scale: 2, nullable: true })
   monto: number;
 
-  // Años del subproyecto
-  @Column({ type: 'simple-array', nullable: true })
-  anios: number[];
+  @Column({ name: 'costos_anuales', type: 'jsonb', nullable: true })
+  costosAnuales?: { anio: number; monto: number }[];
 
-  // Áreas financieras
-  @Column({ name: 'areas_financieras', type: 'simple-array', nullable: true })
-  areasFinancieras: string[];
+  // Años del subproyecto (actualizado de simple-array a array)
+  @Column({ type: 'int', array: true, nullable: true })
+  anios?: number[];
+
+  // Áreas financieras (actualizado de simple-array a array)
+  @Column({ name: 'areas_financieras', type: 'text', array: true, nullable: true })
+  areasFinancieras?: string[];
 
   /**
    * @deprecated Los responsables ahora se manejan via tabla rrhh.asignaciones
@@ -51,6 +98,26 @@ export class Subproyecto {
    */
   @Column({ type: 'simple-array', nullable: true })
   responsables: number[];
+
+  // ==========================================
+  // ALCANCE Y VALOR DE NEGOCIO
+  // ==========================================
+
+  @Column({ type: 'text', array: true, nullable: true })
+  alcances?: string[];
+
+  @Column({ type: 'text', nullable: true })
+  problematica?: string;
+
+  @Column({ type: 'text', nullable: true })
+  beneficiarios?: string;
+
+  @Column({ type: 'text', array: true, nullable: true })
+  beneficios?: string[];
+
+  // ==========================================
+  // ESTADO
+  // ==========================================
 
   @Index()
   @Column({
@@ -93,7 +160,19 @@ export class Subproyecto {
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp with time zone' })
   updatedAt: Date;
 
-  // Relaciones inversas
+  // ==========================================
+  // RELACIONES INVERSAS
+  // ==========================================
+
   @OneToMany('Documento', 'subproyecto')
-  documentos: any[];
+  documentos?: any[];
+
+  @OneToMany('Acta', 'subproyecto')
+  actas?: any[];
+
+  @OneToMany('Requerimiento', 'subproyecto')
+  requerimientos?: any[];
+
+  @OneToMany('Cronograma', 'subproyecto')
+  cronogramas?: any[];
 }

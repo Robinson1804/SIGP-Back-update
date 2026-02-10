@@ -28,3 +28,4 @@ export * from './1768600000000-AddRequiereCambioPassword';
 export * from './1768700000000-AddAreaUsuariaToProyectos';
 export * from './1768800000000-AddActivoToNotificaciones';
 export * from './1768900000000-AddActividadIdToNotificaciones';
+export * from './1769000000000-EnhanceSubproyectoSchema';
