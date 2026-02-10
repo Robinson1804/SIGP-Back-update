@@ -49,11 +49,8 @@ export class NotificacionService {
       .leftJoinAndSelect('n.proyecto', 'proyecto')
       .leftJoinAndSelect('n.actividad', 'actividad');
 
-    // PMO sees all notifications, others see only their own
-    if (userRole !== Role.PMO) {
-      queryBuilder.where('n.destinatarioId = :usuarioId', { usuarioId });
-    }
-
+    // All users see only their own notifications (where they are destinatario)
+    queryBuilder.where('n.destinatarioId = :usuarioId', { usuarioId });
     queryBuilder.andWhere('n.activo = true');
 
     if (leida !== undefined) {
@@ -170,19 +167,10 @@ export class NotificacionService {
   }
 
   async marcarLeida(id: number, usuarioId: number, userRole?: string): Promise<Notificacion> {
-    // PMO, COORDINADOR, SCRUM_MASTER can mark any notification as read
-    // Others can only mark their own notifications
-    let notificacion: Notificacion | null;
-
-    if (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER) {
-      notificacion = await this.notificacionRepository.findOne({
-        where: { id, activo: true },
-      });
-    } else {
-      notificacion = await this.notificacionRepository.findOne({
-        where: { id, destinatarioId: usuarioId, activo: true },
-      });
-    }
+    // Users can only mark their own notifications as read
+    const notificacion = await this.notificacionRepository.findOne({
+      where: { id, destinatarioId: usuarioId, activo: true },
+    });
 
     if (!notificacion) {
       throw new NotFoundException(`Notificación con ID ${id} no encontrada`);
@@ -241,52 +229,22 @@ export class NotificacionService {
       .addSelect('COUNT(n.id)', 'total')
       .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas');
 
-    // PMO sees all active projects with notifications
-    if (userRole === Role.PMO) {
-      qb.where('n.activo = true')
-        .andWhere('p.activo = true')
-        .andWhere('n.tipo IN (:...tipos)', {
-          tipos: [
-            TipoNotificacion.PROYECTOS,
-            TipoNotificacion.SPRINTS,
-            TipoNotificacion.APROBACIONES,
-            TipoNotificacion.VALIDACIONES,
-          ],
-        });
-    } else if (userRole === Role.COORDINADOR) {
-      // COORDINADOR sees projects where they are coordinador or scrum_master
-      qb.where('n.activo = true')
-        .andWhere('p.activo = true')
-        .andWhere('(p.coordinador_id = :usuarioId OR p.scrum_master_id = :usuarioId)', { usuarioId })
-        .andWhere('n.tipo IN (:...tipos)', {
-          tipos: [
-            TipoNotificacion.PROYECTOS,
-            TipoNotificacion.SPRINTS,
-            TipoNotificacion.APROBACIONES,
-            TipoNotificacion.VALIDACIONES,
-          ],
-        });
-    } else if (userRole === Role.SCRUM_MASTER) {
-      // SCRUM_MASTER sees projects where they are scrum_master
-      qb.where('n.activo = true')
-        .andWhere('p.activo = true')
-        .andWhere('p.scrum_master_id = :usuarioId', { usuarioId })
-        .andWhere('n.tipo IN (:...tipos)', {
-          tipos: [
-            TipoNotificacion.PROYECTOS,
-            TipoNotificacion.SPRINTS,
-            TipoNotificacion.APROBACIONES,
-            TipoNotificacion.VALIDACIONES,
-          ],
-        });
-    } else {
-      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
-        .andWhere('n.activo = true');
+    // All users see only notifications where they are destinatario
+    qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.activo = true')
+      .andWhere('p.activo = true')
+      .andWhere('n.tipo IN (:...tipos)', {
+        tipos: [
+          TipoNotificacion.PROYECTOS,
+          TipoNotificacion.SPRINTS,
+          TipoNotificacion.APROBACIONES,
+          TipoNotificacion.VALIDACIONES,
+        ],
+      });
 
-      // DESARROLLADOR only sees TAREAS notifications
-      if (userRole === Role.DESARROLLADOR) {
-        qb.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
-      }
+    // DESARROLLADOR only sees TAREAS notifications
+    if (userRole === Role.DESARROLLADOR) {
+      qb.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
     }
 
     if (pgdId) {
@@ -377,28 +335,16 @@ export class NotificacionService {
       .addSelect('COUNT(n.id)', 'total')
       .addSelect('COUNT(CASE WHEN n.leida = false THEN 1 END)', 'noLeidas');
 
-    // PMO sees all active activities with notifications
-    if (userRole === Role.PMO) {
-      qb.where('n.activo = true')
-        .andWhere('n.actividadId IS NOT NULL')
-        .andWhere('a.activo = true');
-    } else if (userRole === Role.COORDINADOR) {
-      // COORDINADOR sees activities where they are coordinador or gestor
-      qb.where('n.activo = true')
-        .andWhere('n.actividadId IS NOT NULL')
-        .andWhere('a.activo = true')
-        .andWhere('(a.coordinador_id = :usuarioId OR a.gestor_id = :usuarioId)', { usuarioId });
-    } else if (userRole === Role.IMPLEMENTADOR) {
-      // IMPLEMENTADOR only sees subtask notifications (not regular tasks)
-      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
-        .andWhere('n.activo = true')
-        .andWhere('n.actividadId IS NOT NULL')
-        .andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS })
+    // All users see only notifications where they are destinatario
+    qb.where('n.destinatarioId = :usuarioId', { usuarioId })
+      .andWhere('n.activo = true')
+      .andWhere('n.actividadId IS NOT NULL')
+      .andWhere('a.activo = true');
+
+    // IMPLEMENTADOR only sees subtask notifications (not regular tasks)
+    if (userRole === Role.IMPLEMENTADOR) {
+      qb.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS })
         .andWhere('n.entidadTipo = :entidadTipo', { entidadTipo: 'subtarea' });
-    } else {
-      qb.where('n.destinatarioId = :usuarioId', { usuarioId })
-        .andWhere('n.activo = true')
-        .andWhere('n.actividadId IS NOT NULL');
     }
 
     if (pgdId) {
