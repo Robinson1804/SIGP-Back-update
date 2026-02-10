@@ -73,6 +73,11 @@ export class ActividadController {
     return this.actividadService.getMetricas(id);
   }
 
+  @Get(':id/verificar-tareas-finalizadas')
+  verificarTareasFinalizadas(@Param('id', ParseIntPipe) id: number) {
+    return this.actividadService.verificarTareasFinalizadas(id);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.actividadService.findOne(id);
@@ -92,6 +97,12 @@ export class ActividadController {
   @Roles(Role.ADMIN, Role.PMO)
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
     return this.actividadService.remove(id, userId);
+  }
+
+  @Post(':id/finalizar')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  finalizarActividad(@Param('id', ParseIntPipe) id: number, @CurrentUser('id') userId: number) {
+    return this.actividadService.finalizarActividad(id, userId);
   }
 }
 

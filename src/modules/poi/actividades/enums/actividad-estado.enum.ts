@@ -1,8 +1,7 @@
 export enum ActividadEstado {
   PENDIENTE = 'Pendiente',
-  EN_EJECUCION = 'En ejecucion',
+  EN_DESARROLLO = 'En desarrollo',
   FINALIZADO = 'Finalizado',
-  SUSPENDIDO = 'Suspendido',
 }
 
 export enum Periodicidad {

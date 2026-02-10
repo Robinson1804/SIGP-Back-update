@@ -383,4 +383,93 @@ export class ActividadService {
       porcentajeCompletado,
     };
   }
+
+  /**
+   * Verificar si todas las tareas de una actividad están finalizadas
+   */
+  async verificarTareasFinalizadas(actividadId: number): Promise<{ todasFinalizadas: boolean; totalTareas: number; tareasFinalizadas: number }> {
+    const tareas = await this.tareaRepository.find({
+      where: {
+        actividadId,
+        activo: true,
+        tipo: TareaTipo.KANBAN,
+      },
+      select: ['id', 'estado'],
+    });
+
+    const totalTareas = tareas.length;
+    const tareasFinalizadas = tareas.filter(t => t.estado === TareaEstado.FINALIZADO).length;
+    const todasFinalizadas = totalTareas > 0 && tareasFinalizadas === totalTareas;
+
+    return {
+      todasFinalizadas,
+      totalTareas,
+      tareasFinalizadas,
+    };
+  }
+
+  /**
+   * Finalizar actividad manualmente (llamado desde modal cuando todas las tareas están completas)
+   */
+  async finalizarActividad(actividadId: number, userId?: number): Promise<Actividad> {
+    const actividad = await this.actividadRepository.findOne({
+      where: { id: actividadId },
+    });
+
+    if (!actividad) {
+      throw new NotFoundException('Actividad no encontrada');
+    }
+
+    if (actividad.estado === ActividadEstado.FINALIZADO) {
+      throw new BadRequestException('La actividad ya está finalizada');
+    }
+
+    // Verificar que todas las tareas estén finalizadas
+    const tareas = await this.tareaRepository.find({
+      where: {
+        actividadId,
+        activo: true,
+        tipo: TareaTipo.KANBAN,
+      },
+      select: ['id', 'estado'],
+    });
+
+    const tareasNoFinalizadas = tareas.filter(t => t.estado !== TareaEstado.FINALIZADO);
+
+    if (tareasNoFinalizadas.length > 0) {
+      throw new BadRequestException(
+        `No se puede finalizar la actividad porque aún hay ${tareasNoFinalizadas.length} tarea(s) pendiente(s)`
+      );
+    }
+
+    // Cambiar estado a Finalizado
+    actividad.estado = ActividadEstado.FINALIZADO;
+    actividad.updatedBy = userId;
+
+    const actividadFinalizada = await this.actividadRepository.save(actividad);
+
+    console.log(`[Actividad ${actividad.codigo}] Finalizada manualmente por usuario ${userId}`);
+
+    // Notificar a coordinador y gestor
+    const destinatarios = [actividad.coordinadorId, actividad.gestorId].filter(
+      (id): id is number => id !== null && id !== undefined,
+    );
+
+    if (destinatarios.length > 0) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `Actividad finalizada: ${actividad.codigo}`,
+          descripcion: `La actividad "${actividad.nombre}" ha sido finalizada. Todas las tareas están completadas.`,
+          entidadTipo: 'Actividad',
+          entidadId: actividad.id,
+          actividadId: actividad.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividad.id}`,
+        },
+      );
+    }
+
+    return actividadFinalizada;
+  }
 }

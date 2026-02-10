@@ -20,6 +20,7 @@ import { TareaTipo, TareaEstado } from '../../tareas/enums/tarea.enum';
 import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 import { TareaService } from '../../tareas/services/tarea.service';
+import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
 
 @Injectable()
 export class SubtareaService {
@@ -32,6 +33,8 @@ export class SubtareaService {
     private readonly evidenciaSubtareaRepository: Repository<EvidenciaSubtarea>,
     @InjectRepository(TareaAsignado)
     private readonly tareaAsignadoRepository: Repository<TareaAsignado>,
+    @InjectRepository(Actividad)
+    private readonly actividadRepository: Repository<Actividad>,
     private readonly notificacionService: NotificacionService,
     @Inject(forwardRef(() => TareaService))
     private readonly tareaService: TareaService,
@@ -125,6 +128,17 @@ export class SubtareaService {
 
     if (tarea.tipo !== TareaTipo.KANBAN) {
       throw new BadRequestException('Solo se pueden crear subtareas para tareas de tipo KANBAN');
+    }
+
+    // No se pueden crear subtareas si la actividad está finalizada
+    if (tarea.actividadId) {
+      const actividad = await this.actividadRepository.findOne({
+        where: { id: tarea.actividadId },
+        select: ['id', 'estado'],
+      });
+      if (actividad && actividad.estado === 'Finalizado') {
+        throw new ForbiddenException('No se pueden crear subtareas en una actividad finalizada');
+      }
     }
 
     // Verificar permisos para IMPLEMENTADOR: debe estar asignado a la tarea

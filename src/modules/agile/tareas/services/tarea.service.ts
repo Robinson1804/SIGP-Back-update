@@ -135,6 +135,17 @@ export class TareaService {
       throw new ForbiddenException('Los implementadores no pueden crear tareas en actividades. Solo pueden crear subtareas en tareas donde estén asignados.');
     }
 
+    // No se pueden crear tareas KANBAN en actividades finalizadas
+    if (createDto.tipo === TareaTipo.KANBAN && createDto.actividadId) {
+      const actividad = await this.actividadRepository.findOne({
+        where: { id: createDto.actividadId },
+        select: ['id', 'estado'],
+      });
+      if (actividad && actividad.estado === 'Finalizado') {
+        throw new ForbiddenException('No se pueden crear tareas en una actividad finalizada');
+      }
+    }
+
     // DESARROLLADOR solo puede crear tareas en HUs donde está asignado como responsable
     // asignadoA en la HU guarda IDs de la tabla personal (personalId), no de usuarios (userId)
     if (userRole === Role.DESARROLLADOR && createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId && userId) {
@@ -306,6 +317,11 @@ export class TareaService {
     // Auto-transition: HU pasa a "En progreso" cuando se crea una tarea SCRUM
     if (tareaGuardada.tipo === TareaTipo.SCRUM && tareaGuardada.historiaUsuarioId) {
       await this.autoTransicionHUAlCrearTarea(tareaGuardada.historiaUsuarioId, userId);
+    }
+
+    // Auto-transition: Actividad pasa de "Pendiente" a "En desarrollo" cuando se crea una tarea KANBAN
+    if (tareaGuardada.tipo === TareaTipo.KANBAN && tareaGuardada.actividadId) {
+      await this.recalcularEstadoActividad(tareaGuardada.actividadId, userId);
     }
 
     return tareaGuardada;
@@ -741,6 +757,11 @@ export class TareaService {
     // Actualizar estado de la HU automáticamente (solo para tareas SCRUM)
     if (tarea.tipo === TareaTipo.SCRUM && tarea.historiaUsuarioId) {
       await this.actualizarEstadoHUSegunTareas(tarea.historiaUsuarioId, userId);
+    }
+
+    // Actualizar estado de la Actividad automáticamente (solo para tareas KANBAN)
+    if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
+      await this.recalcularEstadoActividad(tarea.actividadId, userId);
     }
 
     return tareaActualizada;
@@ -1954,6 +1975,79 @@ export class TareaService {
       console.log(`[KANBAN Tarea ${tarea.codigo}] Notificación de finalización enviada a gestores.`);
     } catch (error) {
       console.error(`[KANBAN Tarea ${tarea.codigo}] Error enviando notificación de finalización:`, error);
+    }
+  }
+
+  /**
+   * Recalcula el estado de una actividad basándose en el estado de sus tareas.
+   * Transiciones:
+   * - Pendiente → En desarrollo: Cuando se crea la primera tarea
+   * - En desarrollo → (mantener): Cuando hay tareas pero no todas están finalizadas
+   * - Finalizado: Solo se cambia manualmente desde el frontend con modal de confirmación
+   */
+  async recalcularEstadoActividad(actividadId: number, userId?: number): Promise<void> {
+    const actividad = await this.actividadRepository.findOne({
+      where: { id: actividadId },
+      select: ['id', 'codigo', 'nombre', 'estado', 'coordinadorId', 'gestorId'],
+    });
+
+    if (!actividad) {
+      console.log(`[Actividad ${actividadId}] No encontrada, no se puede recalcular estado.`);
+      return;
+    }
+
+    const estadoAnterior = actividad.estado;
+
+    // Obtener todas las tareas activas de la actividad
+    const tareas = await this.tareaRepository.find({
+      where: { actividadId, activo: true, tipo: TareaTipo.KANBAN },
+      select: ['id', 'estado'],
+    });
+
+    const totalTareas = tareas.length;
+
+    // Si hay tareas y la actividad está en Pendiente → cambiar a En desarrollo
+    if (totalTareas > 0 && estadoAnterior === 'Pendiente') {
+      actividad.estado = 'En desarrollo' as any;
+      await this.actividadRepository.save(actividad);
+
+      console.log(
+        `[Actividad ${actividad.codigo}] Estado cambiado de "${estadoAnterior}" a "En desarrollo" (primera tarea creada)`,
+      );
+
+      // Notificar a coordinador y gestor
+      const destinatarios = [actividad.coordinadorId, actividad.gestorId].filter(
+        (id): id is number => id !== null && id !== undefined,
+      );
+
+      if (destinatarios.length > 0) {
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.PROYECTOS,
+          destinatarios,
+          {
+            titulo: `Actividad iniciada: ${actividad.codigo}`,
+            descripcion: `La actividad "${actividad.nombre}" ha cambiado a estado "En desarrollo" (se creó la primera tarea).`,
+            entidadTipo: 'Actividad',
+            entidadId: actividad.id,
+            actividadId: actividad.id,
+            urlAccion: `/poi/actividad/detalles?id=${actividad.id}`,
+          },
+        );
+      }
+    }
+
+    // Verificar si todas las tareas están finalizadas (pero NO cambiar automáticamente)
+    // El frontend mostrará un modal para que el usuario decida si finalizar o continuar
+    if (totalTareas > 0 && estadoAnterior === 'En desarrollo') {
+      const tareasFinalizadas = tareas.filter(t => t.estado === TareaEstado.FINALIZADO).length;
+
+      if (tareasFinalizadas === totalTareas) {
+        console.log(
+          `[Actividad ${actividad.codigo}] Todas las tareas (${totalTareas}) están finalizadas. ` +
+          `El frontend debe mostrar modal de confirmación para finalizar la actividad.`,
+        );
+        // NO cambiar el estado aquí - el frontend lo hará con el modal
+      }
     }
   }
 }
