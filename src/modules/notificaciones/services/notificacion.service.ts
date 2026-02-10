@@ -172,7 +172,7 @@ export class NotificacionService {
   async marcarLeida(id: number, usuarioId: number, userRole?: string): Promise<Notificacion> {
     // PMO, COORDINADOR, SCRUM_MASTER can mark any notification as read
     // Others can only mark their own notifications
-    let notificacion: Notificacion;
+    let notificacion: Notificacion | null;
 
     if (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER) {
       notificacion = await this.notificacionRepository.findOne({
