@@ -98,11 +98,9 @@ export class DashboardGeneralService {
 
     const total = actividades.length;
     const enEjecucion = actividades.filter(
-      (a) => a.estado === ActividadEstado.EN_EJECUCION,
+      (a) => a.estado === ActividadEstado.EN_DESARROLLO,
     ).length;
-    const suspendidas = actividades.filter(
-      (a) => a.estado === ActividadEstado.SUSPENDIDO,
-    ).length;
+    const suspendidas = 0; // Estado SUSPENDIDO eliminado del enum
 
     return { total, enEjecucion, suspendidas };
   }

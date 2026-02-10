@@ -138,7 +138,7 @@ export class DashboardGerencialService {
 
     const total = actividades.length;
     const enCurso = actividades.filter(
-      (a) => a.estado === ActividadEstado.EN_EJECUCION,
+      (a) => a.estado === ActividadEstado.EN_DESARROLLO,
     ).length;
     const finalizados = actividades.filter(
       (a) => a.estado === ActividadEstado.FINALIZADO,
@@ -394,7 +394,7 @@ export class DashboardGerencialService {
     const [actividades, total] = await this.actividadRepository.findAndCount({
       where: {
         activo: true,
-        estado: In([ActividadEstado.EN_EJECUCION, ActividadEstado.PENDIENTE]),
+        estado: In([ActividadEstado.EN_DESARROLLO, ActividadEstado.PENDIENTE]),
       },
       relations: ['coordinador'],
       order: { updatedAt: 'DESC' },
