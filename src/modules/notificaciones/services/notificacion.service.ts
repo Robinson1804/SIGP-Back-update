@@ -228,17 +228,41 @@ export class NotificacionService {
     // PMO sees all active projects with notifications
     if (userRole === Role.PMO) {
       qb.where('n.activo = true')
-        .andWhere('p.activo = true');
+        .andWhere('p.activo = true')
+        .andWhere('n.tipo IN (:...tipos)', {
+          tipos: [
+            TipoNotificacion.PROYECTOS,
+            TipoNotificacion.SPRINTS,
+            TipoNotificacion.APROBACIONES,
+            TipoNotificacion.VALIDACIONES,
+          ],
+        });
     } else if (userRole === Role.COORDINADOR) {
       // COORDINADOR sees projects where they are coordinador or scrum_master
       qb.where('n.activo = true')
         .andWhere('p.activo = true')
-        .andWhere('(p.coordinador_id = :usuarioId OR p.scrum_master_id = :usuarioId)', { usuarioId });
+        .andWhere('(p.coordinador_id = :usuarioId OR p.scrum_master_id = :usuarioId)', { usuarioId })
+        .andWhere('n.tipo IN (:...tipos)', {
+          tipos: [
+            TipoNotificacion.PROYECTOS,
+            TipoNotificacion.SPRINTS,
+            TipoNotificacion.APROBACIONES,
+            TipoNotificacion.VALIDACIONES,
+          ],
+        });
     } else if (userRole === Role.SCRUM_MASTER) {
       // SCRUM_MASTER sees projects where they are scrum_master
       qb.where('n.activo = true')
         .andWhere('p.activo = true')
-        .andWhere('p.scrum_master_id = :usuarioId', { usuarioId });
+        .andWhere('p.scrum_master_id = :usuarioId', { usuarioId })
+        .andWhere('n.tipo IN (:...tipos)', {
+          tipos: [
+            TipoNotificacion.PROYECTOS,
+            TipoNotificacion.SPRINTS,
+            TipoNotificacion.APROBACIONES,
+            TipoNotificacion.VALIDACIONES,
+          ],
+        });
     } else {
       qb.where('n.destinatarioId = :usuarioId', { usuarioId })
         .andWhere('n.activo = true');
