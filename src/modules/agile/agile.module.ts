@@ -12,7 +12,7 @@ import { Usuario } from '../auth/entities/usuario.entity';
 // Epicas
 import { Epica } from './epicas/entities/epica.entity';
 import { EpicaService } from './epicas/services/epica.service';
-import { EpicaController, ProyectoEpicasController } from './epicas/controllers/epica.controller';
+import { EpicaController, ProyectoEpicasController, SubproyectoEpicasController } from './epicas/controllers/epica.controller';
 
 // Sprints
 import { Sprint } from './sprints/entities/sprint.entity';
@@ -142,6 +142,7 @@ import {
     // Epicas
     EpicaController,
     ProyectoEpicasController,
+    SubproyectoEpicasController,
     // Sprints
     SprintController,
     ProyectoSprintsController,

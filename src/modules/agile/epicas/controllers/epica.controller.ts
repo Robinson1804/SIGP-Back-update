@@ -35,11 +35,13 @@ export class EpicaController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('prioridad') prioridad?: EpicaPrioridad,
     @Query('activo') activo?: string,
   ) {
     return this.epicaService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       prioridad,
       activo: activo !== undefined ? activo === 'true' : undefined,
     });
@@ -90,5 +92,16 @@ export class ProyectoEpicasController {
     @CurrentUser('id') userId: number,
   ) {
     return this.epicaService.reordenarEpicas(proyectoId, reordenarDto, userId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/epicas')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoEpicasController {
+  constructor(private readonly epicaService: EpicaService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.epicaService.findBySubproyecto(subproyectoId);
   }
 }
