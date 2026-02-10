@@ -42,9 +42,18 @@ export class SprintService {
   ) {}
 
   async create(createDto: CreateSprintDto, userId?: number): Promise<Sprint> {
+    // Validar que tenga proyecto o subproyecto (mutuamente exclusivo)
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Debe proporcionar proyectoId o subproyectoId');
+    }
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede proporcionar ambos proyectoId y subproyectoId');
+    }
+
     // Map frontend field names to entity field names
     const sprint = this.sprintRepository.create({
       proyectoId: createDto.proyectoId,
+      subproyectoId: createDto.subproyectoId,
       nombre: createDto.nombre,
       sprintGoal: createDto.objetivo || createDto.sprintGoal,
       fechaInicio: createDto.fechaInicio,
@@ -69,9 +78,13 @@ export class SprintService {
 
     // Auto-transición: En planificación → En desarrollo al crear primer sprint
     try {
-      const proyecto = await this.proyectoRepository.findOne({
-        where: { id: createDto.proyectoId },
-      });
+      // Validar que el proyecto/subproyecto existe
+      const parentId = createDto.proyectoId || createDto.subproyectoId;
+      const parentType = createDto.proyectoId ? 'proyecto' : 'subproyecto';
+
+      const proyecto = createDto.proyectoId
+        ? await this.proyectoRepository.findOne({ where: { id: createDto.proyectoId } })
+        : null;
 
       if (proyecto && proyecto.estado === ProyectoEstado.EN_PLANIFICACION) {
         proyecto.estado = ProyectoEstado.EN_DESARROLLO;
@@ -112,6 +125,7 @@ export class SprintService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     estado?: SprintEstado;
     activo?: boolean;
   }): Promise<Sprint[]> {
@@ -122,6 +136,12 @@ export class SprintService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('sprint.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('sprint.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -139,6 +159,13 @@ export class SprintService {
   async findByProyecto(proyectoId: number): Promise<Sprint[]> {
     return this.sprintRepository.find({
       where: { proyectoId, activo: true },
+      order: { fechaInicio: 'DESC' },
+    });
+  }
+
+  async findBySubproyecto(subproyectoId: number): Promise<Sprint[]> {
+    return this.sprintRepository.find({
+      where: { subproyectoId, activo: true },
       order: { fechaInicio: 'DESC' },
     });
   }

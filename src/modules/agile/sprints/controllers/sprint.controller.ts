@@ -35,11 +35,13 @@ export class SprintController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('estado') estado?: SprintEstado,
     @Query('activo') activo?: string,
   ) {
     return this.sprintService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       estado,
       activo: activo !== undefined ? activo === 'true' : undefined,
     });
@@ -106,5 +108,16 @@ export class ProyectoSprintsController {
   @Get('velocidad')
   getVelocidad(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.sprintService.getVelocidadProyecto(proyectoId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/sprints')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoSprintsController {
+  constructor(private readonly sprintService: SprintService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.sprintService.findBySubproyecto(subproyectoId);
   }
 }

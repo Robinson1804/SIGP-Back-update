@@ -16,22 +16,32 @@ export class EpicaService {
   ) {}
 
   async create(createDto: CreateEpicaDto, userId?: number): Promise<Epica> {
+    // Validar que tenga proyecto o subproyecto (mutuamente exclusivo)
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new ConflictException('Debe proporcionar proyectoId o subproyectoId');
+    }
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new ConflictException('No puede proporcionar ambos proyectoId y subproyectoId');
+    }
+
     // Auto-generate codigo if not provided
     let codigo = createDto.codigo;
     if (!codigo) {
-      const count = await this.epicaRepository.count({
-        where: { proyectoId: createDto.proyectoId },
-      });
+      const whereClause = createDto.proyectoId
+        ? { proyectoId: createDto.proyectoId }
+        : { subproyectoId: createDto.subproyectoId };
+      const count = await this.epicaRepository.count({ where: whereClause });
       codigo = `EP-${String(count + 1).padStart(3, '0')}`;
     }
 
-    const existing = await this.epicaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo },
-    });
+    const whereClause = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, codigo }
+      : { subproyectoId: createDto.subproyectoId, codigo };
+    const existing = await this.epicaRepository.findOne({ where: whereClause });
 
     if (existing) {
       throw new ConflictException(
-        `Ya existe una épica con el código ${codigo} en este proyecto`,
+        `Ya existe una épica con el código ${codigo} en este proyecto/subproyecto`,
       );
     }
 
@@ -47,6 +57,7 @@ export class EpicaService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     prioridad?: EpicaPrioridad;
     activo?: boolean;
   }): Promise<Epica[]> {
@@ -58,6 +69,12 @@ export class EpicaService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('epica.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('epica.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -77,6 +94,20 @@ export class EpicaService {
   async findByProyecto(proyectoId: number): Promise<Epica[]> {
     const epicas = await this.epicaRepository.find({
       where: { proyectoId, activo: true },
+      relations: ['historiasUsuario'],
+      order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
+    });
+
+    // Filtrar solo las HUs activas en cada épica
+    return epicas.map((epica) => ({
+      ...epica,
+      historiasUsuario: epica.historiasUsuario?.filter((hu) => hu.activo) || [],
+    }));
+  }
+
+  async findBySubproyecto(subproyectoId: number): Promise<Epica[]> {
+    const epicas = await this.epicaRepository.find({
+      where: { subproyectoId, activo: true },
       relations: ['historiasUsuario'],
       order: { orden: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
     });

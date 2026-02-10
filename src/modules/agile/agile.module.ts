@@ -17,7 +17,7 @@ import { EpicaController, ProyectoEpicasController } from './epicas/controllers/
 // Sprints
 import { Sprint } from './sprints/entities/sprint.entity';
 import { SprintService } from './sprints/services/sprint.service';
-import { SprintController, ProyectoSprintsController } from './sprints/controllers/sprint.controller';
+import { SprintController, ProyectoSprintsController, SubproyectoSprintsController } from './sprints/controllers/sprint.controller';
 
 // Historias de Usuario
 import { HistoriaUsuario } from './historias-usuario/entities/historia-usuario.entity';
@@ -145,6 +145,7 @@ import {
     // Sprints
     SprintController,
     ProyectoSprintsController,
+    SubproyectoSprintsController,
     // Historias de Usuario
     HistoriaUsuarioController,
     ProyectoHistoriasUsuarioController,

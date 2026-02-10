@@ -9,8 +9,13 @@ import {
 import { EpicaPrioridad } from '../enums/epica.enum';
 
 export class CreateEpicaDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsOptional()
   @IsString()

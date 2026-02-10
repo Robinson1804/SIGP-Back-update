@@ -10,8 +10,13 @@ import {
 import { SprintEstado } from '../enums/sprint.enum';
 
 export class CreateSprintDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsString()
   @MaxLength(100)
