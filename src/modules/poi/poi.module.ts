@@ -47,15 +47,18 @@ import {
 import {
   ActaController,
   ProyectoActasController,
+  SubproyectoActasController,
 } from './actas/controllers/acta.controller';
 import {
   RequerimientoController,
   ProyectoRequerimientosController,
+  SubproyectoRequerimientosController,
 } from './requerimientos/controllers/requerimiento.controller';
 import {
   CronogramaController,
   ProyectoCronogramasController,
   ProyectoCronogramaController,
+  SubproyectoCronogramaController,
   TareaCronogramaController,
   CronogramaTareasController,
   CronogramaDependenciasController,
@@ -108,13 +111,16 @@ import {
     // Actas
     ActaController,
     ProyectoActasController,
+    SubproyectoActasController,
     // Requerimientos
     RequerimientoController,
     ProyectoRequerimientosController,
+    SubproyectoRequerimientosController,
     // Cronogramas
     CronogramaController,
     ProyectoCronogramasController,
     ProyectoCronogramaController,
+    SubproyectoCronogramaController,
     TareaCronogramaController,
     CronogramaTareasController,
     CronogramaDependenciasController,

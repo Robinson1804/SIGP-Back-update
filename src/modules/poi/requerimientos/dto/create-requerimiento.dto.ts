@@ -19,8 +19,13 @@ class CriterioAceptacionDto {
 }
 
 export class CreateRequerimientoDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsString()
   @MaxLength(20)

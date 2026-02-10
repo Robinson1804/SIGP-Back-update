@@ -47,11 +47,13 @@ export class CronogramaController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('estado') estado?: CronogramaEstado,
     @Query('activo') activo?: string,
   ) {
     return this.cronogramaService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       estado,
       activo: activo !== undefined ? activo === 'true' : undefined,
     });
@@ -181,6 +183,33 @@ export class ProyectoCronogramaController {
     @CurrentUser('id') userId: number,
   ) {
     return this.cronogramaService.create({ ...createDto, proyectoId }, userId);
+  }
+}
+
+// Endpoint singular para obtener el cronograma activo de un subproyecto
+@Controller('subproyectos/:subproyectoId/cronograma')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoCronogramaController {
+  constructor(private readonly cronogramaService: CronogramaService) {}
+
+  @Get()
+  async findActiveBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    const cronogramas = await this.cronogramaService.findBySubproyecto(subproyectoId);
+    if (cronogramas.length === 0) {
+      return null;
+    }
+    // Retornar el cronograma mas reciente (activo)
+    return cronogramas[0];
+  }
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  createForSubproyecto(
+    @Param('subproyectoId', ParseIntPipe) subproyectoId: number,
+    @Body() createDto: CreateCronogramaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.cronogramaService.create({ ...createDto, subproyectoId, proyectoId: undefined }, userId);
   }
 }
 

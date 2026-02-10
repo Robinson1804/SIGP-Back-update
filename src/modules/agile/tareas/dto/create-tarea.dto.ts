@@ -16,6 +16,14 @@ export class CreateTareaDto {
   @IsEnum(TareaTipo)
   tipo: TareaTipo;
 
+  @IsOptional()
+  @IsInt()
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
+
   @ValidateIf((o) => o.tipo === TareaTipo.SCRUM)
   @IsInt()
   historiaUsuarioId?: number;

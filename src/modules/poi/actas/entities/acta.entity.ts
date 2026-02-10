@@ -7,21 +7,31 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Check,
 } from 'typeorm';
 import { ActaTipo, ActaEstado, TipoReunion, Modalidad } from '../enums/acta.enum';
 
 @Entity('actas', { schema: 'poi' })
+@Check(`("proyecto_id" IS NOT NULL AND "subproyecto_id" IS NULL) OR ("proyecto_id" IS NULL AND "subproyecto_id" IS NOT NULL)`)
 export class Acta {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Index()
-  @Column({ name: 'proyecto_id' })
+  @Column({ name: 'proyecto_id', nullable: true })
   proyectoId: number;
 
-  @ManyToOne('Proyecto', 'actas')
+  @ManyToOne('Proyecto', 'actas', { nullable: true })
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: any;
+
+  @Index()
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
+
+  @ManyToOne('Subproyecto', 'actas', { nullable: true })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: any;
 
   @Column({ length: 20 })
   codigo: string;

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Requerimiento } from '../entities/requerimiento.entity';
@@ -14,8 +14,20 @@ export class RequerimientoService {
   ) {}
 
   async create(createDto: CreateRequerimientoDto, userId?: number): Promise<Requerimiento> {
+    // Validar exclusividad mutua
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede especificar proyectoId y subproyectoId simultáneamente');
+    }
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Se requiere proyectoId o subproyectoId');
+    }
+
+    const whereCondition = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, codigo: createDto.codigo }
+      : { subproyectoId: createDto.subproyectoId, codigo: createDto.codigo };
+
     const existing = await this.requerimientoRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo: createDto.codigo },
+      where: whereCondition,
     });
 
     if (existing) {
@@ -35,6 +47,7 @@ export class RequerimientoService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     tipo?: RequerimientoTipo;
     prioridad?: RequerimientoPrioridad;
     activo?: boolean;
@@ -47,6 +60,12 @@ export class RequerimientoService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('requerimiento.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('requerimiento.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -74,10 +93,17 @@ export class RequerimientoService {
     });
   }
 
+  async findBySubproyecto(subproyectoId: number): Promise<Requerimiento[]> {
+    return this.requerimientoRepository.find({
+      where: { subproyectoId, activo: true },
+      order: { prioridad: 'DESC', createdAt: 'DESC' },
+    });
+  }
+
   async findOne(id: number): Promise<Requerimiento> {
     const requerimiento = await this.requerimientoRepository.findOne({
       where: { id },
-      relations: ['proyecto'],
+      relations: ['proyecto', 'subproyecto'],
     });
 
     if (!requerimiento) {

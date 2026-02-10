@@ -9,8 +9,13 @@ import {
 } from 'class-validator';
 
 export class CreateActaConstitucionDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsOptional()
   @IsString()

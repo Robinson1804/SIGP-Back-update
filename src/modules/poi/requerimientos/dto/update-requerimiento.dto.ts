@@ -3,7 +3,7 @@ import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { CreateRequerimientoDto } from './create-requerimiento.dto';
 
 export class UpdateRequerimientoDto extends PartialType(
-  OmitType(CreateRequerimientoDto, ['proyectoId'] as const),
+  OmitType(CreateRequerimientoDto, ['proyectoId', 'subproyectoId'] as const),
 ) {
   /**
    * Código del requerimiento (REQ-001, REQ-002, etc.)

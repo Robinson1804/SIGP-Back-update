@@ -39,8 +39,13 @@ export class ParticipanteDailyDto {
 }
 
 export class CreateActaDailyDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsString()
   @MaxLength(200)

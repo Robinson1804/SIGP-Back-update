@@ -6,17 +6,23 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  Check,
 } from 'typeorm';
 import { RequerimientoPrioridad, RequerimientoTipo } from '../enums/requerimiento.enum';
 import { Proyecto } from '../../proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../subproyectos/entities/subproyecto.entity';
 
 @Entity({ schema: 'poi', name: 'requerimientos' })
+@Check(`("proyecto_id" IS NOT NULL AND "subproyecto_id" IS NULL) OR ("proyecto_id" IS NULL AND "subproyecto_id" IS NOT NULL)`)
 export class Requerimiento {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'proyecto_id' })
+  @Column({ name: 'proyecto_id', nullable: true })
   proyectoId: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ length: 20 })
   codigo: string;
@@ -66,7 +72,11 @@ export class Requerimiento {
   updatedBy: number | null | undefined;
 
   // Relations
-  @ManyToOne(() => Proyecto, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 }

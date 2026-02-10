@@ -7,19 +7,25 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Check,
 } from 'typeorm';
 import { CronogramaEstado } from '../enums/cronograma.enum';
 import { Proyecto } from '../../proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../subproyectos/entities/subproyecto.entity';
 import { TareaCronograma } from './tarea-cronograma.entity';
 import { DependenciaCronograma } from './dependencia-cronograma.entity';
 
 @Entity({ schema: 'poi', name: 'cronogramas' })
+@Check(`("proyecto_id" IS NOT NULL AND "subproyecto_id" IS NULL) OR ("proyecto_id" IS NULL AND "subproyecto_id" IS NOT NULL)`)
 export class Cronograma {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'proyecto_id' })
+  @Column({ name: 'proyecto_id', nullable: true })
   proyectoId: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ length: 20 })
   codigo: string;
@@ -78,9 +84,13 @@ export class Cronograma {
   updatedBy: number | null | undefined;
 
   // Relations
-  @ManyToOne(() => Proyecto, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'proyecto_id' })
   proyecto: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 
   @OneToMany(() => TareaCronograma, (tarea) => tarea.cronograma)
   tareas: TareaCronograma[];

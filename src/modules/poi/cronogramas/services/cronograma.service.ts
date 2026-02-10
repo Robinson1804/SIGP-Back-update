@@ -61,19 +61,29 @@ export class CronogramaService {
   }
 
   async create(createDto: CreateCronogramaDto, userId?: number): Promise<Cronograma> {
-    // Validar que proyectoId esté definido
-    if (!createDto.proyectoId) {
-      throw new BadRequestException('El proyectoId es requerido para crear un cronograma');
+    // Validar que al menos uno de proyectoId o subproyectoId esté definido
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Se requiere proyectoId o subproyectoId para crear un cronograma');
     }
 
-    // Validar que el proyecto no tenga ya un cronograma (relación 1:1)
+    // Validar exclusividad mutua
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede especificar proyectoId y subproyectoId simultáneamente');
+    }
+
+    // Validar que el proyecto/subproyecto no tenga ya un cronograma (relación 1:1)
+    const whereCondition = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, activo: true }
+      : { subproyectoId: createDto.subproyectoId, activo: true };
+
     const existingForProject = await this.cronogramaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, activo: true },
+      where: whereCondition,
     });
 
     if (existingForProject) {
+      const entidad = createDto.proyectoId ? 'proyecto' : 'subproyecto';
       throw new ConflictException(
-        `El proyecto ya tiene un cronograma activo (${existingForProject.codigo}). Un proyecto solo puede tener un cronograma.`,
+        `El ${entidad} ya tiene un cronograma activo (${existingForProject.codigo}). Solo puede tener un cronograma.`,
       );
     }
 
@@ -113,6 +123,7 @@ export class CronogramaService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     estado?: CronogramaEstado;
     activo?: boolean;
   }): Promise<Cronograma[]> {
@@ -123,6 +134,12 @@ export class CronogramaService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('cronograma.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('cronograma.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -160,13 +177,36 @@ export class CronogramaService {
     }
   }
 
+  async findBySubproyecto(subproyectoId: number): Promise<Cronograma[]> {
+    try {
+      const cronogramas = await this.cronogramaRepository.find({
+        where: { subproyectoId, activo: true },
+        relations: ['tareas'],
+        order: { version: 'DESC' },
+      });
+
+      // Filtrar tareas inactivas (soft-deleted) - crear copia para no afectar la entidad
+      return cronogramas.map(cronograma => ({
+        ...cronograma,
+        tareas: cronograma.tareas ? cronograma.tareas.filter(t => t.activo === true) : [],
+      })) as Cronograma[];
+    } catch (error) {
+      console.error('Error in findBySubproyecto:', error);
+      // Fallback sin relaciones si hay error
+      return this.cronogramaRepository.find({
+        where: { subproyectoId, activo: true },
+        order: { version: 'DESC' },
+      });
+    }
+  }
+
   /**
    * Obtiene el cronograma sin filtrar tareas (uso interno para operaciones de escritura)
    */
   private async findOneInternal(id: number): Promise<Cronograma> {
     const cronograma = await this.cronogramaRepository.findOne({
       where: { id },
-      relations: ['proyecto', 'tareas'],
+      relations: ['proyecto', 'subproyecto', 'tareas'],
     });
 
     if (!cronograma) {

@@ -12,6 +12,10 @@ export class CreateCronogramaDto {
   proyectoId?: number;
 
   @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
+
+  @IsOptional()
   @IsString()
   @MaxLength(20)
   codigo?: string;

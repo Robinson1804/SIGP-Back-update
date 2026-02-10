@@ -34,12 +34,14 @@ export class RequerimientoController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('tipo') tipo?: RequerimientoTipo,
     @Query('prioridad') prioridad?: RequerimientoPrioridad,
     @Query('activo') activo?: string,
   ) {
     return this.requerimientoService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       tipo,
       prioridad,
       activo: activo !== undefined ? activo === 'true' : undefined,
@@ -82,6 +84,26 @@ export class ProyectoRequerimientosController {
   findFuncionalesByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.requerimientoService.findAll({
       proyectoId,
+      tipo: RequerimientoTipo.FUNCIONAL,
+      activo: true,
+    });
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/requerimientos')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoRequerimientosController {
+  constructor(private readonly requerimientoService: RequerimientoService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.requerimientoService.findBySubproyecto(subproyectoId);
+  }
+
+  @Get('funcionales')
+  findFuncionalesBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.requerimientoService.findAll({
+      subproyectoId,
       tipo: RequerimientoTipo.FUNCIONAL,
       activo: true,
     });

@@ -7,14 +7,18 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Check,
 } from 'typeorm';
 import { TareaTipo, TareaEstado, TareaPrioridad } from '../enums/tarea.enum';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
+import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { TareaAsignado } from './tarea-asignado.entity';
 
 @Entity({ schema: 'agile', name: 'tareas' })
+@Check(`"proyecto_id" IS NULL OR "subproyecto_id" IS NULL`)
 export class Tarea {
   @PrimaryGeneratedColumn()
   id: number;
@@ -24,6 +28,12 @@ export class Tarea {
     enum: TareaTipo,
   })
   tipo: TareaTipo;
+
+  @Column({ name: 'proyecto_id', nullable: true })
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ name: 'historia_usuario_id', nullable: true })
   historiaUsuarioId: number;
@@ -116,6 +126,14 @@ export class Tarea {
   updatedBy: number | null | undefined;
 
   // Relations
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'proyecto_id' })
+  proyecto?: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
+
   @ManyToOne(() => HistoriaUsuario, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'historia_usuario_id' })
   historiaUsuario: HistoriaUsuario;

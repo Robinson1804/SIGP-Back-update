@@ -55,12 +55,14 @@ export class ActaController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('tipo') tipo?: ActaTipo,
     @Query('estado') estado?: ActaEstado,
     @Query('activo') activo?: string,
   ) {
     return this.actaService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       tipo,
       estado,
       activo: activo !== undefined ? activo === 'true' : undefined,
@@ -181,5 +183,16 @@ export class ProyectoActasController {
   @Get()
   findByProyecto(@Param('proyectoId', ParseIntPipe) proyectoId: number) {
     return this.actaService.findByProyecto(proyectoId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/actas')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoActasController {
+  constructor(private readonly actaService: ActaService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.actaService.findBySubproyecto(subproyectoId);
   }
 }

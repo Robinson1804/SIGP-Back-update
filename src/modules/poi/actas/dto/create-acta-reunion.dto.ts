@@ -12,8 +12,13 @@ import {
 import { TipoReunion, Modalidad } from '../enums/acta.enum';
 
 export class CreateActaReunionDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsOptional()
   @IsString()

@@ -43,10 +43,13 @@ export class ActaService {
    * - Reunión: ACT-REU-# (ej: ACT-REU-1, ACT-REU-2)
    * - Daily Meeting: ACT-DAI-# (ej: ACT-DAI-1, ACT-DAI-2)
    */
-  private async generateActaCodigo(proyectoId: number, tipo: ActaTipo): Promise<string> {
-    // Contar actas del mismo tipo en el proyecto
+  private async generateActaCodigo(proyectoId: number | undefined, tipo: ActaTipo, subproyectoId?: number): Promise<string> {
+    // Contar actas del mismo tipo en el proyecto/subproyecto
+    const whereCondition = proyectoId
+      ? { proyectoId, tipo }
+      : { subproyectoId, tipo };
     const count = await this.actaRepository.count({
-      where: { proyectoId, tipo },
+      where: whereCondition,
     });
 
     // Prefijo según tipo
@@ -68,11 +71,23 @@ export class ActaService {
   }
 
   async createReunion(createDto: CreateActaReunionDto, userId?: number): Promise<Acta> {
+    // Validar exclusividad mutua
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede especificar proyectoId y subproyectoId simultáneamente');
+    }
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Se requiere proyectoId o subproyectoId');
+    }
+
     // Auto-generar codigo usando el formato por tipo
-    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.REUNION);
+    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.REUNION, createDto.subproyectoId);
+
+    const whereCondition = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, codigo }
+      : { subproyectoId: createDto.subproyectoId, codigo };
 
     const existing = await this.actaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo },
+      where: whereCondition,
     });
 
     if (existing) {
@@ -94,9 +109,21 @@ export class ActaService {
   }
 
   async createConstitucion(createDto: CreateActaConstitucionDto, userId?: number): Promise<Acta> {
-    // Verificar si ya existe un acta de constitución para este proyecto
+    // Validar exclusividad mutua
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede especificar proyectoId y subproyectoId simultáneamente');
+    }
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Se requiere proyectoId o subproyectoId');
+    }
+
+    // Verificar si ya existe un acta de constitución para este proyecto/subproyecto
+    const whereCondition = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, tipo: ActaTipo.CONSTITUCION, activo: true }
+      : { subproyectoId: createDto.subproyectoId, tipo: ActaTipo.CONSTITUCION, activo: true };
+
     const existingConstitucion = await this.actaRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, tipo: ActaTipo.CONSTITUCION, activo: true },
+      where: whereCondition,
     });
 
     if (existingConstitucion) {
@@ -106,7 +133,7 @@ export class ActaService {
     }
 
     // Auto-generar codigo usando el formato por tipo
-    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.CONSTITUCION);
+    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.CONSTITUCION, createDto.subproyectoId);
 
     // Generar valores por defecto
     const today = new Date().toISOString().split('T')[0];
@@ -126,13 +153,21 @@ export class ActaService {
   }
 
   async createDaily(createDto: CreateActaDailyDto, userId?: number): Promise<Acta> {
-    // Verificar si ya existe un daily para esta fecha en el proyecto
+    // Validar exclusividad mutua
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede especificar proyectoId y subproyectoId simultáneamente');
+    }
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Se requiere proyectoId o subproyectoId');
+    }
+
+    // Verificar si ya existe un daily para esta fecha en el proyecto/subproyecto
+    const dailyWhereCondition = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, tipo: ActaTipo.DAILY_MEETING, fecha: createDto.fecha as unknown as Date }
+      : { subproyectoId: createDto.subproyectoId, tipo: ActaTipo.DAILY_MEETING, fecha: createDto.fecha as unknown as Date };
+
     const existingDaily = await this.actaRepository.findOne({
-      where: {
-        proyectoId: createDto.proyectoId,
-        tipo: ActaTipo.DAILY_MEETING,
-        fecha: createDto.fecha as unknown as Date,
-      },
+      where: dailyWhereCondition,
     });
 
     if (existingDaily) {
@@ -142,10 +177,11 @@ export class ActaService {
     }
 
     // Auto-generar codigo usando el formato por tipo
-    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.DAILY_MEETING);
+    const codigo = await this.generateActaCodigo(createDto.proyectoId, ActaTipo.DAILY_MEETING, createDto.subproyectoId);
 
     const acta = this.actaRepository.create({
       proyectoId: createDto.proyectoId,
+      subproyectoId: createDto.subproyectoId,
       codigo,
       nombre: createDto.nombre,
       fecha: createDto.fecha,
@@ -235,6 +271,7 @@ export class ActaService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     tipo?: ActaTipo;
     estado?: ActaEstado;
     activo?: boolean;
@@ -245,6 +282,10 @@ export class ActaService {
 
     if (filters?.proyectoId) {
       queryBuilder.andWhere('acta.proyectoId = :proyectoId', { proyectoId: filters.proyectoId });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('acta.subproyectoId = :subproyectoId', { subproyectoId: filters.subproyectoId });
     }
 
     if (filters?.tipo) {
@@ -275,10 +316,23 @@ export class ActaService {
     return { constitucion, reuniones, dailies };
   }
 
+  async findBySubproyecto(subproyectoId: number): Promise<{ constitucion: Acta | null; reuniones: Acta[]; dailies: Acta[] }> {
+    const actas = await this.actaRepository.find({
+      where: { subproyectoId, activo: true },
+      order: { fecha: 'DESC' },
+    });
+
+    const constitucion = actas.find((a) => a.tipo === ActaTipo.CONSTITUCION) || null;
+    const reuniones = actas.filter((a) => a.tipo === ActaTipo.REUNION);
+    const dailies = actas.filter((a) => a.tipo === ActaTipo.DAILY_MEETING);
+
+    return { constitucion, reuniones, dailies };
+  }
+
   async findOne(id: number): Promise<Acta> {
     const acta = await this.actaRepository.findOne({
       where: { id },
-      relations: ['proyecto', 'aprobador', 'moderador'],
+      relations: ['proyecto', 'subproyecto', 'aprobador', 'moderador'],
     });
 
     if (!acta) {
@@ -291,18 +345,21 @@ export class ActaService {
   async findOneWithProyecto(id: number): Promise<{ acta: Acta; proyecto: { codigo: string; nombre: string } }> {
     const acta = await this.actaRepository.findOne({
       where: { id },
-      relations: ['proyecto'],
+      relations: ['proyecto', 'subproyecto'],
     });
 
     if (!acta) {
       throw new NotFoundException(`Acta con ID ${id} no encontrada`);
     }
 
+    // Usar datos del proyecto o del subproyecto según corresponda
+    const entidad = acta.proyecto || acta.subproyecto;
+
     return {
       acta,
       proyecto: {
-        codigo: acta.proyecto?.codigo || 'N/A',
-        nombre: acta.proyecto?.nombre || 'Sin nombre',
+        codigo: entidad?.codigo || 'N/A',
+        nombre: entidad?.nombre || 'Sin nombre',
       },
     };
   }
