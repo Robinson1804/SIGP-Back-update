@@ -30,6 +30,7 @@ import { HuEvidenciaPdfService } from './historias-usuario/services/hu-evidencia
 import {
   HistoriaUsuarioController,
   ProyectoHistoriasUsuarioController,
+  SubproyectoHistoriasUsuarioController,
   SprintHistoriasUsuarioController,
   EpicaHistoriasUsuarioController,
 } from './historias-usuario/controllers/historia-usuario.controller';
@@ -150,6 +151,7 @@ import {
     // Historias de Usuario
     HistoriaUsuarioController,
     ProyectoHistoriasUsuarioController,
+    SubproyectoHistoriasUsuarioController,
     SprintHistoriasUsuarioController,
     EpicaHistoriasUsuarioController,
     // Criterios de Aceptacion

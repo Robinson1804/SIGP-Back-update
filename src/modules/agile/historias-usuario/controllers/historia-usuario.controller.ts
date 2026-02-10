@@ -47,6 +47,7 @@ export class HistoriaUsuarioController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('epicaId') epicaId?: string,
     @Query('sprintId') sprintId?: string,
     @Query('estado') estado?: HuEstado,
@@ -57,6 +58,7 @@ export class HistoriaUsuarioController {
   ) {
     return this.huService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       epicaId: epicaId ? parseInt(epicaId, 10) : undefined,
       sprintId: sprintId ? parseInt(sprintId, 10) : undefined,
       estado,
@@ -231,5 +233,16 @@ export class EpicaHistoriasUsuarioController {
   @Get()
   findByEpica(@Param('epicaId', ParseIntPipe) epicaId: number) {
     return this.huService.findByEpica(epicaId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/historias-usuario')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoHistoriasUsuarioController {
+  constructor(private readonly huService: HistoriaUsuarioService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.huService.findBySubproyecto(subproyectoId);
   }
 }

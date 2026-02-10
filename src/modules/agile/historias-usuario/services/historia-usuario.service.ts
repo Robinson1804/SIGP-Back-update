@@ -345,18 +345,29 @@ export class HistoriaUsuarioService {
   }
 
   async create(createDto: CreateHistoriaUsuarioDto, userId?: number): Promise<HistoriaUsuario> {
-    const existing = await this.huRepository.findOne({
-      where: { proyectoId: createDto.proyectoId, codigo: createDto.codigo },
-    });
+    // Validar que tenga proyecto o subproyecto (mutuamente exclusivo)
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new ConflictException('Debe proporcionar proyectoId o subproyectoId');
+    }
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new ConflictException('No puede proporcionar ambos proyectoId y subproyectoId');
+    }
+
+    const whereClause = createDto.proyectoId
+      ? { proyectoId: createDto.proyectoId, codigo: createDto.codigo }
+      : { subproyectoId: createDto.subproyectoId, codigo: createDto.codigo };
+    const existing = await this.huRepository.findOne({ where: whereClause });
 
     if (existing) {
       throw new ConflictException(
-        `Ya existe una HU con el código ${createDto.codigo} en este proyecto`,
+        `Ya existe una HU con el código ${createDto.codigo} en este proyecto/subproyecto`,
       );
     }
 
-    // Validar que existan requerimientos funcionales
-    await this.validarRequerimientosFuncionales(createDto.proyectoId);
+    // Validar que existan requerimientos funcionales (solo para proyectos, subproyectos heredan)
+    if (createDto.proyectoId) {
+      await this.validarRequerimientosFuncionales(createDto.proyectoId);
+    }
 
     // Validar fechas contra rango del sprint (si aplica)
     await this.validarFechasContraSprint(
@@ -407,6 +418,7 @@ export class HistoriaUsuarioService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     epicaId?: number;
     sprintId?: number;
     estado?: HuEstado;
@@ -427,6 +439,12 @@ export class HistoriaUsuarioService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('hu.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('hu.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -464,6 +482,14 @@ export class HistoriaUsuarioService {
   async findByProyecto(proyectoId: number): Promise<HistoriaUsuario[]> {
     return this.huRepository.find({
       where: { proyectoId, activo: true },
+      relations: ['epica', 'sprint'],
+      order: { ordenBacklog: 'ASC', prioridad: 'ASC', createdAt: 'DESC' },
+    });
+  }
+
+  async findBySubproyecto(subproyectoId: number): Promise<HistoriaUsuario[]> {
+    return this.huRepository.find({
+      where: { subproyectoId, activo: true },
       relations: ['epica', 'sprint'],
       order: { ordenBacklog: 'ASC', prioridad: 'ASC' },
     });

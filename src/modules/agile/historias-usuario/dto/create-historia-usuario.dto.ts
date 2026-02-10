@@ -29,8 +29,13 @@ class CriterioAceptacionDto {
 }
 
 export class CreateHistoriaUsuarioDto {
+  @IsOptional()
   @IsInt()
-  proyectoId: number;
+  proyectoId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subproyectoId?: number;
 
   @IsOptional()
   @ValidateIf((o) => o.epicaId !== null)
