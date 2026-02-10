@@ -47,6 +47,10 @@ export class CreateDailyMeetingDto {
   @IsNotEmpty()
   proyectoId?: number;
 
+  @IsInt()
+  @IsOptional()
+  subproyectoId?: number;
+
   @ValidateIf((o) => o.tipo === DailyMeetingTipo.ACTIVIDAD)
   @IsInt()
   @IsNotEmpty()

@@ -61,6 +61,7 @@ import { DailyMeetingService } from './daily-meetings/services/daily-meeting.ser
 import {
   DailyMeetingController,
   ProyectoDailyMeetingsController,
+  SubproyectoDailyMeetingsController,
   ActividadDailyMeetingsController,
   SprintDailyMeetingsController,
 } from './daily-meetings/controllers/daily-meeting.controller';
@@ -167,6 +168,7 @@ import {
     // Daily Meetings
     DailyMeetingController,
     ProyectoDailyMeetingsController,
+    SubproyectoDailyMeetingsController,
     ActividadDailyMeetingsController,
     SprintDailyMeetingsController,
     // Impedimentos

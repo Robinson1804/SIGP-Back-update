@@ -14,8 +14,12 @@ export class CreateImpedimentoDto {
   descripcion: string;
 
   @IsInt()
-  @IsNotEmpty()
-  proyectoId: number;
+  @IsOptional()
+  proyectoId?: number;
+
+  @IsInt()
+  @IsOptional()
+  subproyectoId?: number;
 
   @IsInt()
   @IsOptional()

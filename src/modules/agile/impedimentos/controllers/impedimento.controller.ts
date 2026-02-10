@@ -33,12 +33,14 @@ export class ImpedimentoController {
   @Get()
   findAll(
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('sprintId') sprintId?: string,
     @Query('actividadId') actividadId?: string,
     @Query('estado') estado?: ImpedimentoEstado,
   ) {
     return this.impedimentoService.findAll({
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       sprintId: sprintId ? parseInt(sprintId, 10) : undefined,
       actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
       estado,

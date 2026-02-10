@@ -36,6 +36,7 @@ export class DailyMeetingController {
   findAll(
     @Query('tipo') tipo?: DailyMeetingTipo,
     @Query('proyectoId') proyectoId?: string,
+    @Query('subproyectoId') subproyectoId?: string,
     @Query('actividadId') actividadId?: string,
     @Query('sprintId') sprintId?: string,
     @Query('fechaDesde') fechaDesde?: string,
@@ -44,6 +45,7 @@ export class DailyMeetingController {
     return this.dailyMeetingService.findAll({
       tipo,
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
+      subproyectoId: subproyectoId ? parseInt(subproyectoId, 10) : undefined,
       actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
       sprintId: sprintId ? parseInt(sprintId, 10) : undefined,
       fechaDesde,
@@ -135,5 +137,16 @@ export class SprintDailyMeetingsController {
   @Get()
   findBySprint(@Param('sprintId', ParseIntPipe) sprintId: number) {
     return this.dailyMeetingService.findBySprint(sprintId);
+  }
+}
+
+@Controller('subproyectos/:subproyectoId/daily-meetings')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class SubproyectoDailyMeetingsController {
+  constructor(private readonly dailyMeetingService: DailyMeetingService) {}
+
+  @Get()
+  findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.dailyMeetingService.findBySubproyecto(subproyectoId);
   }
 }

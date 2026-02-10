@@ -91,6 +91,7 @@ export class DailyMeetingService {
   async findAll(filters?: {
     tipo?: DailyMeetingTipo;
     proyectoId?: number;
+    subproyectoId?: number;
     actividadId?: number;
     sprintId?: number;
     fechaDesde?: string;
@@ -112,6 +113,12 @@ export class DailyMeetingService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('daily.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('daily.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
@@ -140,6 +147,14 @@ export class DailyMeetingService {
   async findByProyecto(proyectoId: number): Promise<DailyMeeting[]> {
     return this.dailyMeetingRepository.find({
       where: { proyectoId, activo: true },
+      relations: ['facilitador', 'participantes', 'participantes.usuario'],
+      order: { fecha: 'DESC', horaInicio: 'DESC' },
+    });
+  }
+
+  async findBySubproyecto(subproyectoId: number): Promise<DailyMeeting[]> {
+    return this.dailyMeetingRepository.find({
+      where: { subproyectoId, activo: true },
       relations: ['facilitador', 'participantes', 'participantes.usuario'],
       order: { fecha: 'DESC', horaInicio: 'DESC' },
     });

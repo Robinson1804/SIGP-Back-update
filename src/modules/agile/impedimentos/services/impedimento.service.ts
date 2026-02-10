@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +18,14 @@ export class ImpedimentoService {
   ) {}
 
   async create(createDto: CreateImpedimentoDto): Promise<Impedimento> {
+    // Validar que tenga proyecto o subproyecto
+    if (!createDto.proyectoId && !createDto.subproyectoId) {
+      throw new BadRequestException('Debe proporcionar proyectoId o subproyectoId');
+    }
+    if (createDto.proyectoId && createDto.subproyectoId) {
+      throw new BadRequestException('No puede proporcionar ambos proyectoId y subproyectoId');
+    }
+
     const impedimento = this.impedimentoRepository.create({
       ...createDto,
       fechaReporte: createDto.fechaReporte || new Date().toISOString().split('T')[0],
@@ -28,6 +37,7 @@ export class ImpedimentoService {
 
   async findAll(filters?: {
     proyectoId?: number;
+    subproyectoId?: number;
     sprintId?: number;
     actividadId?: number;
     estado?: ImpedimentoEstado;
@@ -42,6 +52,12 @@ export class ImpedimentoService {
     if (filters?.proyectoId) {
       queryBuilder.andWhere('impedimento.proyectoId = :proyectoId', {
         proyectoId: filters.proyectoId,
+      });
+    }
+
+    if (filters?.subproyectoId) {
+      queryBuilder.andWhere('impedimento.subproyectoId = :subproyectoId', {
+        subproyectoId: filters.subproyectoId,
       });
     }
 
