@@ -169,8 +169,24 @@ export class NotificacionService {
     };
   }
 
-  async marcarLeida(id: number, usuarioId: number): Promise<Notificacion> {
-    const notificacion = await this.findOne(id, usuarioId);
+  async marcarLeida(id: number, usuarioId: number, userRole?: string): Promise<Notificacion> {
+    // PMO, COORDINADOR, SCRUM_MASTER can mark any notification as read
+    // Others can only mark their own notifications
+    let notificacion: Notificacion;
+
+    if (userRole === Role.PMO || userRole === Role.COORDINADOR || userRole === Role.SCRUM_MASTER) {
+      notificacion = await this.notificacionRepository.findOne({
+        where: { id, activo: true },
+      });
+    } else {
+      notificacion = await this.notificacionRepository.findOne({
+        where: { id, destinatarioId: usuarioId, activo: true },
+      });
+    }
+
+    if (!notificacion) {
+      throw new NotFoundException(`Notificación con ID ${id} no encontrada`);
+    }
 
     if (!notificacion.leida) {
       notificacion.leida = true;

@@ -136,8 +136,9 @@ export class NotificacionController {
   marcarLeida(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser('id') usuarioId: number,
+    @CurrentUser('rol') userRole: string,
   ) {
-    return this.notificacionService.marcarLeida(id, usuarioId);
+    return this.notificacionService.marcarLeida(id, usuarioId, userRole);
   }
 
   @Patch('leer-todas')
