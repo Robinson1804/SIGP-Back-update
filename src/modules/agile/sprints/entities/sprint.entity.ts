@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { SprintEstado } from '../enums/sprint.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { DateOnlyTransformer } from '../../../../common/transformers/date.transformer';
 
 @Entity({ schema: 'agile', name: 'sprints' })
@@ -16,8 +17,11 @@ export class Sprint {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'proyecto_id' })
-  proyectoId: number;
+  @Column({ name: 'proyecto_id', nullable: true })
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ length: 100 })
   nombre: string;
@@ -66,7 +70,11 @@ export class Sprint {
   updatedBy: number | null | undefined;
 
   // Relations
-  @ManyToOne(() => Proyecto, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'proyecto_id' })
-  proyecto: Proyecto;
+  proyecto?: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 }

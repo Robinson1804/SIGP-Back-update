@@ -490,8 +490,9 @@ export class DashboardGerencialService {
     const sprints = await this.sprintRepository
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.proyecto', 'p')
+      .leftJoinAndSelect('s.subproyecto', 'sp')
       .where('s.activo = true')
-      .andWhere('p.activo = true')
+      .andWhere('(p.activo = true OR sp.activo = true)')
       .andWhere('s.fechaFin >= :rangoInicio', { rangoInicio })
       .andWhere('s.fechaInicio <= :rangoFin', { rangoFin })
       .orderBy('s.fechaInicio', 'ASC')
@@ -522,8 +523,9 @@ export class DashboardGerencialService {
         id: sprint.id,
         nombre: sprint.nombre,
         proyectoId: sprint.proyectoId,
-        proyectoNombre: sprint.proyecto?.nombre || '',
-        proyectoCodigo: sprint.proyecto?.codigo || `PRY-${sprint.proyectoId}`,
+        subproyectoId: sprint.subproyectoId,
+        proyectoNombre: sprint.proyecto?.nombre || sprint.subproyecto?.nombre || '',
+        proyectoCodigo: sprint.proyecto?.codigo || sprint.subproyecto?.codigo || `SPR-${sprint.id}`,
         fechaInicio: sprint.fechaInicio || '',
         fechaFin: sprint.fechaFin || '',
         estado: sprint.estado as 'Por hacer' | 'En progreso' | 'Finalizado',

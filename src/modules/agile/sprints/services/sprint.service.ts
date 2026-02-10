@@ -235,11 +235,13 @@ export class SprintService {
     await this.notificarEquipoSprint(sprint, 'iniciado');
 
     // Emitir evento WebSocket para actualizar dashboards
-    this.notificacionService.emitSprintUpdate(sprint.proyectoId, {
-      event: 'sprint_started',
-      sprintId: sprint.id,
-      nombre: sprint.nombre,
-    });
+    if (sprint.proyectoId) {
+      this.notificacionService.emitSprintUpdate(sprint.proyectoId, {
+        event: 'sprint_started',
+        sprintId: sprint.id,
+        nombre: sprint.nombre,
+      });
+    }
 
     return sprintIniciado;
   }
@@ -322,14 +324,16 @@ export class SprintService {
     await this.notificarEquipoSprint(sprint, 'cerrado');
 
     // Emitir evento WebSocket para actualizar dashboards
-    this.notificacionService.emitSprintUpdate(sprint.proyectoId, {
-      event: 'sprint_closed',
-      sprintId: sprint.id,
-      nombre: sprint.nombre,
-    });
+    if (sprint.proyectoId) {
+      this.notificacionService.emitSprintUpdate(sprint.proyectoId, {
+        event: 'sprint_closed',
+        sprintId: sprint.id,
+        nombre: sprint.nombre,
+      });
 
-    // Verificar si todos los sprints del proyecto están finalizados
-    await this.verificarSprintsCompletados(sprint.proyectoId);
+      // Verificar si todos los sprints del proyecto están finalizados
+      await this.verificarSprintsCompletados(sprint.proyectoId);
+    }
 
     return sprintCerrado;
   }

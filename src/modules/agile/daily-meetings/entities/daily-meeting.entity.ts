@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { DailyMeetingTipo } from '../enums/daily-meeting.enum';
 import { DailyParticipante } from './daily-participante.entity';
 
@@ -25,13 +26,16 @@ export class DailyMeeting {
   tipo: DailyMeetingTipo;
 
   @Column({ name: 'proyecto_id', nullable: true })
-  proyectoId: number;
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ name: 'actividad_id', nullable: true })
-  actividadId: number;
+  actividadId?: number;
 
   @Column({ name: 'sprint_id', nullable: true })
-  sprintId: number;
+  sprintId?: number;
 
   @Column({ length: 200 })
   nombre: string;
@@ -51,6 +55,10 @@ export class DailyMeeting {
   @ManyToOne(() => Usuario)
   @JoinColumn({ name: 'facilitador_id' })
   facilitador: Usuario;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 
   @Column({ type: 'text', nullable: true })
   notas: string;

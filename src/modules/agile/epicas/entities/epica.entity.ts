@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { EpicaPrioridad } from '../enums/epica.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 
 @Entity({ schema: 'agile', name: 'epicas' })
@@ -17,8 +18,11 @@ export class Epica {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'proyecto_id' })
-  proyectoId: number;
+  @Column({ name: 'proyecto_id', nullable: true })
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ length: 20 })
   codigo: string;
@@ -65,9 +69,13 @@ export class Epica {
   updatedBy: number | null | undefined;
 
   // Relations
-  @ManyToOne(() => Proyecto, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'proyecto_id' })
-  proyecto: Proyecto;
+  proyecto?: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 
   @OneToMany(() => HistoriaUsuario, (hu) => hu.epica)
   historiasUsuario: HistoriaUsuario[];

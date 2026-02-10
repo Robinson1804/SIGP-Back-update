@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { HuPrioridad, HuEstimacion, HuEstado } from '../enums/historia-usuario.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { Epica } from '../../epicas/entities/epica.entity';
 import { Sprint } from '../../sprints/entities/sprint.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
@@ -23,8 +24,11 @@ export class HistoriaUsuario {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'proyecto_id' })
-  proyectoId: number;
+  @Column({ name: 'proyecto_id', nullable: true })
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ name: 'epica_id', nullable: true })
   epicaId: number | null;
@@ -116,9 +120,13 @@ export class HistoriaUsuario {
   updatedBy: number | null | undefined;
 
   // Relations
-  @ManyToOne(() => Proyecto, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Proyecto, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'proyecto_id' })
-  proyecto: Proyecto;
+  proyecto?: Proyecto;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 
   @ManyToOne(() => Epica, { nullable: true })
   @JoinColumn({ name: 'epica_id' })

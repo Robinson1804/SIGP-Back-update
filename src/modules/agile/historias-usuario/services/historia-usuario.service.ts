@@ -210,7 +210,7 @@ export class HistoriaUsuarioService {
       await this.notificarAutoTransicionSprint(sprint, nuevoEstado);
 
       // Si sprint se finalizó, verificar si todos los sprints del proyecto están completos
-      if (nuevoEstado === SprintEstado.FINALIZADO) {
+      if (nuevoEstado === SprintEstado.FINALIZADO && sprint.proyectoId) {
         await this.verificarSprintsCompletadosDesdeHU(sprint.proyectoId);
       }
     }

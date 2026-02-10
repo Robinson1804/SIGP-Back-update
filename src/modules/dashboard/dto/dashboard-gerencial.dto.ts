@@ -86,7 +86,8 @@ export class ActividadesActivasResponseDto {
 export class SprintTimelineDto {
   id: number;
   nombre: string;
-  proyectoId: number;
+  proyectoId?: number;
+  subproyectoId?: number;
   proyectoNombre: string;
   proyectoCodigo: string;
   fechaInicio: string;

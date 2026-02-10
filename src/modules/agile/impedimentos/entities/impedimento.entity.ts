@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { DailyMeeting } from '../../daily-meetings/entities/daily-meeting.entity';
 import { ImpedimentoPrioridad, ImpedimentoEstado } from '../enums/impedimento.enum';
 
@@ -19,11 +20,14 @@ export class Impedimento {
   @Column({ type: 'text' })
   descripcion: string;
 
-  @Column({ name: 'proyecto_id' })
-  proyectoId: number;
+  @Column({ name: 'proyecto_id', nullable: true })
+  proyectoId?: number;
+
+  @Column({ name: 'subproyecto_id', nullable: true })
+  subproyectoId?: number;
 
   @Column({ name: 'sprint_id', nullable: true })
-  sprintId: number;
+  sprintId?: number;
 
   @Column({ name: 'actividad_id', nullable: true })
   actividadId: number;
@@ -34,6 +38,10 @@ export class Impedimento {
   @ManyToOne(() => DailyMeeting, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'daily_meeting_id' })
   dailyMeeting: DailyMeeting;
+
+  @ManyToOne(() => Subproyecto, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subproyecto_id' })
+  subproyecto?: Subproyecto;
 
   @Column({ name: 'reportado_por_id' })
   reportadoPorId: number;
