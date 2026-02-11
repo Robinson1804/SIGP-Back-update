@@ -16,7 +16,7 @@ export enum HuEstimacion {
 export enum HuEstado {
   POR_HACER = 'Por hacer',
   EN_PROGRESO = 'En progreso',
-  EN_REVISION = 'En revision',
+  EN_REVISION = 'En revisión',
   FINALIZADO = 'Finalizado',
 }
 
