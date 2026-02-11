@@ -263,6 +263,12 @@ export class ProyectoService {
       updatedBy: userId,
     });
 
+    // Verificar si todos los campos requeridos están completos
+    // Si es así, establecer estado como "En planificación" automáticamente
+    if (this.camposRequeridosCompletos(proyecto)) {
+      proyecto.estado = ProyectoEstado.EN_PLANIFICACION;
+    }
+
     const proyectoGuardado: Proyecto = await this.proyectoRepository.save(proyecto);
 
     // Crear cronograma automáticamente para el proyecto
@@ -277,6 +283,32 @@ export class ProyectoService {
     } catch (error) {
       console.error('Error al crear cronograma automático:', error);
       // No lanzamos error - el proyecto se creó correctamente
+    }
+
+    // Notificar sobre auto-transición a "En planificación" si aplica
+    if (proyectoGuardado.estado === ProyectoEstado.EN_PLANIFICACION) {
+      const destinatariosEstado: number[] = [];
+      if (createDto.coordinadorId && createDto.coordinadorId !== userId) {
+        destinatariosEstado.push(createDto.coordinadorId);
+      }
+      if (createDto.scrumMasterId && createDto.scrumMasterId !== userId && createDto.scrumMasterId !== createDto.coordinadorId) {
+        destinatariosEstado.push(createDto.scrumMasterId);
+      }
+
+      if (destinatariosEstado.length > 0) {
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.PROYECTOS,
+          destinatariosEstado,
+          {
+            titulo: `Proyecto creado en estado "En planificación": ${proyectoGuardado.codigo}`,
+            descripcion: `El proyecto "${proyectoGuardado.nombre}" se creó con todos los campos completos y está listo para planificar sprints`,
+            entidadTipo: 'Proyecto',
+            entidadId: proyectoGuardado.id,
+            proyectoId: proyectoGuardado.id,
+            urlAccion: `/poi/proyecto/detalles?id=${proyectoGuardado.id}`,
+          },
+        );
+      }
     }
 
     // Notificar al coordinador y PMOs si se le asigna el proyecto
