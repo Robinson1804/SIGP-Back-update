@@ -10,24 +10,14 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  */
 export class FixHuEstadoEnRevision1769200000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Actualizar registros existentes de 'En revision' a 'En revisión'
-    await queryRunner.query(`
-      UPDATE agile.historias_usuario
-      SET estado = 'En revisión'
-      WHERE estado = 'En revision';
-    `);
-
-    console.log('✅ Estados de Historia de Usuario actualizados: "En revision" → "En revisión"');
+    // MIGRACIÓN DESHABILITADA
+    // Esta migración fue reemplazada por UpdateHuEstadoEnum que corrige tanto el ENUM como los datos
+    // No hacer nada aquí para evitar errores de validación del ENUM
+    console.log('⏭️  Migración FixHuEstadoEnRevision omitida (reemplazada por UpdateHuEstadoEnum)');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Revertir: cambiar de vuelta a 'En revision' (sin acento)
-    await queryRunner.query(`
-      UPDATE agile.historias_usuario
-      SET estado = 'En revision'
-      WHERE estado = 'En revisión';
-    `);
-
-    console.log('⏪ Revertido: Estados de Historia de Usuario actualizados: "En revisión" → "En revision"');
+    // MIGRACIÓN DESHABILITADA - No hacer nada
+    console.log('⏭️  Rollback de FixHuEstadoEnRevision omitido (reemplazada por UpdateHuEstadoEnum)');
   }
 }
