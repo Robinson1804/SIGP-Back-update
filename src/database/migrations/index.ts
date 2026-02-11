@@ -31,4 +31,4 @@ export * from './1768900000000-AddActividadIdToNotificaciones';
 export * from './1769000000000-EnhanceSubproyectoSchema';
 export * from './1769100000000-AddSubproyectoIdToAgileEntities';
 export * from './1769200000000-FixHuEstadoEnRevision';
-export * from './1739300000000-UpdateHuEstadoEnum';
+export * from './1769300000000-UpdateHuEstadoEnum';
