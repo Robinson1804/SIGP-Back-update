@@ -4,6 +4,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RedisModule } from '@nestjs-modules/ioredis';
 
+// Migrations
+import * as migrations from './database/migrations';
+
 // Config imports
 import databaseConfig from './config/database.config';
 import jwtConfig from './config/jwt.config';
@@ -75,6 +78,8 @@ import { StorageModule } from './modules/storage/storage.module';
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          migrations: Object.values(migrations),
+          migrationsRun: true,
         };
       },
     }),
