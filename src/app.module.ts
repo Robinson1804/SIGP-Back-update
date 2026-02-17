@@ -4,8 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { RedisModule } from '@nestjs-modules/ioredis';
 
-// Migrations
-import * as migrations from './database/migrations';
+// Solo migraciones nuevas (las antiguas ya están aplicadas en la BD via synchronize)
+import { FixHuEstadoEnRevision1769200000000 } from './database/migrations/1769200000000-FixHuEstadoEnRevision';
+import { UpdateHuEstadoEnum1769300000000 } from './database/migrations/1769300000000-UpdateHuEstadoEnum';
+import { CreateEvidenciasTareaTable1769400000000 } from './database/migrations/1769400000000-CreateEvidenciasTareaTable';
 
 // Config imports
 import databaseConfig from './config/database.config';
@@ -78,7 +80,11 @@ import { StorageModule } from './modules/storage/storage.module';
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          migrations: Object.values(migrations),
+          migrations: [
+            FixHuEstadoEnRevision1769200000000,
+            UpdateHuEstadoEnum1769300000000,
+            CreateEvidenciasTareaTable1769400000000,
+          ],
           migrationsRun: true,
         };
       },
