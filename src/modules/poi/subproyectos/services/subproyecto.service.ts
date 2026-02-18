@@ -488,9 +488,6 @@ export class SubproyectoService {
   ): Promise<Subproyecto> {
     const subproyecto = await this.findOne(id);
 
-    // Validar transición de estado (reglas de negocio similares a Proyecto)
-    // Por ahora, permitimos todas las transiciones (se pueden agregar validaciones específicas)
-
     // Actualizar estado
     subproyecto.estado = dto.nuevoEstado;
     subproyecto.updatedBy = userId;
@@ -499,7 +496,75 @@ export class SubproyectoService {
     // Notificar cambio de estado
     await this.notificarCambioEstado(subproyecto, dto.nuevoEstado, userId);
 
+    // Si el subproyecto se finaliza, verificar si todos los subproyectos del
+    // proyecto padre también están finalizados para notificar al equipo del proyecto
+    if (dto.nuevoEstado === ProyectoEstado.FINALIZADO) {
+      await this.verificarSubproyectosCompletados(subproyecto.proyectoPadreId);
+    }
+
     return this.findOne(id);
+  }
+
+  /**
+   * Verifica si todos los subproyectos activos del proyecto padre están finalizados
+   * (o cancelados). Si es así, notifica al Coordinador y SM del proyecto padre.
+   * Solo aplica cuando el proyecto tiene subproyectos (caso contrario, la finalización
+   * del proyecto se maneja por sprints directos).
+   */
+  private async verificarSubproyectosCompletados(proyectoPadreId: number): Promise<void> {
+    // Subproyectos activos que aún no están finalizados ni cancelados
+    const subproyectosActivos = await this.subproyectoRepository.count({
+      where: {
+        proyectoPadreId,
+        estado: In([
+          ProyectoEstado.PENDIENTE,
+          ProyectoEstado.EN_PLANIFICACION,
+          ProyectoEstado.EN_DESARROLLO,
+        ]),
+        activo: true,
+      },
+    });
+
+    if (subproyectosActivos > 0) return;
+
+    // Debe haber al menos un subproyecto finalizado
+    const subproyectosFinalizados = await this.subproyectoRepository.count({
+      where: {
+        proyectoPadreId,
+        estado: ProyectoEstado.FINALIZADO,
+        activo: true,
+      },
+    });
+
+    if (subproyectosFinalizados === 0) return;
+
+    // Obtener el proyecto padre
+    const proyecto = await this.proyectoRepository.findOne({
+      where: { id: proyectoPadreId },
+    });
+
+    if (!proyecto || proyecto.estado === ProyectoEstado.FINALIZADO) return;
+
+    const destinatarios: number[] = [];
+    if (proyecto.coordinadorId) destinatarios.push(proyecto.coordinadorId);
+    if (proyecto.scrumMasterId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+      destinatarios.push(proyecto.scrumMasterId);
+    }
+
+    if (destinatarios.length === 0) return;
+
+    await this.notificacionService.notificarMultiples(
+      TipoNotificacion.PROYECTOS,
+      destinatarios,
+      {
+        titulo: `¿Finalizar proyecto ${proyecto.codigo}?`,
+        descripcion: `Todos los subproyectos del proyecto "${proyecto.nombre}" han sido completados. ¿Desea marcar el proyecto como Finalizado?`,
+        entidadTipo: 'Proyecto',
+        entidadId: proyectoPadreId,
+        proyectoId: proyectoPadreId,
+        urlAccion: `/poi/proyectos/${proyectoPadreId}`,
+      },
+    );
   }
 
   /**

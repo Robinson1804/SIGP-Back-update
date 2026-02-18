@@ -360,6 +360,9 @@ export class SprintService {
 
       // Verificar si todos los sprints del proyecto están finalizados
       await this.verificarSprintsCompletados(sprint.proyectoId);
+    } else if (sprint.subproyectoId) {
+      // Sprint pertenece a un subproyecto: verificar si todos sus sprints están finalizados
+      await this.verificarSprintsSubproyecto(sprint.subproyectoId);
     }
 
     return sprintCerrado;
@@ -470,6 +473,77 @@ export class SprintService {
         entidadId: proyectoId,
         proyectoId: proyectoId,
         urlAccion: `/poi/proyectos/${proyectoId}`,
+      },
+    );
+  }
+
+  /**
+   * Verifica si todos los sprints de un subproyecto están finalizados.
+   * Si es así, notifica al Coordinador y SM del subproyecto para que lo finalicen.
+   */
+  private async verificarSprintsSubproyecto(subproyectoId: number): Promise<void> {
+    // Sprints pendientes o en progreso del subproyecto
+    const sprintsNoFinalizados = await this.sprintRepository.count({
+      where: {
+        subproyectoId,
+        estado: In([SprintEstado.POR_HACER, SprintEstado.EN_PROGRESO]),
+        activo: true,
+      },
+    });
+
+    if (sprintsNoFinalizados > 0) return;
+
+    const sprintsFinalizados = await this.sprintRepository.count({
+      where: {
+        subproyectoId,
+        estado: SprintEstado.FINALIZADO,
+        activo: true,
+      },
+    });
+
+    if (sprintsFinalizados === 0) return;
+
+    // Obtener datos del subproyecto via raw query
+    const subproyecto = await this.sprintRepository.manager
+      .createQueryBuilder()
+      .select([
+        's.id',
+        's.codigo',
+        's.nombre',
+        's.coordinador_id',
+        's.scrum_master_id',
+        's.estado',
+        's.proyecto_padre_id',
+      ])
+      .from('poi.subproyectos', 's')
+      .where('s.id = :subproyectoId', { subproyectoId })
+      .getRawOne();
+
+    if (!subproyecto || subproyecto.s_estado === 'Finalizado') return;
+
+    const destinatarios: number[] = [];
+    if (subproyecto.s_coordinador_id) destinatarios.push(Number(subproyecto.s_coordinador_id));
+    if (
+      subproyecto.s_scrum_master_id &&
+      subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id
+    ) {
+      destinatarios.push(Number(subproyecto.s_scrum_master_id));
+    }
+
+    if (destinatarios.length === 0) return;
+
+    await this.notificacionService.notificarMultiples(
+      TipoNotificacion.PROYECTOS,
+      destinatarios,
+      {
+        titulo: `¿Finalizar subproyecto ${subproyecto.s_codigo}?`,
+        descripcion: `Todos los sprints del subproyecto "${subproyecto.s_nombre}" han sido completados. ¿Desea marcar el subproyecto como Finalizado?`,
+        entidadTipo: 'Proyecto',
+        entidadId: subproyectoId,
+        proyectoId: subproyecto.s_proyecto_padre_id
+          ? Number(subproyecto.s_proyecto_padre_id)
+          : undefined,
+        urlAccion: `/poi/subproyectos/${subproyectoId}`,
       },
     );
   }
