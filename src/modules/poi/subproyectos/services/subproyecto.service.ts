@@ -284,26 +284,6 @@ export class SubproyectoService {
         },
       );
     }
-
-    // Notificar al nuevo patrocinador del Área Usuaria
-    if (
-      updateDto.areaUsuariaId !== undefined &&
-      updateDto.areaUsuariaId !== null &&
-      updateDto.areaUsuariaId !== subproyecto.areaUsuariaId &&
-      updateDto.areaUsuariaId !== userId
-    ) {
-      await this.notificacionService.notificarMultiples(
-        TipoNotificacion.PROYECTOS,
-        [updateDto.areaUsuariaId],
-        {
-          titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
-          descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
-          entidadTipo: 'Proyecto',
-          entidadId: subproyecto.id,
-          proyectoId: subproyecto.proyectoPadreId,
-        },
-      );
-    }
   }
 
   /**
@@ -552,8 +532,28 @@ export class SubproyectoService {
       await this.notificarCambioEstado(saved, nuevoEstado, userId);
     }
 
-    // 6. Notificar cambios en roles
-    if (rolesChanged.coordinador || rolesChanged.scrumMaster || rolesChanged.patrocinador) {
+    // 6. Notificar al nuevo patrocinador del Área Usuaria
+    if (
+      updateDto.areaUsuariaId !== undefined &&
+      updateDto.areaUsuariaId !== null &&
+      updateDto.areaUsuariaId !== subproyecto.areaUsuariaId &&
+      updateDto.areaUsuariaId !== userId
+    ) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [updateDto.areaUsuariaId],
+        {
+          titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
+          descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: subproyecto.id,
+          proyectoId: subproyecto.proyectoPadreId,
+        },
+      );
+    }
+
+    // 7. Notificar cambios en roles
+    if (rolesChanged.coordinador || rolesChanged.scrumMaster) {
       await this.notificarCambiosRoles(saved, rolesChanged, userId);
     }
 
