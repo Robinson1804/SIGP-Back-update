@@ -537,7 +537,9 @@ export class SubproyectoService {
         : ProyectoEstado.EN_PLANIFICACION;
 
       saved.estado = nuevoEstado;
-      await this.subproyectoRepository.save(saved);
+      // IMPORTANTE: Reasignar saved para mantener la referencia al objeto más reciente
+      saved = await this.subproyectoRepository.save(saved);
+      this.logger.log(`🔍 DEBUG - Después de auto-transición estado, coordinadorId: ${saved.coordinadorId}`);
       await this.notificarCambioEstado(saved, nuevoEstado, userId);
     }
 
