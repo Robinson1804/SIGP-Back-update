@@ -78,41 +78,115 @@ export class SprintService {
 
     // Auto-transición: En planificación → En desarrollo al crear primer sprint
     try {
-      // Validar que el proyecto/subproyecto existe
-      const parentId = createDto.proyectoId || createDto.subproyectoId;
-      const parentType = createDto.proyectoId ? 'proyecto' : 'subproyecto';
+      if (createDto.proyectoId) {
+        // Sprint creado directamente en el proyecto
+        const proyecto = await this.proyectoRepository.findOne({
+          where: { id: createDto.proyectoId },
+        });
 
-      const proyecto = createDto.proyectoId
-        ? await this.proyectoRepository.findOne({ where: { id: createDto.proyectoId } })
-        : null;
+        if (proyecto && proyecto.estado === ProyectoEstado.EN_PLANIFICACION) {
+          proyecto.estado = ProyectoEstado.EN_DESARROLLO;
+          proyecto.updatedBy = userId;
+          await this.proyectoRepository.save(proyecto);
 
-      if (proyecto && proyecto.estado === ProyectoEstado.EN_PLANIFICACION) {
-        proyecto.estado = ProyectoEstado.EN_DESARROLLO;
-        proyecto.updatedBy = userId;
-        await this.proyectoRepository.save(proyecto);
+          const destinatarios: number[] = [];
+          if (proyecto.coordinadorId && proyecto.coordinadorId !== userId) {
+            destinatarios.push(proyecto.coordinadorId);
+          }
+          if (proyecto.scrumMasterId && proyecto.scrumMasterId !== userId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
+            destinatarios.push(proyecto.scrumMasterId);
+          }
 
-        // Notificar al equipo sobre el cambio de estado
-        const destinatarios: number[] = [];
-        if (proyecto.coordinadorId && proyecto.coordinadorId !== userId) {
-          destinatarios.push(proyecto.coordinadorId);
+          if (destinatarios.length > 0) {
+            await this.notificacionService.notificarMultiples(
+              TipoNotificacion.PROYECTOS,
+              destinatarios,
+              {
+                titulo: `Proyecto en desarrollo: ${proyecto.codigo}`,
+                descripcion: `El proyecto "${proyecto.nombre}" ha pasado a estado "En desarrollo" al crear el sprint "${sprintGuardado.nombre}"`,
+                entidadTipo: 'Proyecto',
+                entidadId: proyecto.id,
+                proyectoId: proyecto.id,
+                urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+              },
+            );
+          }
         }
-        if (proyecto.scrumMasterId && proyecto.scrumMasterId !== userId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
-          destinatarios.push(proyecto.scrumMasterId);
+      } else if (createDto.subproyectoId) {
+        // Sprint creado en un subproyecto: transicionar subproyecto y proyecto padre
+        const subproyecto = await this.proyectoRepository.manager
+          .createQueryBuilder()
+          .select(['s.id', 's.nombre', 's.codigo', 's.estado', 's.proyecto_padre_id', 's.coordinador_id', 's.scrum_master_id'])
+          .from('poi.subproyectos', 's')
+          .where('s.id = :id', { id: createDto.subproyectoId })
+          .getRawOne();
+
+        if (subproyecto && subproyecto.s_estado === ProyectoEstado.EN_PLANIFICACION) {
+          await this.proyectoRepository.manager
+            .createQueryBuilder()
+            .update('poi.subproyectos')
+            .set({ estado: ProyectoEstado.EN_DESARROLLO, updated_by: userId })
+            .where('id = :id', { id: createDto.subproyectoId })
+            .execute();
+
+          // Notificar al equipo del subproyecto
+          const destSubproyecto: number[] = [];
+          if (subproyecto.s_coordinador_id && subproyecto.s_coordinador_id !== userId) {
+            destSubproyecto.push(subproyecto.s_coordinador_id);
+          }
+          if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== userId && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
+            destSubproyecto.push(subproyecto.s_scrum_master_id);
+          }
+          if (destSubproyecto.length > 0) {
+            await this.notificacionService.notificarMultiples(
+              TipoNotificacion.PROYECTOS,
+              destSubproyecto,
+              {
+                titulo: `Subproyecto en desarrollo: ${subproyecto.s_codigo}`,
+                descripcion: `El subproyecto "${subproyecto.s_nombre}" ha pasado a estado "En desarrollo" al crear el sprint "${sprintGuardado.nombre}"`,
+                entidadTipo: 'Proyecto',
+                entidadId: createDto.subproyectoId,
+                proyectoId: subproyecto.s_proyecto_padre_id,
+                urlAccion: `/poi/proyecto/detalles?id=${subproyecto.s_proyecto_padre_id}`,
+              },
+            );
+          }
         }
 
-        if (destinatarios.length > 0) {
-          await this.notificacionService.notificarMultiples(
-            TipoNotificacion.PROYECTOS,
-            destinatarios,
-            {
-              titulo: `Proyecto en desarrollo: ${proyecto.codigo}`,
-              descripcion: `El proyecto "${proyecto.nombre}" ha pasado a estado "En desarrollo" al crear el sprint "${sprintGuardado.nombre}"`,
-              entidadTipo: 'Proyecto',
-              entidadId: proyecto.id,
-              proyectoId: proyecto.id,
-              urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
-            },
-          );
+        // También transicionar el proyecto padre si está en planificación
+        if (subproyecto?.s_proyecto_padre_id) {
+          const proyectoPadre = await this.proyectoRepository.findOne({
+            where: { id: subproyecto.s_proyecto_padre_id },
+          });
+
+          if (proyectoPadre && proyectoPadre.estado === ProyectoEstado.EN_PLANIFICACION) {
+            proyectoPadre.estado = ProyectoEstado.EN_DESARROLLO;
+            proyectoPadre.updatedBy = userId;
+            await this.proyectoRepository.save(proyectoPadre);
+
+            const destProyecto: number[] = [];
+            if (proyectoPadre.coordinadorId && proyectoPadre.coordinadorId !== userId) {
+              destProyecto.push(proyectoPadre.coordinadorId);
+            }
+            if (proyectoPadre.scrumMasterId && proyectoPadre.scrumMasterId !== userId && proyectoPadre.scrumMasterId !== proyectoPadre.coordinadorId) {
+              destProyecto.push(proyectoPadre.scrumMasterId);
+            }
+
+            if (destProyecto.length > 0) {
+              await this.notificacionService.notificarMultiples(
+                TipoNotificacion.PROYECTOS,
+                destProyecto,
+                {
+                  titulo: `Proyecto en desarrollo: ${proyectoPadre.codigo}`,
+                  descripcion: `El proyecto "${proyectoPadre.nombre}" ha pasado a estado "En desarrollo" al crear el sprint "${sprintGuardado.nombre}" en el subproyecto "${subproyecto.s_nombre}"`,
+                  entidadTipo: 'Proyecto',
+                  entidadId: proyectoPadre.id,
+                  proyectoId: proyectoPadre.id,
+                  urlAccion: `/poi/proyecto/detalles?id=${proyectoPadre.id}`,
+                },
+              );
+            }
+          }
         }
       }
     } catch (error) {

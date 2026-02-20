@@ -130,6 +130,29 @@ export class SubproyectoService {
   }
 
   /**
+   * Valida que las fechas del subproyecto estén dentro del rango de fechas del proyecto padre.
+   */
+  private validateFechasEnRangoProyecto(
+    proyectoPadre: Proyecto,
+    fechaInicio: string,
+    fechaFin: string,
+  ): void {
+    if (!proyectoPadre.fechaInicio || !proyectoPadre.fechaFin) {
+      return; // Sin restricción si el proyecto padre no tiene fechas definidas
+    }
+
+    // Normalizar a YYYY-MM-DD (TypeORM 'date' puede retornar string o Date)
+    const padInicio = String(proyectoPadre.fechaInicio).split('T')[0];
+    const padFin = String(proyectoPadre.fechaFin).split('T')[0];
+
+    if (fechaInicio < padInicio || fechaFin > padFin) {
+      throw new BadRequestException(
+        `Las fechas del subproyecto deben estar dentro del rango del proyecto padre: ${padInicio} a ${padFin}`,
+      );
+    }
+  }
+
+  /**
    * Valida que los años del subproyecto estén dentro del rango del PGD
    */
   private async validateAniosEnRangoPGD(proyectoPadreId: number, anios: number[]): Promise<void> {
@@ -366,14 +389,8 @@ export class SubproyectoService {
       );
     }
 
-    // 4. Validar fechas contra PGD (si tiene fechas)
+    // 4. Validar fechas (si tiene fechas)
     if (createDto.fechaInicio && createDto.fechaFin) {
-      await this.validateFechasEnRangoPGD(
-        createDto.proyectoPadreId,
-        createDto.fechaInicio,
-        createDto.fechaFin,
-      );
-
       // Validar que fechaFin >= fechaInicio
       const inicio = this.parseDateString(createDto.fechaInicio);
       const fin = this.parseDateString(createDto.fechaFin);
@@ -381,6 +398,16 @@ export class SubproyectoService {
       if (fin < inicio) {
         throw new BadRequestException('La fecha de fin debe ser posterior a la fecha de inicio');
       }
+
+      // Validar dentro del rango del proyecto padre
+      this.validateFechasEnRangoProyecto(proyectoPadre, createDto.fechaInicio, createDto.fechaFin);
+
+      // Validar contra PGD
+      await this.validateFechasEnRangoPGD(
+        createDto.proyectoPadreId,
+        createDto.fechaInicio,
+        createDto.fechaFin,
+      );
     }
 
     // 5. Validar años contra PGD (si tiene años)
@@ -417,12 +444,13 @@ export class SubproyectoService {
 
     // 1. Validar fechas si se actualizan
     if (updateDto.fechaInicio || updateDto.fechaFin) {
-      const fechaInicio = updateDto.fechaInicio || subproyecto.fechaInicio?.toISOString().split('T')[0];
-      const fechaFin = updateDto.fechaFin || subproyecto.fechaFin?.toISOString().split('T')[0];
+      const fechaInicio =
+        updateDto.fechaInicio || String(subproyecto.fechaInicio || '').split('T')[0] || undefined;
+      const fechaFin =
+        updateDto.fechaFin || String(subproyecto.fechaFin || '').split('T')[0] || undefined;
 
       if (fechaInicio && fechaFin) {
-        await this.validateFechasEnRangoPGD(subproyecto.proyectoPadreId, fechaInicio, fechaFin);
-
+        // Validar que fechaFin >= fechaInicio
         const inicio = this.parseDateString(fechaInicio);
         const fin = this.parseDateString(fechaFin);
 
@@ -431,6 +459,17 @@ export class SubproyectoService {
             'La fecha de fin debe ser posterior a la fecha de inicio',
           );
         }
+
+        // Cargar proyecto padre para validar rango
+        const proyectoPadre = await this.proyectoRepository.findOne({
+          where: { id: subproyecto.proyectoPadreId },
+        });
+
+        if (proyectoPadre) {
+          this.validateFechasEnRangoProyecto(proyectoPadre, fechaInicio, fechaFin);
+        }
+
+        await this.validateFechasEnRangoPGD(subproyecto.proyectoPadreId, fechaInicio, fechaFin);
       }
     }
 
@@ -507,7 +546,7 @@ export class SubproyectoService {
 
   /**
    * Verifica si todos los subproyectos activos del proyecto padre están finalizados
-   * (o cancelados). Si es así, notifica al Coordinador y SM del proyecto padre.
+   * (o cancelados). Si es así, finaliza automáticamente el proyecto padre.
    * Solo aplica cuando el proyecto tiene subproyectos (caso contrario, la finalización
    * del proyecto se maneja por sprints directos).
    */
@@ -545,26 +584,39 @@ export class SubproyectoService {
 
     if (!proyecto || proyecto.estado === ProyectoEstado.FINALIZADO) return;
 
+    // Auto-finalizar el proyecto padre
+    proyecto.estado = ProyectoEstado.FINALIZADO;
+    await this.proyectoRepository.save(proyecto);
+
+    // Notificar al equipo que el proyecto fue finalizado automáticamente
     const destinatarios: number[] = [];
     if (proyecto.coordinadorId) destinatarios.push(proyecto.coordinadorId);
     if (proyecto.scrumMasterId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
       destinatarios.push(proyecto.scrumMasterId);
     }
 
-    if (destinatarios.length === 0) return;
+    // Agregar PMOs
+    const pmoIds = await this.getPmoUserIds();
+    for (const pmoId of pmoIds) {
+      if (!destinatarios.includes(pmoId)) {
+        destinatarios.push(pmoId);
+      }
+    }
 
-    await this.notificacionService.notificarMultiples(
-      TipoNotificacion.PROYECTOS,
-      destinatarios,
-      {
-        titulo: `¿Finalizar proyecto ${proyecto.codigo}?`,
-        descripcion: `Todos los subproyectos del proyecto "${proyecto.nombre}" han sido completados. ¿Desea marcar el proyecto como Finalizado?`,
-        entidadTipo: 'Proyecto',
-        entidadId: proyectoPadreId,
-        proyectoId: proyectoPadreId,
-        urlAccion: `/poi/proyectos/${proyectoPadreId}`,
-      },
-    );
+    if (destinatarios.length > 0) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `Proyecto finalizado: ${proyecto.codigo}`,
+          descripcion: `El proyecto "${proyecto.nombre}" ha sido finalizado automáticamente porque todos sus subproyectos han sido completados.`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoPadreId,
+          proyectoId: proyectoPadreId,
+          urlAccion: `/poi/proyecto/detalles?id=${proyectoPadreId}`,
+        },
+      );
+    }
   }
 
   /**

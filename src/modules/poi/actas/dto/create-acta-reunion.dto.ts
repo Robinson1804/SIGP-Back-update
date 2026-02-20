@@ -10,6 +10,8 @@ import {
   ArrayMinSize,
 } from 'class-validator';
 import { TipoReunion, Modalidad } from '../enums/acta.enum';
+// Nota: fasePerteneciente, horaInicio, horaFin, modalidad son opcionales para
+// permitir guardar borradores antes de tener todos los datos completos.
 
 export class CreateActaReunionDto {
   @IsOptional()
@@ -35,23 +37,23 @@ export class CreateActaReunionDto {
   @IsEnum(TipoReunion)
   tipoReunion: TipoReunion;
 
-  @IsNotEmpty({ message: 'La fase del proyecto es obligatoria' })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  fasePerteneciente: string;
+  fasePerteneciente?: string;
 
-  @IsNotEmpty({ message: 'La hora de inicio es obligatoria' })
+  @IsOptional()
   @IsString()
-  horaInicio: string;
+  horaInicio?: string;
 
-  @IsNotEmpty({ message: 'La hora de fin es obligatoria' })
+  @IsOptional()
   @IsString()
-  horaFin: string;
+  horaFin?: string;
 
   // Nuevos campos
-  @IsNotEmpty({ message: 'La modalidad es obligatoria' })
+  @IsOptional()
   @IsEnum(Modalidad)
-  modalidad: Modalidad;
+  modalidad?: Modalidad;
 
   @IsOptional()
   @IsString()

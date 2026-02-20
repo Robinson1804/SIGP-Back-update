@@ -262,6 +262,24 @@ export class DashboardProyectoService {
   }
 
   private async calcularProgreso(proyectoId: number): Promise<number> {
+    // Check if project has subprojects; if so, base progress on subproject states
+    const subproyectosStats = await this.proyectoRepository.manager
+      .createQueryBuilder()
+      .select('COUNT(*)', 'total')
+      .addSelect("SUM(CASE WHEN s.estado = 'Finalizado' THEN 1 ELSE 0 END)", 'finalizados')
+      .from('poi.subproyectos', 's')
+      .where('s.proyecto_padre_id = :proyectoId', { proyectoId })
+      .andWhere('s.activo = true')
+      .getRawOne();
+
+    const totalSubproyectos = parseInt(subproyectosStats?.total || '0', 10);
+
+    if (totalSubproyectos > 0) {
+      const finalizados = parseInt(subproyectosStats?.finalizados || '0', 10);
+      return Math.round((finalizados / totalSubproyectos) * 100);
+    }
+
+    // No subprojects: use HU-based calculation
     const stats = await this.historiaUsuarioRepository
       .createQueryBuilder('hu')
       .select('COUNT(*)', 'total')
