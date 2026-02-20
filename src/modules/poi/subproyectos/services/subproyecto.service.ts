@@ -546,7 +546,10 @@ export class SubproyectoService {
       await this.notificarCambiosRoles(saved, rolesChanged, userId);
     }
 
-    return this.findOne(id);
+    // IMPORTANTE: Devolver el objeto saved directamente para evitar que findOne()
+    // devuelva datos desactualizados antes de que TypeORM haga flush a la BD
+    // El findOne() carga relaciones pero puede devolver cache viejo
+    return saved;
   }
 
   /**
