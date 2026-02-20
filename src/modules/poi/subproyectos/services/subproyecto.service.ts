@@ -215,10 +215,9 @@ export class SubproyectoService {
       destinatarios.push(subproyecto.scrumMasterId);
     }
 
-    // Área usuaria
-    if (subproyecto.areaUsuaria && subproyecto.areaUsuaria.length > 0) {
-      const areaUsuariaFiltered = subproyecto.areaUsuaria.filter((id) => id !== userId);
-      destinatarios.push(...areaUsuariaFiltered);
+    // Área usuaria (patrocinador)
+    if (subproyecto.areaUsuariaId && subproyecto.areaUsuariaId !== userId) {
+      destinatarios.push(subproyecto.areaUsuariaId);
     }
 
     // PMO
@@ -286,25 +285,24 @@ export class SubproyectoService {
       );
     }
 
-    // Notificar a los nuevos miembros del Área Usuaria
-    if (updateDto.areaUsuaria && updateDto.areaUsuaria.length > 0) {
-      const areaUsuariaAnterior = subproyecto.areaUsuaria || [];
-      const nuevosPatrocinadores = updateDto.areaUsuaria.filter(
-        (id) => !areaUsuariaAnterior.includes(id) && id !== userId,
+    // Notificar al nuevo patrocinador del Área Usuaria
+    if (
+      updateDto.areaUsuariaId !== undefined &&
+      updateDto.areaUsuariaId !== null &&
+      updateDto.areaUsuariaId !== subproyecto.areaUsuariaId &&
+      updateDto.areaUsuariaId !== userId
+    ) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [updateDto.areaUsuariaId],
+        {
+          titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
+          descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: subproyecto.id,
+          proyectoId: subproyecto.proyectoPadreId,
+        },
       );
-      if (nuevosPatrocinadores.length > 0) {
-        await this.notificacionService.notificarMultiples(
-          TipoNotificacion.PROYECTOS,
-          nuevosPatrocinadores,
-          {
-            titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
-            descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
-            entidadTipo: 'Proyecto',
-            entidadId: subproyecto.id,
-            proyectoId: subproyecto.proyectoPadreId,
-          },
-        );
-      }
     }
   }
 
@@ -511,7 +509,7 @@ export class SubproyectoService {
     if (updateDto.clasificacion !== undefined) updateData.clasificacion = updateDto.clasificacion;
     if (updateDto.coordinadorId !== undefined) updateData.coordinadorId = updateDto.coordinadorId;
     if (updateDto.scrumMasterId !== undefined) updateData.scrumMasterId = updateDto.scrumMasterId;
-    if (updateDto.areaUsuaria !== undefined) updateData.areaUsuaria = updateDto.areaUsuaria;
+    if (updateDto.areaUsuariaId !== undefined) updateData.areaUsuaria = updateDto.areaUsuariaId;
     if (updateDto.coordinacion !== undefined) updateData.coordinacion = updateDto.coordinacion;
     if (updateDto.areaResponsable !== undefined) updateData.areaResponsable = updateDto.areaResponsable;
     if (updateDto.areasFinancieras !== undefined) updateData.areasFinancieras = updateDto.areasFinancieras;

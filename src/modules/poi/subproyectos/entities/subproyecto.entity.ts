@@ -52,8 +52,13 @@ export class Subproyecto {
   @JoinColumn({ name: 'coordinador_id' })
   coordinador?: any;
 
-  @Column({ name: 'area_usuaria', type: 'int', array: true, nullable: true })
-  areaUsuaria?: number[];
+  // Área Usuaria (Patrocinador) - Un solo usuario para subproyectos
+  @Column({ name: 'area_usuaria', type: 'int', nullable: true })
+  areaUsuariaId?: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'area_usuaria' })
+  areaUsuaria?: any;
 
   // ==========================================
   // ADMINISTRATIVO

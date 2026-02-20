@@ -58,9 +58,8 @@ export class CreateSubproyectoDto {
   scrumMasterId?: number;
 
   @IsOptional()
-  @IsArray()
-  @IsInt({ each: true })
-  areaUsuaria?: number[];
+  @IsInt()
+  areaUsuariaId?: number;
 
   // ==========================================
   // ADMINISTRATIVO (OPCIONALES)
