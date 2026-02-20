@@ -524,7 +524,7 @@ export class SubproyectoService {
     if (userId !== undefined) subproyecto.updatedBy = userId;
 
     this.logger.log(`🔍 DEBUG - Subproyecto después de asignación coordinadorId: ${subproyecto.coordinadorId}`);
-    const saved = await this.subproyectoRepository.save(subproyecto);
+    let saved = await this.subproyectoRepository.save(subproyecto);
     this.logger.log(`🔍 DEBUG - Subproyecto guardado coordinadorId: ${saved.coordinadorId}`);
 
     // 5. Auto-transición de estado (si campos completos y estado es Pendiente)
