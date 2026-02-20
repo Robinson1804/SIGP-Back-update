@@ -158,7 +158,7 @@ export class ActaController {
    * Para Acta de Constitución: requiere aprobación de PMO y PATROCINADOR
    */
   @Post(':id/aprobar')
-  @Roles(Role.ADMIN, Role.PMO, Role.PATROCINADOR)
+  @Roles(Role.PMO, Role.PATROCINADOR)
   aprobar(
     @Param('id', ParseIntPipe) id: number,
     @Body() aprobarDto: AprobarActaDto,

@@ -85,7 +85,7 @@ export class CronogramaController {
   }
 
   @Post(':id/aprobar')
-  @Roles(Role.ADMIN, Role.PMO, Role.PATROCINADOR)
+  @Roles(Role.PMO, Role.PATROCINADOR)
   aprobar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AprobarCronogramaDto,

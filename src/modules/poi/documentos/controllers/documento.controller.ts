@@ -70,7 +70,7 @@ export class DocumentoController {
   }
 
   @Post(':id/aprobar')
-  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR)
+  @Roles(Role.ADMIN, Role.PMO)
   aprobar(
     @Param('id', ParseIntPipe) id: number,
     @Body() aprobarDto: AprobarDocumentoDto,

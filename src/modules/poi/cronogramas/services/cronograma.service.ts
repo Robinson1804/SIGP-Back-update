@@ -312,9 +312,9 @@ export class CronogramaService {
 
     if (dto.aprobado) {
       // Registrar aprobación según el rol
-      const rolAprobador = userRole === Role.PMO || userRole === Role.ADMIN ? 'PMO' : 'Patrocinador';
+      const rolAprobador = userRole === Role.PMO ? 'PMO' : 'Patrocinador';
 
-      if (userRole === Role.PMO || userRole === Role.ADMIN) {
+      if (userRole === Role.PMO) {
         if (cronograma.aprobadoPorPmo) {
           throw new BadRequestException('El PMO ya ha aprobado este cronograma');
         }
@@ -346,7 +346,7 @@ export class CronogramaService {
       );
     } else {
       // Rechazar: volver a estado BORRADOR y resetear aprobaciones
-      const rolRechazador = userRole === Role.PMO || userRole === Role.ADMIN ? 'PMO' : 'Patrocinador';
+      const rolRechazador = userRole === Role.PMO ? 'PMO' : 'Patrocinador';
 
       cronograma.estado = CronogramaEstado.BORRADOR;
       cronograma.aprobadoPorPmo = false;

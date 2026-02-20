@@ -440,11 +440,11 @@ export class ActaService {
     acta.updatedBy = userId;
 
     // Determinar quién está aprobando/rechazando
-    const rolAprobador = userRole === Role.PMO || userRole === Role.ADMIN ? 'PMO' : 'Patrocinador';
+    const rolAprobador = userRole === Role.PMO ? 'PMO' : 'Patrocinador';
 
     if (dto.aprobado) {
       // Registrar aprobación según el rol
-      if (userRole === Role.PMO || userRole === Role.ADMIN) {
+      if (userRole === Role.PMO) {
         if (acta.aprobadoPorPmo) {
           throw new BadRequestException('El PMO ya ha aprobado esta acta');
         }
