@@ -498,42 +498,47 @@ export class SubproyectoService {
         updateDto.patrocinadorId !== subproyecto.patrocinadorId,
     };
 
-    // 4. Actualizar
-    // Asignar campos explícitamente para evitar problemas con Object.assign
-    if (updateDto.nombre !== undefined) subproyecto.nombre = updateDto.nombre;
-    if (updateDto.descripcion !== undefined) subproyecto.descripcion = updateDto.descripcion;
-    if (updateDto.clasificacion !== undefined) subproyecto.clasificacion = updateDto.clasificacion;
-    if (updateDto.coordinadorId !== undefined) subproyecto.coordinadorId = updateDto.coordinadorId;
-    if (updateDto.scrumMasterId !== undefined) subproyecto.scrumMasterId = updateDto.scrumMasterId;
-    if (updateDto.patrocinadorId !== undefined) subproyecto.patrocinadorId = updateDto.patrocinadorId;
-    if (updateDto.areaUsuaria !== undefined) subproyecto.areaUsuaria = updateDto.areaUsuaria;
-    if (updateDto.coordinacion !== undefined) subproyecto.coordinacion = updateDto.coordinacion;
-    if (updateDto.areaResponsable !== undefined) subproyecto.areaResponsable = updateDto.areaResponsable;
-    if (updateDto.areasFinancieras !== undefined) subproyecto.areasFinancieras = updateDto.areasFinancieras;
-    if (updateDto.monto !== undefined) subproyecto.monto = updateDto.monto;
-    if (updateDto.anios !== undefined) subproyecto.anios = updateDto.anios;
-    if (updateDto.costosAnuales !== undefined) subproyecto.costosAnuales = updateDto.costosAnuales;
-    if (updateDto.alcances !== undefined) subproyecto.alcances = updateDto.alcances;
-    if (updateDto.problematica !== undefined) subproyecto.problematica = updateDto.problematica;
-    if (updateDto.beneficiarios !== undefined) subproyecto.beneficiarios = updateDto.beneficiarios;
-    if (updateDto.beneficios !== undefined) subproyecto.beneficios = updateDto.beneficios;
-    if (updateDto.fechaInicio !== undefined) subproyecto.fechaInicio = this.parseDateString(updateDto.fechaInicio);
-    if (updateDto.fechaFin !== undefined) subproyecto.fechaFin = this.parseDateString(updateDto.fechaFin);
-    if (updateDto.estado !== undefined) subproyecto.estado = updateDto.estado;
-    if (updateDto.activo !== undefined) subproyecto.activo = updateDto.activo;
-    if (userId !== undefined) subproyecto.updatedBy = userId;
+    // 4. Actualizar usando update() del repositorio
+    // CRÍTICO: Usar update() en vez de save() para evitar problemas con relaciones
+    // TypeORM prioriza las relaciones sobre los campos de ID cuando se usa save()
+    // update() trabaja directamente con los campos de la BD
 
-    this.logger.log(`🔍 DEBUG - Subproyecto después de asignación coordinadorId: ${subproyecto.coordinadorId}`);
-    let saved = await this.subproyectoRepository.save(subproyecto);
-    this.logger.log(`🔍 DEBUG - Subproyecto guardado coordinadorId: ${saved.coordinadorId}`);
+    // Preparar datos para actualización
+    const updateData: any = {
+      updatedBy: userId,
+    };
 
-    // CRITICAL: Recargar desde BD para evitar cache stale de TypeORM
-    // Cuando update() se llama múltiples veces, el entity manager cachea versiones antiguas
-    const reloaded = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
-    if (reloaded) {
-      saved = reloaded;
-      this.logger.log(`🔍 DEBUG - Subproyecto recargado desde BD, coordinadorId: ${saved.coordinadorId}`);
-    }
+    // Asignar solo campos presentes en el DTO
+    if (updateDto.nombre !== undefined) updateData.nombre = updateDto.nombre;
+    if (updateDto.descripcion !== undefined) updateData.descripcion = updateDto.descripcion;
+    if (updateDto.clasificacion !== undefined) updateData.clasificacion = updateDto.clasificacion;
+    if (updateDto.coordinadorId !== undefined) updateData.coordinadorId = updateDto.coordinadorId;
+    if (updateDto.scrumMasterId !== undefined) updateData.scrumMasterId = updateDto.scrumMasterId;
+    if (updateDto.patrocinadorId !== undefined) updateData.patrocinadorId = updateDto.patrocinadorId;
+    if (updateDto.areaUsuaria !== undefined) updateData.areaUsuaria = updateDto.areaUsuaria;
+    if (updateDto.coordinacion !== undefined) updateData.coordinacion = updateDto.coordinacion;
+    if (updateDto.areaResponsable !== undefined) updateData.areaResponsable = updateDto.areaResponsable;
+    if (updateDto.areasFinancieras !== undefined) updateData.areasFinancieras = updateDto.areasFinancieras;
+    if (updateDto.monto !== undefined) updateData.monto = updateDto.monto;
+    if (updateDto.anios !== undefined) updateData.anios = updateDto.anios;
+    if (updateDto.costosAnuales !== undefined) updateData.costosAnuales = updateDto.costosAnuales;
+    if (updateDto.alcances !== undefined) updateData.alcances = updateDto.alcances;
+    if (updateDto.problematica !== undefined) updateData.problematica = updateDto.problematica;
+    if (updateDto.beneficiarios !== undefined) updateData.beneficiarios = updateDto.beneficiarios;
+    if (updateDto.beneficios !== undefined) updateData.beneficios = updateDto.beneficios;
+    if (updateDto.fechaInicio !== undefined) updateData.fechaInicio = this.parseDateString(updateDto.fechaInicio);
+    if (updateDto.fechaFin !== undefined) updateData.fechaFin = this.parseDateString(updateDto.fechaFin);
+    if (updateDto.estado !== undefined) updateData.estado = updateDto.estado;
+    if (updateDto.activo !== undefined) updateData.activo = updateDto.activo;
+
+    this.logger.log(`🔍 DEBUG - coordinadorId en updateData: ${updateData.coordinadorId}`);
+
+    // Usar update() del repositorio para evitar conflictos con relaciones
+    await this.subproyectoRepository.update(id, updateData);
+
+    // Recargar el subproyecto con las relaciones actualizadas
+    let saved = await this.findOne(id);
+    this.logger.log(`🔍 DEBUG - Subproyecto después de update(), coordinadorId: ${saved.coordinadorId}`);
 
     // 5. Auto-transición de estado (si campos completos y estado es Pendiente)
     if (saved.estado === ProyectoEstado.PENDIENTE && this.camposRequeridosCompletos(saved)) {
@@ -544,17 +549,11 @@ export class SubproyectoService {
         ? ProyectoEstado.EN_DESARROLLO
         : ProyectoEstado.EN_PLANIFICACION;
 
+      // Usar update() para la auto-transición también
+      await this.subproyectoRepository.update(id, { estado: nuevoEstado });
       saved.estado = nuevoEstado;
-      // IMPORTANTE: Reasignar saved para mantener la referencia al objeto más reciente
-      saved = await this.subproyectoRepository.save(saved);
-      this.logger.log(`🔍 DEBUG - Después de auto-transición estado, coordinadorId: ${saved.coordinadorId}`);
 
-      // CRITICAL: Recargar desde BD después de auto-transición
-      const reloadedAfterTransition = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
-      if (reloadedAfterTransition) {
-        saved = reloadedAfterTransition;
-        this.logger.log(`🔍 DEBUG - Subproyecto recargado después de transición, coordinadorId: ${saved.coordinadorId}`);
-      }
+      this.logger.log(`🔍 DEBUG - Después de auto-transición, estado: ${saved.estado}, coordinadorId: ${saved.coordinadorId}`);
 
       await this.notificarCambioEstado(saved, nuevoEstado, userId);
     }
