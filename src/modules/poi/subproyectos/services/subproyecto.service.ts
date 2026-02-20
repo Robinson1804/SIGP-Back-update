@@ -529,7 +529,11 @@ export class SubproyectoService {
 
     // CRITICAL: Recargar desde BD para evitar cache stale de TypeORM
     // Cuando update() se llama múltiples veces, el entity manager cachea versiones antiguas
-    saved = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
+    const reloaded = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
+    if (reloaded) {
+      saved = reloaded;
+      this.logger.log(`🔍 DEBUG - Subproyecto recargado desde BD, coordinadorId: ${saved.coordinadorId}`);
+    }
 
     // 5. Auto-transición de estado (si campos completos y estado es Pendiente)
     if (saved.estado === ProyectoEstado.PENDIENTE && this.camposRequeridosCompletos(saved)) {
@@ -546,7 +550,11 @@ export class SubproyectoService {
       this.logger.log(`🔍 DEBUG - Después de auto-transición estado, coordinadorId: ${saved.coordinadorId}`);
 
       // CRITICAL: Recargar desde BD después de auto-transición
-      saved = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
+      const reloadedAfterTransition = await this.subproyectoRepository.findOne({ where: { id: saved.id } });
+      if (reloadedAfterTransition) {
+        saved = reloadedAfterTransition;
+        this.logger.log(`🔍 DEBUG - Subproyecto recargado después de transición, coordinadorId: ${saved.coordinadorId}`);
+      }
 
       await this.notificarCambioEstado(saved, nuevoEstado, userId);
     }
