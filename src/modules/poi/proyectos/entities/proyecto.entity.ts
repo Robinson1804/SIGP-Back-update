@@ -72,9 +72,13 @@ export class Proyecto {
   @JoinColumn({ name: 'scrum_master_id' })
   scrumMaster: any;
 
-  // Área Usuaria - Patrocinadores asignados al proyecto (IDs de usuario)
-  @Column({ name: 'area_usuaria', type: 'integer', array: true, nullable: true })
-  areaUsuaria: number[];
+  // Área Usuaria (Patrocinador) - Un solo usuario
+  @Column({ name: 'area_usuaria', type: 'integer', nullable: true })
+  areaUsuariaId: number;
+
+  @ManyToOne('Usuario', { nullable: true })
+  @JoinColumn({ name: 'area_usuaria' })
+  areaUsuaria: any;
 
   // Área Responsable del Proyecto (ej: OTIN, OGD, etc.)
   @Column({ name: 'area_responsable', length: 100, nullable: true })

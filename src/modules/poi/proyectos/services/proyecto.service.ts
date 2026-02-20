@@ -363,25 +363,25 @@ export class ProyectoService {
       );
     }
 
-    // Notificar a los patrocinadores del Área Usuaria
-    if (createDto.areaUsuaria && createDto.areaUsuaria.length > 0) {
-      const destinatariosAreaUsuaria = createDto.areaUsuaria.filter(
-        (id) => id !== userId && id !== createDto.coordinadorId && id !== createDto.scrumMasterId,
+    // Notificar al patrocinador del Área Usuaria
+    if (
+      createDto.areaUsuariaId &&
+      createDto.areaUsuariaId !== userId &&
+      createDto.areaUsuariaId !== createDto.coordinadorId &&
+      createDto.areaUsuariaId !== createDto.scrumMasterId
+    ) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [createDto.areaUsuariaId],
+        {
+          titulo: `Asignado como Área Usuaria: ${proyectoGuardado.codigo}`,
+          descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyectoGuardado.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyectoGuardado.id,
+          proyectoId: proyectoGuardado.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyectoGuardado.id}`,
+        },
       );
-      if (destinatariosAreaUsuaria.length > 0) {
-        await this.notificacionService.notificarMultiples(
-          TipoNotificacion.PROYECTOS,
-          destinatariosAreaUsuaria,
-          {
-            titulo: `Asignado como Área Usuaria: ${proyectoGuardado.codigo}`,
-            descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyectoGuardado.nombre}"`,
-            entidadTipo: 'Proyecto',
-            entidadId: proyectoGuardado.id,
-            proyectoId: proyectoGuardado.id,
-            urlAccion: `/poi/proyecto/detalles?id=${proyectoGuardado.id}`,
-          },
-        );
-      }
     }
 
     return proyectoGuardado;
@@ -439,7 +439,7 @@ export class ProyectoService {
     }
 
     if (filters?.areaUsuariaUserId) {
-      queryBuilder.andWhere('proyecto.area_usuaria @> ARRAY[:areaUsuariaUserId]::integer[]', {
+      queryBuilder.andWhere('proyecto.area_usuaria = :areaUsuariaUserId', {
         areaUsuariaUserId: filters.areaUsuariaUserId,
       });
     }
@@ -655,26 +655,25 @@ export class ProyectoService {
       );
     }
 
-    // Notificar a los nuevos patrocinadores del Área Usuaria
-    if (updateDto.areaUsuaria && updateDto.areaUsuaria.length > 0) {
-      const areaUsuariaAnterior = proyecto.areaUsuaria || [];
-      const nuevosPatrocinadores = updateDto.areaUsuaria.filter(
-        (id) => !areaUsuariaAnterior.includes(id) && id !== userId,
+    // Notificar al nuevo patrocinador del Área Usuaria
+    if (
+      updateDto.areaUsuariaId !== undefined &&
+      updateDto.areaUsuariaId !== null &&
+      updateDto.areaUsuariaId !== proyecto.areaUsuariaId &&
+      updateDto.areaUsuariaId !== userId
+    ) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [updateDto.areaUsuariaId],
+        {
+          titulo: `Asignado como Área Usuaria: ${proyecto.codigo}`,
+          descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+        },
       );
-      if (nuevosPatrocinadores.length > 0) {
-        await this.notificacionService.notificarMultiples(
-          TipoNotificacion.PROYECTOS,
-          nuevosPatrocinadores,
-          {
-            titulo: `Asignado como Área Usuaria: ${proyecto.codigo}`,
-            descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyecto.nombre}"`,
-            entidadTipo: 'Proyecto',
-            entidadId: proyecto.id,
-            proyectoId: proyecto.id,
-            urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
-          },
-        );
-      }
     }
 
     return saved;
