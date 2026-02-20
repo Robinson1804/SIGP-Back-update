@@ -527,6 +527,10 @@ export class SubproyectoService {
     let saved = await this.subproyectoRepository.save(subproyecto);
     this.logger.log(`🔍 DEBUG - Subproyecto guardado coordinadorId: ${saved.coordinadorId}`);
 
+    // CRITICAL: Limpiar entity manager cache para evitar que findOne() devuelva datos stale
+    // Esto es necesario porque TypeORM cachea entities y puede devolver versiones antiguas
+    await this.subproyectoRepository.manager.clear();
+
     // 5. Auto-transición de estado (si campos completos y estado es Pendiente)
     if (saved.estado === ProyectoEstado.PENDIENTE && this.camposRequeridosCompletos(saved)) {
       // TODO: Verificar si tiene sprints (requiere integración con módulo Agile)
@@ -540,6 +544,10 @@ export class SubproyectoService {
       // IMPORTANTE: Reasignar saved para mantener la referencia al objeto más reciente
       saved = await this.subproyectoRepository.save(saved);
       this.logger.log(`🔍 DEBUG - Después de auto-transición estado, coordinadorId: ${saved.coordinadorId}`);
+
+      // CRITICAL: Limpiar entity manager cache después de auto-transición
+      await this.subproyectoRepository.manager.clear();
+
       await this.notificarCambioEstado(saved, nuevoEstado, userId);
     }
 
