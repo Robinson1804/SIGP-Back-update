@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -15,6 +16,8 @@ import { TipoAsignacion } from '../enums/tipo-asignacion.enum';
 
 @Injectable()
 export class AsignacionService {
+  private readonly logger = new Logger(AsignacionService.name);
+
   constructor(
     @InjectRepository(Asignacion)
     private readonly asignacionRepository: Repository<Asignacion>,
@@ -26,16 +29,14 @@ export class AsignacionService {
     // Validate reference based on type
     this.validarReferencia(createDto);
 
-    // Check if exceeds 100% dedication
-    const dedicacionActual = await this.calcularDedicacionActual(createDto.personalId);
-    const nuevaDedicacion = dedicacionActual + Number(createDto.porcentajeDedicacion);
-
-    if (nuevaDedicacion > 100) {
-      throw new ConflictException(
-        `El personal tiene ${dedicacionActual}% asignado. ` +
-        `No se puede agregar ${createDto.porcentajeDedicacion}% (excedería 100%)`,
-      );
-    }
+    // Check if exceeds 100% dedication (only for execution roles)
+    // This will skip verification for Coordinador, Scrum Master, Patrocinador, Product Owner
+    await this.verificarSobrecarga(
+      createDto.personalId,
+      createDto.porcentajeDedicacion,
+      undefined, // excludeAsignacionId (no aplica en create)
+      createDto.rolEquipo, // Pass role to check if it's a management role
+    );
 
     const asignacion = this.asignacionRepository.create({
       ...createDto,
@@ -229,6 +230,123 @@ export class AsignacionService {
     await this.actualizarDisponibilidad(asignacion.personalId);
 
     return saved;
+  }
+
+  /**
+   * Verifica si asignar un porcentaje a un personal causaría sobrecarga (>100%)
+   * IMPORTANTE: Solo aplica para roles de ejecución (Desarrollador, Implementador)
+   * NO aplica para roles de gestión (Coordinador, Scrum Master, Patrocinador)
+   *
+   * @param personalId - ID del personal a verificar
+   * @param porcentajeNuevo - Porcentaje que se desea asignar
+   * @param excludeAsignacionId - ID de asignación a excluir (para actualizaciones)
+   * @param rolEquipo - Rol en el equipo ('Desarrollador', 'Implementador', etc.)
+   * @throws BadRequestException si causaría sobrecarga para roles de ejecución
+   */
+  async verificarSobrecarga(
+    personalId: number,
+    porcentajeNuevo: number,
+    excludeAsignacionId?: number,
+    rolEquipo?: string,
+  ): Promise<void> {
+    // Defensive: validate inputs
+    if (!personalId || porcentajeNuevo === null || porcentajeNuevo === undefined) {
+      this.logger.warn(
+        `[verificarSobrecarga] Parámetros inválidos: personalId=${personalId}, porcentaje=${porcentajeNuevo}`,
+      );
+      return; // Don't block if invalid params
+    }
+
+    // CRITICAL: Solo verificar sobrecarga para roles de ejecución
+    // Coordinadores, Scrum Masters y Patrocinadores NO tienen límite de dedicación
+    const rolesDeGestion = ['Coordinador', 'Scrum Master', 'Patrocinador', 'Product Owner'];
+    if (rolEquipo && rolesDeGestion.includes(rolEquipo)) {
+      this.logger.log(
+        `[verificarSobrecarga] Rol de gestión "${rolEquipo}" - sobrecarga no aplica`,
+      );
+      return; // Don't verify for management roles
+    }
+
+    try {
+      // Get current assignments with null safety
+      // Solo contar asignaciones de ejecución (con roles Desarrollador/Implementador)
+      const asignaciones = await this.asignacionRepository.find({
+        where: {
+          personalId,
+          activo: true,
+        },
+      });
+
+      // Defensive: handle undefined or null array
+      if (!asignaciones || !Array.isArray(asignaciones)) {
+        this.logger.warn(
+          `[verificarSobrecarga] No se encontraron asignaciones para personal ${personalId}`,
+        );
+        return; // Don't block if no assignments found
+      }
+
+      // Filter active assignments and exclude:
+      // 1. The assignment being updated (if excludeAsignacionId provided)
+      // 2. Assignments with management roles (shouldn't count towards dedication)
+      // 3. Assignments that have ended
+      const asignacionesActivas = asignaciones.filter((a) => {
+        // Exclude the assignment being updated
+        if (excludeAsignacionId && a.id === excludeAsignacionId) {
+          return false;
+        }
+        // Exclude management roles from dedication calculation
+        if (a.rolEquipo && rolesDeGestion.includes(a.rolEquipo)) {
+          return false;
+        }
+        // Only count active assignments that haven't ended
+        return !a.fechaFin || new Date(a.fechaFin) >= new Date();
+      });
+
+      // Calculate current dedication (only from execution roles)
+      const dedicacionActual = asignacionesActivas.reduce((sum, a) => {
+        return sum + Number(a.porcentajeDedicacion || 0);
+      }, 0);
+
+      const nuevaDedicacion = dedicacionActual + Number(porcentajeNuevo);
+
+      if (nuevaDedicacion > 100) {
+        throw new BadRequestException(
+          `El personal tiene ${dedicacionActual}% asignado en roles de ejecución. ` +
+            `No se puede agregar ${porcentajeNuevo}% (excedería 100%). ` +
+            `Total resultante: ${nuevaDedicacion}%`,
+        );
+      }
+
+      this.logger.log(
+        `[verificarSobrecarga] Verificación OK - Personal ${personalId}: ${dedicacionActual}% actual + ${porcentajeNuevo}% nuevo = ${nuevaDedicacion}%`,
+      );
+    } catch (error) {
+      // If it's our BadRequestException, re-throw it
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      // For any other error, log and don't block the operation
+      this.logger.error(`[verificarSobrecarga] Error inesperado:`, error);
+      // Don't block the operation on unexpected errors
+      return;
+    }
+  }
+
+  /**
+   * Wrapper para verificar sobrecarga antes de guardar
+   * Used by subproyecto and other services
+   * @param personalId - ID del personal
+   * @param porcentaje - Porcentaje de dedicación
+   * @param excludeAsignacionId - ID de asignación a excluir (opcional)
+   * @param rolEquipo - Rol en el equipo (opcional, para filtrar roles de gestión)
+   */
+  async verificarSobrecargaAntesDeGuardar(
+    personalId: number,
+    porcentaje: number,
+    excludeAsignacionId?: number,
+    rolEquipo?: string,
+  ): Promise<void> {
+    return this.verificarSobrecarga(personalId, porcentaje, excludeAsignacionId, rolEquipo);
   }
 
   async getAlertasSobrecarga(): Promise<AlertaSobrecargaResponseDto[]> {

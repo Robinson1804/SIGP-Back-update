@@ -440,7 +440,11 @@ export class SubproyectoService {
     updateDto: UpdateSubproyectoDto,
     userId?: number,
   ): Promise<Subproyecto> {
+    this.logger.log(`🔍 DEBUG - UpdateDto recibido: ${JSON.stringify(updateDto)}`);
+    this.logger.log(`🔍 DEBUG - coordinadorId en DTO: ${updateDto.coordinadorId}`);
+
     const subproyecto = await this.findOne(id);
+    this.logger.log(`🔍 DEBUG - Subproyecto actual coordinadorId: ${subproyecto.coordinadorId}`);
 
     // 1. Validar fechas si se actualizan
     if (updateDto.fechaInicio || updateDto.fechaFin) {
@@ -492,8 +496,33 @@ export class SubproyectoService {
     };
 
     // 4. Actualizar
-    Object.assign(subproyecto, updateDto, { updatedBy: userId });
+    // Asignar campos explícitamente para evitar problemas con Object.assign
+    if (updateDto.nombre !== undefined) subproyecto.nombre = updateDto.nombre;
+    if (updateDto.descripcion !== undefined) subproyecto.descripcion = updateDto.descripcion;
+    if (updateDto.clasificacion !== undefined) subproyecto.clasificacion = updateDto.clasificacion;
+    if (updateDto.coordinadorId !== undefined) subproyecto.coordinadorId = updateDto.coordinadorId;
+    if (updateDto.scrumMasterId !== undefined) subproyecto.scrumMasterId = updateDto.scrumMasterId;
+    if (updateDto.patrocinadorId !== undefined) subproyecto.patrocinadorId = updateDto.patrocinadorId;
+    if (updateDto.areaUsuaria !== undefined) subproyecto.areaUsuaria = updateDto.areaUsuaria;
+    if (updateDto.coordinacion !== undefined) subproyecto.coordinacion = updateDto.coordinacion;
+    if (updateDto.areaResponsable !== undefined) subproyecto.areaResponsable = updateDto.areaResponsable;
+    if (updateDto.areasFinancieras !== undefined) subproyecto.areasFinancieras = updateDto.areasFinancieras;
+    if (updateDto.monto !== undefined) subproyecto.monto = updateDto.monto;
+    if (updateDto.anios !== undefined) subproyecto.anios = updateDto.anios;
+    if (updateDto.costosAnuales !== undefined) subproyecto.costosAnuales = updateDto.costosAnuales;
+    if (updateDto.alcances !== undefined) subproyecto.alcances = updateDto.alcances;
+    if (updateDto.problematica !== undefined) subproyecto.problematica = updateDto.problematica;
+    if (updateDto.beneficiarios !== undefined) subproyecto.beneficiarios = updateDto.beneficiarios;
+    if (updateDto.beneficios !== undefined) subproyecto.beneficios = updateDto.beneficios;
+    if (updateDto.fechaInicio !== undefined) subproyecto.fechaInicio = this.parseDateString(updateDto.fechaInicio);
+    if (updateDto.fechaFin !== undefined) subproyecto.fechaFin = this.parseDateString(updateDto.fechaFin);
+    if (updateDto.estado !== undefined) subproyecto.estado = updateDto.estado;
+    if (updateDto.activo !== undefined) subproyecto.activo = updateDto.activo;
+    if (userId !== undefined) subproyecto.updatedBy = userId;
+
+    this.logger.log(`🔍 DEBUG - Subproyecto después de asignación coordinadorId: ${subproyecto.coordinadorId}`);
     const saved = await this.subproyectoRepository.save(subproyecto);
+    this.logger.log(`🔍 DEBUG - Subproyecto guardado coordinadorId: ${saved.coordinadorId}`);
 
     // 5. Auto-transición de estado (si campos completos y estado es Pendiente)
     if (saved.estado === ProyectoEstado.PENDIENTE && this.camposRequeridosCompletos(saved)) {

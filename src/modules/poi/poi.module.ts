@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificacionesModule } from '../notificaciones';
 import { StorageModule } from '../storage/storage.module';
+import { RrhhModule } from '../rrhh/rrhh.module';
 
 // Entities
 import { Proyecto } from './proyectos/entities/proyecto.entity';
@@ -77,6 +78,7 @@ import {
   imports: [
     forwardRef(() => NotificacionesModule),
     StorageModule,
+    RrhhModule,
     TypeOrmModule.forFeature([
       Proyecto,
       Actividad,
