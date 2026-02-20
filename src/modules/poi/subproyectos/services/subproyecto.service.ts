@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -22,6 +23,8 @@ import { Role } from '../../../../common/constants/roles.constant';
 
 @Injectable()
 export class SubproyectoService {
+  private readonly logger = new Logger(SubproyectoService.name);
+
   constructor(
     @InjectRepository(Subproyecto)
     private readonly subproyectoRepository: Repository<Subproyecto>,
