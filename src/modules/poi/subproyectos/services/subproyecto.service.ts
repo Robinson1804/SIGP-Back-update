@@ -683,7 +683,7 @@ export class SubproyectoService {
       .createQueryBuilder('subproyecto')
       .leftJoinAndSelect('subproyecto.scrumMaster', 'scrumMaster')
       .leftJoinAndSelect('subproyecto.coordinador', 'coordinador')
-      .leftJoinAndSelect('subproyecto.patrocinador', 'patrocinador')
+      .leftJoinAndSelect('subproyecto.areaUsuaria', 'areaUsuaria')
       .orderBy('subproyecto.codigo', 'ASC');
 
     // Filtro por proyecto padre
@@ -734,7 +734,7 @@ export class SubproyectoService {
   async findByProyecto(proyectoPadreId: number): Promise<Subproyecto[]> {
     return this.subproyectoRepository.find({
       where: { proyectoPadreId, activo: true },
-      relations: ['scrumMaster', 'coordinador', 'patrocinador'],
+      relations: ['scrumMaster', 'coordinador', 'areaUsuaria'],
       order: { codigo: 'ASC' },
     });
   }
@@ -745,7 +745,7 @@ export class SubproyectoService {
   async findOne(id: number): Promise<Subproyecto> {
     const subproyecto = await this.subproyectoRepository.findOne({
       where: { id },
-      relations: ['proyectoPadre', 'scrumMaster', 'coordinador', 'patrocinador'],
+      relations: ['proyectoPadre', 'scrumMaster', 'coordinador', 'areaUsuaria'],
     });
 
     if (!subproyecto) {

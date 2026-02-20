@@ -457,7 +457,7 @@ export class ProyectoService {
       relations: [
         'coordinador',
         'scrumMaster',
-        'patrocinador',
+        'areaUsuaria',
         'accionEstrategica',
         'subproyectos',
       ],
@@ -473,7 +473,7 @@ export class ProyectoService {
   async findByCodigo(codigo: string): Promise<Proyecto> {
     const proyecto = await this.proyectoRepository.findOne({
       where: { codigo },
-      relations: ['coordinador', 'scrumMaster', 'patrocinador'],
+      relations: ['coordinador', 'scrumMaster', 'areaUsuaria'],
     });
 
     if (!proyecto) {
