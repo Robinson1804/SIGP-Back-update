@@ -58,10 +58,6 @@ export class CreateSubproyectoDto {
   scrumMasterId?: number;
 
   @IsOptional()
-  @IsInt()
-  patrocinadorId?: number;
-
-  @IsOptional()
   @IsArray()
   @IsInt({ each: true })
   areaUsuaria?: number[];

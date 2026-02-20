@@ -52,14 +52,6 @@ export class Subproyecto {
   @JoinColumn({ name: 'coordinador_id' })
   coordinador?: any;
 
-  @Index()
-  @Column({ name: 'patrocinador_id', nullable: true })
-  patrocinadorId?: number;
-
-  @ManyToOne('Usuario', { nullable: true })
-  @JoinColumn({ name: 'patrocinador_id' })
-  patrocinador?: any;
-
   @Column({ name: 'area_usuaria', type: 'int', array: true, nullable: true })
   areaUsuaria?: number[];
 

@@ -11,7 +11,6 @@ export class ProyectoResponseDto {
   accionEstrategicaId: number | null;
   coordinadorId: number | null;
   scrumMasterId: number | null;
-  patrocinadorId: number | null;
   coordinacion: string | null;
   areasFinancieras: string[] | null;
   montoAnual: number | null;
@@ -36,11 +35,6 @@ export class ProyectoDetailResponseDto extends ProyectoResponseDto {
     apellido: string;
   };
   scrumMaster?: {
-    id: number;
-    nombre: string;
-    apellido: string;
-  };
-  patrocinador?: {
     id: number;
     nombre: string;
     apellido: string;

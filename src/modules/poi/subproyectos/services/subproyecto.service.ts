@@ -215,11 +215,6 @@ export class SubproyectoService {
       destinatarios.push(subproyecto.scrumMasterId);
     }
 
-    // Patrocinador
-    if (subproyecto.patrocinadorId && subproyecto.patrocinadorId !== userId) {
-      destinatarios.push(subproyecto.patrocinadorId);
-    }
-
     // Área usuaria
     if (subproyecto.areaUsuaria && subproyecto.areaUsuaria.length > 0) {
       const areaUsuariaFiltered = subproyecto.areaUsuaria.filter((id) => id !== userId);
@@ -291,20 +286,25 @@ export class SubproyectoService {
       );
     }
 
-    // Notificar cambio de patrocinador
-    if (rolesChanged.patrocinador && subproyecto.patrocinadorId && subproyecto.patrocinadorId !== userId) {
-      const destinatarios = [subproyecto.patrocinadorId, ...pmoIds];
-      await this.notificacionService.notificarMultiples(
-        TipoNotificacion.PROYECTOS,
-        destinatarios,
-        {
-          titulo: `Asignación: Patrocinador de ${subproyecto.codigo}`,
-          descripcion: `Has sido asignado como patrocinador del subproyecto "${subproyecto.nombre}"`,
-          entidadTipo: 'Proyecto',
-          entidadId: subproyecto.id,
-          proyectoId: subproyecto.proyectoPadreId,
-        },
+    // Notificar a los nuevos miembros del Área Usuaria
+    if (updateDto.areaUsuaria && updateDto.areaUsuaria.length > 0) {
+      const areaUsuariaAnterior = subproyecto.areaUsuaria || [];
+      const nuevosPatrocinadores = updateDto.areaUsuaria.filter(
+        (id) => !areaUsuariaAnterior.includes(id) && id !== userId,
       );
+      if (nuevosPatrocinadores.length > 0) {
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.PROYECTOS,
+          nuevosPatrocinadores,
+          {
+            titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
+            descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
+            entidadTipo: 'Proyecto',
+            entidadId: subproyecto.id,
+            proyectoId: subproyecto.proyectoPadreId,
+          },
+        );
+      }
     }
   }
 
@@ -493,9 +493,6 @@ export class SubproyectoService {
       scrumMaster:
         updateDto.scrumMasterId !== undefined &&
         updateDto.scrumMasterId !== subproyecto.scrumMasterId,
-      patrocinador:
-        updateDto.patrocinadorId !== undefined &&
-        updateDto.patrocinadorId !== subproyecto.patrocinadorId,
     };
 
     // 4. Actualizar usando update() del repositorio
@@ -514,7 +511,6 @@ export class SubproyectoService {
     if (updateDto.clasificacion !== undefined) updateData.clasificacion = updateDto.clasificacion;
     if (updateDto.coordinadorId !== undefined) updateData.coordinadorId = updateDto.coordinadorId;
     if (updateDto.scrumMasterId !== undefined) updateData.scrumMasterId = updateDto.scrumMasterId;
-    if (updateDto.patrocinadorId !== undefined) updateData.patrocinadorId = updateDto.patrocinadorId;
     if (updateDto.areaUsuaria !== undefined) updateData.areaUsuaria = updateDto.areaUsuaria;
     if (updateDto.coordinacion !== undefined) updateData.coordinacion = updateDto.coordinacion;
     if (updateDto.areaResponsable !== undefined) updateData.areaResponsable = updateDto.areaResponsable;
