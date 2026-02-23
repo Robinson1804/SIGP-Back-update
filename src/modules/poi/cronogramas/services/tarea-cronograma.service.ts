@@ -81,8 +81,8 @@ export class TareaCronogramaService {
       if (!proyecto) {
         throw new NotFoundException(`Proyecto no encontrado`);
       }
-      contenedorInicio = proyecto.fechaInicio ?? null;
-      contenedorFin = proyecto.fechaFin ?? null;
+      contenedorInicio = proyecto.fechaInicio ? new Date(proyecto.fechaInicio) : null;
+      contenedorFin = proyecto.fechaFin ? new Date(proyecto.fechaFin) : null;
       contenedorNombre = proyecto.nombre;
     } else if (cronograma.subproyectoId) {
       // Cronograma de subproyecto
@@ -93,8 +93,8 @@ export class TareaCronogramaService {
       if (!subproyecto) {
         throw new NotFoundException(`Subproyecto no encontrado`);
       }
-      contenedorInicio = subproyecto.fechaInicio ?? null;
-      contenedorFin = subproyecto.fechaFin ?? null;
+      contenedorInicio = subproyecto.fechaInicio ? new Date(subproyecto.fechaInicio) : null;
+      contenedorFin = subproyecto.fechaFin ? new Date(subproyecto.fechaFin) : null;
       contenedorNombre = subproyecto.nombre;
       tipoContenedor = 'subproyecto';
     } else {
