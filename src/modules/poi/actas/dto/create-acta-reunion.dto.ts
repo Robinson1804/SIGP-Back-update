@@ -9,7 +9,7 @@ import {
   IsNotEmpty,
   ArrayMinSize,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { TipoReunion, Modalidad } from '../enums/acta.enum';
 // Nota: fasePerteneciente, horaInicio, horaFin, modalidad son opcionales para
 // permitir guardar borradores antes de tener todos los datos completos.
@@ -71,7 +71,7 @@ export class CreateActaReunionDto {
   @IsNotEmpty({ message: 'Debe incluir al menos un asistente' })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debe incluir al menos un asistente' })
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   asistentes: {
     nombre: string;
     cargo?: string;
@@ -83,19 +83,19 @@ export class CreateActaReunionDto {
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   ausentes?: { nombre: string; cargo?: string; motivo?: string }[];
 
   @IsNotEmpty({ message: 'La agenda es obligatoria' })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debe incluir al menos un tema en la agenda' })
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   agenda: { numero?: number; tema: string; descripcion?: string }[];
 
   @IsNotEmpty({ message: 'Los temas desarrollados son obligatorios' })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debe incluir al menos un tema desarrollado' })
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   temasDesarrollados: {
     tema: string;
     notas?: string;
@@ -105,7 +105,7 @@ export class CreateActaReunionDto {
   @IsNotEmpty({ message: 'Los acuerdos son obligatorios' })
   @IsArray()
   @ArrayMinSize(1, { message: 'Debe incluir al menos un acuerdo' })
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   acuerdos: {
     descripcion: string;
     responsables?: string[];
@@ -116,7 +116,7 @@ export class CreateActaReunionDto {
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   proximosPasos?: {
     descripcion: string;
     responsable?: string;
@@ -132,7 +132,7 @@ export class CreateActaReunionDto {
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   anexosReferenciados?: { nombre: string; url?: string; descripcion?: string }[];
 
   @IsOptional()

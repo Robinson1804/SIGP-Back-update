@@ -7,7 +7,7 @@ import {
   IsNumber,
   MaxLength,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 
 export class CreateActaConstitucionDto {
   @IsOptional()
@@ -43,19 +43,15 @@ export class CreateActaConstitucionDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  @Transform(({ value }) => value)
   alcance?: string[];
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  @Transform(({ value }) => value)
   fueraDeAlcance?: string[];
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   entregables?: {
     nombre: string;
     descripcion?: string;
@@ -64,19 +60,15 @@ export class CreateActaConstitucionDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  @Transform(({ value }) => value)
   supuestos?: string[];
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
-  @Transform(({ value }) => value)
   restricciones?: string[];
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   riesgos?: {
     descripcion: string;
     probabilidad?: 'Alta' | 'Media' | 'Baja';
@@ -90,7 +82,7 @@ export class CreateActaConstitucionDto {
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   cronogramaHitos?: {
     nombre: string;
     fechaEstimada: string;
@@ -99,7 +91,7 @@ export class CreateActaConstitucionDto {
 
   @IsOptional()
   @IsArray()
-  @Transform(({ value }) => value)
+  @Type(() => Object)
   equipoProyecto?: {
     rol: string;
     nombre: string;
