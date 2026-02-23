@@ -344,6 +344,25 @@ export class HistoriaUsuarioService {
     return `HU-${nextNum}`;
   }
 
+  async getNextCodigoSubproyecto(subproyectoId: number): Promise<string> {
+    const historias = await this.huRepository.find({
+      where: { subproyectoId },
+      select: ['codigo'],
+    });
+
+    let maxNum = 0;
+    for (const historia of historias) {
+      const match = historia.codigo.match(/HU-(\d+)/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+
+    const nextNum = String(maxNum + 1).padStart(3, '0');
+    return `HU-${nextNum}`;
+  }
+
   async create(createDto: CreateHistoriaUsuarioDto, userId?: number): Promise<HistoriaUsuario> {
     // Validar que tenga proyecto o subproyecto (mutuamente exclusivo)
     if (!createDto.proyectoId && !createDto.subproyectoId) {

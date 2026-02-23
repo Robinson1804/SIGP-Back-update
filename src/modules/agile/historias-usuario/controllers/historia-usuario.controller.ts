@@ -241,6 +241,12 @@ export class EpicaHistoriasUsuarioController {
 export class SubproyectoHistoriasUsuarioController {
   constructor(private readonly huService: HistoriaUsuarioService) {}
 
+  @Get('next-codigo')
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  getNextCodigo(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
+    return this.huService.getNextCodigoSubproyecto(subproyectoId);
+  }
+
   @Get()
   findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
     return this.huService.findBySubproyecto(subproyectoId);

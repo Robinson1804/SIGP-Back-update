@@ -23,8 +23,8 @@ export class RequerimientoService {
     }
 
     const whereCondition = createDto.proyectoId
-      ? { proyectoId: createDto.proyectoId, codigo: createDto.codigo }
-      : { subproyectoId: createDto.subproyectoId, codigo: createDto.codigo };
+      ? { proyectoId: createDto.proyectoId, codigo: createDto.codigo, activo: true }
+      : { subproyectoId: createDto.subproyectoId, codigo: createDto.codigo, activo: true };
 
     const existing = await this.requerimientoRepository.findOne({
       where: whereCondition,
