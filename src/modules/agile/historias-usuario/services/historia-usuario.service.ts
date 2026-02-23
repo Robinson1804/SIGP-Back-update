@@ -172,10 +172,14 @@ export class HistoriaUsuarioService {
     if (todasFinalizadas && sprint.estado === SprintEstado.EN_PROGRESO) {
       nuevoEstado = SprintEstado.FINALIZADO;
     } else if (algunaEnProgreso && sprint.estado === SprintEstado.POR_HACER) {
-      // Solo auto-iniciar si no hay otro sprint activo en el proyecto
-      const otroActivo = await this.sprintRepository.findOne({
-        where: { proyectoId: sprint.proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
-      });
+      // Solo auto-iniciar si no hay otro sprint activo en el proyecto o subproyecto
+      const otroActivo = sprint.proyectoId
+        ? await this.sprintRepository.findOne({
+            where: { proyectoId: sprint.proyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
+          })
+        : await this.sprintRepository.findOne({
+            where: { subproyectoId: sprint.subproyectoId, estado: SprintEstado.EN_PROGRESO, activo: true },
+          });
       if (!otroActivo) {
         nuevoEstado = SprintEstado.EN_PROGRESO;
       }
@@ -209,49 +213,83 @@ export class HistoriaUsuarioService {
       // Notificar equipo sobre cambio de estado automático del sprint
       await this.notificarAutoTransicionSprint(sprint, nuevoEstado);
 
-      // Si sprint se finalizó, verificar si todos los sprints del proyecto están completos
-      if (nuevoEstado === SprintEstado.FINALIZADO && sprint.proyectoId) {
-        await this.verificarSprintsCompletadosDesdeHU(sprint.proyectoId);
+      // Si sprint se finalizó, verificar si todos los sprints están completos
+      if (nuevoEstado === SprintEstado.FINALIZADO) {
+        if (sprint.proyectoId) {
+          await this.verificarSprintsCompletadosDesdeHU(sprint.proyectoId);
+        } else if (sprint.subproyectoId) {
+          await this.verificarSprintsCompletadosSubproyectoDesdeHU(sprint.subproyectoId);
+        }
       }
     }
   }
 
   /**
    * Notifica al Coordinador y Scrum Master sobre auto-transiciones de sprint.
+   * Soporta tanto sprints de proyecto como de subproyecto.
    */
   private async notificarAutoTransicionSprint(sprint: Sprint, nuevoEstado: SprintEstado): Promise<void> {
     try {
-      // Obtener proyecto usando el manager ya que no tenemos ProyectoRepository inyectado
-      const proyecto = await this.sprintRepository.manager
-        .createQueryBuilder()
-        .select(['p.id', 'p.nombre', 'p.codigo', 'p.coordinador_id', 'p.scrum_master_id'])
-        .from('poi.proyectos', 'p')
-        .where('p.id = :proyectoId', { proyectoId: sprint.proyectoId })
-        .getRawOne();
-
-      if (!proyecto) return;
-
-      const destinatarios: number[] = [];
-      if (proyecto.p_coordinador_id) destinatarios.push(proyecto.p_coordinador_id);
-      if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
-        destinatarios.push(proyecto.p_scrum_master_id);
-      }
-      if (destinatarios.length === 0) return;
-
       const accion = nuevoEstado === SprintEstado.EN_PROGRESO ? 'iniciado' : 'finalizado';
 
-      await this.notificacionService.notificarMultiples(
-        TipoNotificacion.SPRINTS,
-        destinatarios,
-        {
-          titulo: `Sprint ${accion} automáticamente: ${sprint.nombre}`,
-          descripcion: `El sprint "${sprint.nombre}" del proyecto "${proyecto.p_nombre}" ha sido ${accion} automáticamente.`,
-          entidadTipo: 'Sprint',
-          entidadId: sprint.id,
-          proyectoId: sprint.proyectoId,
-          urlAccion: `/poi/proyecto/detalles?id=${sprint.proyectoId}&tab=Backlog`,
-        },
-      );
+      if (sprint.proyectoId) {
+        const proyecto = await this.sprintRepository.manager
+          .createQueryBuilder()
+          .select(['p.id', 'p.nombre', 'p.codigo', 'p.coordinador_id', 'p.scrum_master_id'])
+          .from('poi.proyectos', 'p')
+          .where('p.id = :proyectoId', { proyectoId: sprint.proyectoId })
+          .getRawOne();
+
+        if (!proyecto) return;
+
+        const destinatarios: number[] = [];
+        if (proyecto.p_coordinador_id) destinatarios.push(proyecto.p_coordinador_id);
+        if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
+          destinatarios.push(proyecto.p_scrum_master_id);
+        }
+        if (destinatarios.length === 0) return;
+
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.SPRINTS,
+          destinatarios,
+          {
+            titulo: `Sprint ${accion} automáticamente: ${sprint.nombre}`,
+            descripcion: `El sprint "${sprint.nombre}" del proyecto "${proyecto.p_nombre}" ha sido ${accion} automáticamente.`,
+            entidadTipo: 'Sprint',
+            entidadId: sprint.id,
+            proyectoId: sprint.proyectoId,
+            urlAccion: `/poi/proyecto/detalles?id=${sprint.proyectoId}&tab=Backlog`,
+          },
+        );
+      } else if (sprint.subproyectoId) {
+        const subproyecto = await this.sprintRepository.manager
+          .createQueryBuilder()
+          .select(['s.id', 's.nombre', 's.codigo', 's.coordinador_id', 's.scrum_master_id'])
+          .from('poi.subproyectos', 's')
+          .where('s.id = :subproyectoId', { subproyectoId: sprint.subproyectoId })
+          .getRawOne();
+
+        if (!subproyecto) return;
+
+        const destinatarios: number[] = [];
+        if (subproyecto.s_coordinador_id) destinatarios.push(subproyecto.s_coordinador_id);
+        if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
+          destinatarios.push(subproyecto.s_scrum_master_id);
+        }
+        if (destinatarios.length === 0) return;
+
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.SPRINTS,
+          destinatarios,
+          {
+            titulo: `Sprint ${accion} automáticamente: ${sprint.nombre}`,
+            descripcion: `El sprint "${sprint.nombre}" del subproyecto "${subproyecto.s_nombre}" ha sido ${accion} automáticamente.`,
+            entidadTipo: 'Sprint',
+            entidadId: sprint.id,
+            urlAccion: `/poi/subproyecto/detalles?id=${sprint.subproyectoId}&tab=Backlog`,
+          },
+        );
+      }
 
       this.logger.log(`[Sprint ${sprint.nombre}] Notificación de auto-transición enviada (${accion})`);
     } catch (error) {
@@ -318,6 +356,67 @@ export class HistoriaUsuarioService {
       this.logger.log(`[Proyecto ${proyecto.p_codigo}] Todos los sprints finalizados. Notificación enviada.`);
     } catch (error) {
       this.logger.error(`[Proyecto ID:${proyectoId}] Error verificando sprints completados:`, error);
+    }
+  }
+
+  /**
+   * Verifica si todos los sprints de un subproyecto están finalizados (vía cambio de estado de HU)
+   * y notifica al equipo para que considere finalizar el subproyecto.
+   */
+  private async verificarSprintsCompletadosSubproyectoDesdeHU(subproyectoId: number): Promise<void> {
+    try {
+      const sprintsNoFinalizados = await this.sprintRepository.count({
+        where: {
+          subproyectoId,
+          estado: In([SprintEstado.POR_HACER, SprintEstado.EN_PROGRESO]),
+          activo: true,
+        },
+      });
+
+      if (sprintsNoFinalizados > 0) return;
+
+      const sprintsFinalizados = await this.sprintRepository.count({
+        where: {
+          subproyectoId,
+          estado: SprintEstado.FINALIZADO,
+          activo: true,
+        },
+      });
+
+      if (sprintsFinalizados === 0) return;
+
+      const subproyecto = await this.sprintRepository.manager
+        .createQueryBuilder()
+        .select(['s.id', 's.codigo', 's.nombre', 's.coordinador_id', 's.scrum_master_id', 's.estado'])
+        .from('poi.subproyectos', 's')
+        .where('s.id = :subproyectoId', { subproyectoId })
+        .getRawOne();
+
+      if (!subproyecto || subproyecto.s_estado === 'Finalizado') return;
+
+      const destinatarios: number[] = [];
+      if (subproyecto.s_coordinador_id) destinatarios.push(subproyecto.s_coordinador_id);
+      if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
+        destinatarios.push(subproyecto.s_scrum_master_id);
+      }
+
+      if (destinatarios.length === 0) return;
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        destinatarios,
+        {
+          titulo: `¿Finalizar subproyecto ${subproyecto.s_codigo}?`,
+          descripcion: `Todos los sprints del subproyecto "${subproyecto.s_nombre}" han sido completados. ¿Desea marcar el subproyecto como Finalizado?`,
+          entidadTipo: 'Subproyecto',
+          entidadId: subproyectoId,
+          urlAccion: `/poi/subproyecto/detalles?id=${subproyectoId}&tab=Backlog`,
+        },
+      );
+
+      this.logger.log(`[Subproyecto ${subproyecto.s_codigo}] Todos los sprints finalizados. Notificación enviada.`);
+    } catch (error) {
+      this.logger.error(`[Subproyecto ID:${subproyectoId}] Error verificando sprints completados:`, error);
     }
   }
 
@@ -1040,10 +1139,10 @@ export class HistoriaUsuarioService {
     validarDto: ValidarHuDto,
     userId: number,
   ): Promise<HistoriaUsuario> {
-    // Obtener la HU con el proyecto
+    // Obtener la HU con el proyecto o subproyecto
     const hu = await this.huRepository.findOne({
       where: { id, activo: true },
-      relations: ['proyecto'],
+      relations: ['proyecto', 'subproyecto'],
     });
 
     if (!hu) {
@@ -1059,7 +1158,7 @@ export class HistoriaUsuarioService {
     }
 
     const estadoAnterior = hu.estado;
-    const proyectoNombre = hu.proyecto?.nombre || 'Proyecto';
+    const proyectoNombre = hu.proyecto?.nombre || hu.subproyecto?.nombre || 'Proyecto';
 
     if (validarDto.aprobado) {
       // === APROBAR ===

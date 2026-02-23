@@ -104,4 +104,14 @@ export class SubproyectoEpicasController {
   findBySubproyecto(@Param('subproyectoId', ParseIntPipe) subproyectoId: number) {
     return this.epicaService.findBySubproyecto(subproyectoId);
   }
+
+  @Post()
+  @Roles(Role.ADMIN, Role.PMO, Role.COORDINADOR, Role.SCRUM_MASTER)
+  create(
+    @Param('subproyectoId', ParseIntPipe) subproyectoId: number,
+    @Body() createDto: CreateEpicaDto,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.epicaService.create({ ...createDto, subproyectoId }, userId);
+  }
 }

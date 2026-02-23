@@ -298,18 +298,26 @@ export class SprintService {
       throw new BadRequestException('Solo se puede iniciar un sprint en estado "Por hacer"');
     }
 
-    // Check if there's already an active sprint for this project
-    const activeSprint = await this.sprintRepository.findOne({
-      where: {
-        proyectoId: sprint.proyectoId,
-        estado: SprintEstado.EN_PROGRESO,
-        activo: true,
-      },
-    });
+    // Check if there's already an active sprint for this project/subproyecto
+    const activeSprint = sprint.proyectoId
+      ? await this.sprintRepository.findOne({
+          where: {
+            proyectoId: sprint.proyectoId,
+            estado: SprintEstado.EN_PROGRESO,
+            activo: true,
+          },
+        })
+      : await this.sprintRepository.findOne({
+          where: {
+            subproyectoId: sprint.subproyectoId,
+            estado: SprintEstado.EN_PROGRESO,
+            activo: true,
+          },
+        });
 
     if (activeSprint) {
       throw new ConflictException(
-        `Ya existe un sprint activo (${activeSprint.nombre}) para este proyecto`,
+        `Ya existe un sprint activo (${activeSprint.nombre}) para este ${sprint.proyectoId ? 'proyecto' : 'subproyecto'}`,
       );
     }
 
@@ -368,11 +376,9 @@ export class SprintService {
       if (cerrarDto.accionHUsPendientes === 'mover_siguiente') {
         // Buscar próximo sprint planificado
         const siguienteSprint = await this.sprintRepository.findOne({
-          where: {
-            proyectoId: sprint.proyectoId,
-            estado: SprintEstado.POR_HACER,
-            activo: true,
-          },
+          where: sprint.proyectoId
+            ? { proyectoId: sprint.proyectoId, estado: SprintEstado.POR_HACER, activo: true }
+            : { subproyectoId: sprint.subproyectoId, estado: SprintEstado.POR_HACER, activo: true },
           order: { fechaInicio: 'ASC' },
         });
 
