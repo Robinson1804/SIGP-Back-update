@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { TareaCronograma } from '../entities/tarea-cronograma.entity';
 import { Cronograma } from '../entities/cronograma.entity';
 import { Proyecto } from '../../proyectos/entities/proyecto.entity';
+import { Subproyecto } from '../../subproyectos/entities/subproyecto.entity';
 import { CreateTareaCronogramaDto } from '../dto/create-tarea-cronograma.dto';
 import { UpdateTareaCronogramaDto } from '../dto/update-tarea-cronograma.dto';
 import { TareaEstado, CronogramaEstado } from '../enums/cronograma.enum';
@@ -20,6 +21,8 @@ export class TareaCronogramaService {
     private readonly cronogramaRepository: Repository<Cronograma>,
     @InjectRepository(Proyecto)
     private readonly proyectoRepository: Repository<Proyecto>,
+    @InjectRepository(Subproyecto)
+    private readonly subproyectoRepository: Repository<Subproyecto>,
   ) {}
 
   /**
@@ -44,7 +47,7 @@ export class TareaCronogramaService {
   }
 
   /**
-   * Valida que las fechas de la tarea estén dentro del rango del proyecto
+   * Valida que las fechas de la tarea estén dentro del rango del proyecto o subproyecto
    * @param cronogramaId - ID del cronograma
    * @param fechaInicio - Fecha de inicio de la tarea
    * @param fechaFin - Fecha de fin de la tarea
@@ -54,28 +57,53 @@ export class TareaCronogramaService {
     fechaInicio: Date | string,
     fechaFin: Date | string,
   ): Promise<void> {
-    // Obtener el cronograma con su proyecto
+    // Obtener el cronograma con proyecto o subproyecto
     const cronograma = await this.cronogramaRepository.findOne({
       where: { id: cronogramaId },
-      select: ['id', 'proyectoId'],
+      select: ['id', 'proyectoId', 'subproyectoId'],
     });
 
     if (!cronograma) {
       throw new NotFoundException(`Cronograma con ID ${cronogramaId} no encontrado`);
     }
 
-    // Obtener el proyecto
-    const proyecto = await this.proyectoRepository.findOne({
-      where: { id: cronograma.proyectoId },
-      select: ['id', 'fechaInicio', 'fechaFin', 'nombre'],
-    });
+    let contenedorInicio: Date | null = null;
+    let contenedorFin: Date | null = null;
+    let contenedorNombre: string = '';
+    let tipoContenedor: string = 'proyecto';
 
-    if (!proyecto) {
-      throw new NotFoundException(`Proyecto no encontrado`);
+    if (cronograma.proyectoId) {
+      // Cronograma de proyecto
+      const proyecto = await this.proyectoRepository.findOne({
+        where: { id: cronograma.proyectoId },
+        select: ['id', 'fechaInicio', 'fechaFin', 'nombre'],
+      });
+      if (!proyecto) {
+        throw new NotFoundException(`Proyecto no encontrado`);
+      }
+      contenedorInicio = proyecto.fechaInicio ?? null;
+      contenedorFin = proyecto.fechaFin ?? null;
+      contenedorNombre = proyecto.nombre;
+    } else if (cronograma.subproyectoId) {
+      // Cronograma de subproyecto
+      const subproyecto = await this.subproyectoRepository.findOne({
+        where: { id: cronograma.subproyectoId },
+        select: ['id', 'fechaInicio', 'fechaFin', 'nombre'],
+      });
+      if (!subproyecto) {
+        throw new NotFoundException(`Subproyecto no encontrado`);
+      }
+      contenedorInicio = subproyecto.fechaInicio ?? null;
+      contenedorFin = subproyecto.fechaFin ?? null;
+      contenedorNombre = subproyecto.nombre;
+      tipoContenedor = 'subproyecto';
+    } else {
+      // Sin contenedor definido, no validar
+      return;
     }
 
-    // Si el proyecto no tiene fechas definidas, no validar
-    if (!proyecto.fechaInicio || !proyecto.fechaFin) {
+    // Si el contenedor no tiene fechas definidas, no validar
+    if (!contenedorInicio || !contenedorFin) {
       return;
     }
 
@@ -87,8 +115,8 @@ export class TareaCronogramaService {
 
     const tareaInicio = normalizeDate(fechaInicio);
     const tareaFin = normalizeDate(fechaFin);
-    const proyectoInicio = normalizeDate(proyecto.fechaInicio);
-    const proyectoFin = normalizeDate(proyecto.fechaFin);
+    const contenedorInicioNorm = normalizeDate(contenedorInicio);
+    const contenedorFinNorm = normalizeDate(contenedorFin);
 
     // Formatear fechas para mensajes de error
     const formatDate = (date: Date): string => {
@@ -96,18 +124,18 @@ export class TareaCronogramaService {
     };
 
     // Validar fecha de inicio
-    if (tareaInicio < proyectoInicio) {
+    if (tareaInicio < contenedorInicioNorm) {
       throw new BadRequestException(
         `La fecha de inicio de la tarea (${formatDate(tareaInicio)}) no puede ser anterior ` +
-        `a la fecha de inicio del proyecto (${formatDate(proyectoInicio)}).`
+        `a la fecha de inicio del ${tipoContenedor} (${formatDate(contenedorInicioNorm)}).`
       );
     }
 
     // Validar fecha de fin
-    if (tareaFin > proyectoFin) {
+    if (tareaFin > contenedorFinNorm) {
       throw new BadRequestException(
         `La fecha de fin de la tarea (${formatDate(tareaFin)}) no puede ser posterior ` +
-        `a la fecha de fin del proyecto (${formatDate(proyectoFin)}).`
+        `a la fecha de fin del ${tipoContenedor} (${formatDate(contenedorFinNorm)}).`
       );
     }
   }
