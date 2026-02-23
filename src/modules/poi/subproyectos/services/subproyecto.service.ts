@@ -489,7 +489,7 @@ export class SubproyectoService {
     if (updateDto.clasificacion !== undefined) updateData.clasificacion = updateDto.clasificacion;
     if (updateDto.coordinadorId !== undefined) updateData.coordinadorId = updateDto.coordinadorId;
     if (updateDto.scrumMasterId !== undefined) updateData.scrumMasterId = updateDto.scrumMasterId;
-    if (updateDto.areaUsuariaId !== undefined) updateData.areaUsuaria = updateDto.areaUsuariaId;
+    if (updateDto.areaUsuariaId !== undefined) updateData.areaUsuariaId = updateDto.areaUsuariaId;
     if (updateDto.coordinacion !== undefined) updateData.coordinacion = updateDto.coordinacion;
     if (updateDto.areaResponsable !== undefined) updateData.areaResponsable = updateDto.areaResponsable;
     if (updateDto.areasFinancieras !== undefined) updateData.areasFinancieras = updateDto.areasFinancieras;
