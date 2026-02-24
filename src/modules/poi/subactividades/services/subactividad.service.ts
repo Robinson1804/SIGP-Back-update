@@ -111,6 +111,14 @@ export class SubactividadService {
 
     const saved = await this.subactividadRepo.save(subactividad);
 
+    // Auto-transición: Pendiente → En desarrollo cuando se crea una subactividad
+    if (actividadPadre.estado === ActividadEstado.PENDIENTE) {
+        await this.actividadRepo.update(actividadPadre.id, {
+            estado: ActividadEstado.EN_DESARROLLO,
+            updatedBy: userId,
+        });
+    }
+
     // Notificar coordinador si fue asignado
     if (dto.coordinadorId && dto.coordinadorId !== userId) {
       const destinatarios: number[] = [dto.coordinadorId];
@@ -277,7 +285,7 @@ export class SubactividadService {
 
   /**
    * Verifica si todas las subactividades de una actividad están finalizadas.
-   * Si es así, auto-finaliza la actividad padre.
+   * Si es así, notifica para que el usuario confirme manualmente la finalización.
    */
   private async verificarSubactividadesCompletadas(actividadPadreId: number, userId?: number): Promise<void> {
     const subactividades = await this.subactividadRepo.find({
@@ -288,10 +296,9 @@ export class SubactividadService {
     if (subactividades.length === 0) return;
 
     const todasFinalizadas = subactividades.every(s => s.estado === ActividadEstado.FINALIZADO);
-
     if (!todasFinalizadas) return;
 
-    // Auto-finalizar la actividad padre
+    // Solo notificar — la finalización de la actividad padre requiere confirmación manual del usuario
     const actividad = await this.actividadRepo.findOne({
       where: { id: actividadPadreId },
       select: ['id', 'codigo', 'nombre', 'estado', 'coordinadorId', 'gestorId'],
@@ -299,12 +306,7 @@ export class SubactividadService {
 
     if (!actividad || actividad.estado === ActividadEstado.FINALIZADO) return;
 
-    await this.actividadRepo.update(actividadPadreId, {
-      estado: ActividadEstado.FINALIZADO,
-      updatedBy: userId,
-    });
-
-    console.log(`[Actividad ${actividad.codigo}] Auto-finalizada porque todas sus subactividades están completas.`);
+    console.log(`[Actividad ${actividad.codigo}] Todas sus subactividades están finalizadas. En espera de confirmación del usuario.`);
 
     // Notificar coordinador y PMOs de la actividad padre
     const destinatarios = [actividad.coordinadorId, actividad.gestorId].filter(
@@ -317,8 +319,8 @@ export class SubactividadService {
 
     if (destinatarios.length > 0) {
       await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
-        titulo: `Actividad finalizada: ${actividad.codigo}`,
-        descripcion: `La actividad "${actividad.nombre}" ha sido finalizada automáticamente. Todas sus subactividades están completadas.`,
+        titulo: `Listo para finalizar: ${actividad.codigo}`,
+        descripcion: `Todas las subactividades de "${actividad.nombre}" están completadas. Se requiere confirmación para finalizar la actividad.`,
         entidadTipo: 'Actividad',
         entidadId: actividad.id,
         actividadId: actividad.id,
