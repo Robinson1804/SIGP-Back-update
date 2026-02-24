@@ -107,19 +107,393 @@ export class HuEvidenciaPdfService {
     const imageCache = await this.preloadImages(tareasConEvidencias);
     this.logger.log(`Se precargaron ${Object.keys(imageCache).length} imágenes`);
 
-    // Crear contenido solo con las imágenes embebidas
-    const content: Content[] = this.createOnlyImagesContent(tareasConEvidencias, imageCache);
+    // Derivar responsables únicos a partir de los asignados a las tareas
+    const responsablesMap = new Map<number, string>();
+    for (const { tarea } of tareasConEvidencias) {
+      if (tarea.asignado) {
+        responsablesMap.set(
+          tarea.asignado.id,
+          `${tarea.asignado.nombre} ${tarea.asignado.apellido}`.trim(),
+        );
+      }
+    }
+    const responsables = Array.from(responsablesMap.values());
+
+    // Construir contenido estructurado
+    const content: Content[] = [
+      ...this.createPortadaContent(hu, proyecto, sprint, responsables, tareasConEvidencias),
+      ...this.createTareasConImagenesContent(tareasConEvidencias, imageCache),
+    ];
 
     const docDefinition: TDocumentDefinitions = {
       pageSize: 'A4',
-      pageMargins: [20, 20, 20, 20], // Márgenes mínimos para maximizar espacio de imagen
-      content: content,
-      defaultStyle: {
-        font: 'Helvetica',
-      },
+      pageMargins: [40, 50, 40, 40],
+      content,
+      styles: this.getPdfStyles(),
+      defaultStyle: { font: 'Helvetica', fontSize: 10 },
+      footer: (currentPage: number, pageCount: number) => ({
+        columns: [
+          {
+            text: `${proyecto.nombre}  |  ${hu.codigo} - ${hu.titulo}`,
+            fontSize: 7,
+            color: '#888888',
+            margin: [40, 0, 0, 0],
+          },
+          {
+            text: `Página ${currentPage} de ${pageCount}`,
+            fontSize: 7,
+            color: '#888888',
+            alignment: 'right',
+            margin: [0, 0, 40, 0],
+          },
+        ],
+        margin: [0, 8, 0, 0],
+      }),
     };
 
     return this.createPdfBuffer(docDefinition);
+  }
+
+  /**
+   * Crea la portada del documento con toda la información de la HU
+   */
+  private createPortadaContent(
+    hu: HistoriaUsuario,
+    proyecto: { codigo: string; nombre: string },
+    sprint: { nombre: string } | null | undefined,
+    responsables: string[],
+    tareasConEvidencias: TareaConEvidencias[],
+  ): Content[] {
+    const content: Content[] = [];
+
+    // ── Encabezado INEI ──
+    content.push({
+      table: {
+        widths: ['*'],
+        body: [
+          [
+            {
+              stack: [
+                {
+                  text: 'SISTEMA INTEGRAL DE GESTIÓN DE PROYECTOS — INEI',
+                  fontSize: 8,
+                  color: '#FFFFFF',
+                  bold: true,
+                  alignment: 'center',
+                  margin: [0, 0, 0, 4],
+                },
+                {
+                  text: 'INFORME DE EVIDENCIAS DE HISTORIA DE USUARIO',
+                  fontSize: 14,
+                  color: '#FFFFFF',
+                  bold: true,
+                  alignment: 'center',
+                },
+              ],
+              fillColor: '#004272',
+              margin: [0, 14, 0, 14],
+            },
+          ],
+        ],
+      },
+      layout: 'noBorders',
+      margin: [0, 0, 0, 20],
+    });
+
+    // ── Datos del Proyecto ──
+    content.push({
+      table: {
+        widths: [110, '*', 90, '*'],
+        body: [
+          [
+            { text: 'Proyecto:', bold: true, fontSize: 10 },
+            { text: `${proyecto.codigo} — ${proyecto.nombre}`, fontSize: 10, colSpan: 3 },
+            {},
+            {},
+          ],
+          ...(sprint
+            ? [
+                [
+                  { text: 'Sprint:', bold: true, fontSize: 10 },
+                  { text: sprint.nombre, fontSize: 10 },
+                  { text: 'Fecha de generación:', bold: true, fontSize: 10 },
+                  { text: this.formatDate(new Date()), fontSize: 10 },
+                ],
+              ]
+            : [
+                [
+                  { text: 'Fecha de generación:', bold: true, fontSize: 10 },
+                  { text: this.formatDate(new Date()), fontSize: 10, colSpan: 3 },
+                  {},
+                  {},
+                ],
+              ]),
+        ],
+      },
+      layout: 'noBorders',
+      margin: [0, 0, 0, 12],
+    });
+
+    // ── Separador ──
+    content.push({
+      canvas: [
+        { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: '#004272' },
+      ],
+      margin: [0, 0, 0, 14],
+    });
+
+    // ── Historia de Usuario ──
+    content.push({ text: 'HISTORIA DE USUARIO', style: 'sectionTitle', margin: [0, 0, 0, 8] });
+
+    const huRows: any[] = [
+      [
+        { text: 'Código:', bold: true, fontSize: 10 },
+        { text: hu.codigo, fontSize: 10 },
+        { text: 'Estado:', bold: true, fontSize: 10 },
+        { text: (hu as any).estado || '-', fontSize: 10 },
+      ],
+      [
+        { text: 'Título:', bold: true, fontSize: 10 },
+        { text: hu.titulo, fontSize: 10, colSpan: 3 },
+        {},
+        {},
+      ],
+      [
+        { text: 'Fecha Inicio:', bold: true, fontSize: 10 },
+        { text: hu.fechaInicio ? this.formatDate(hu.fechaInicio) : 'No definida', fontSize: 10 },
+        { text: 'Fecha Fin:', bold: true, fontSize: 10 },
+        { text: hu.fechaFin ? this.formatDate(hu.fechaFin) : 'No definida', fontSize: 10 },
+      ],
+    ];
+
+    if (hu.prioridad) {
+      huRows.push([
+        { text: 'Prioridad:', bold: true, fontSize: 10 },
+        { text: hu.prioridad, fontSize: 10 },
+        { text: 'Story Points:', bold: true, fontSize: 10 },
+        { text: hu.storyPoints?.toString() || '-', fontSize: 10 },
+      ]);
+    }
+
+    content.push({
+      table: { widths: [110, '*', 90, '*'], body: huRows },
+      layout: 'noBorders',
+      margin: [0, 0, 0, 8],
+    });
+
+    // ── Responsables ──
+    if (responsables.length > 0) {
+      content.push({
+        table: {
+          widths: [110, '*'],
+          body: [
+            [
+              { text: 'Responsables:', bold: true, fontSize: 10 },
+              { text: responsables.join('   /   '), fontSize: 10 },
+            ],
+          ],
+        },
+        layout: 'noBorders',
+        margin: [0, 0, 0, 14],
+      });
+    }
+
+    // ── Separador ──
+    content.push({
+      canvas: [
+        { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: '#cccccc' },
+      ],
+      margin: [0, 0, 0, 14],
+    });
+
+    // ── Tabla resumen de tareas ──
+    content.push({ text: 'TAREAS', style: 'sectionTitle', margin: [0, 0, 0, 8] });
+
+    const tareaHeaderRow = [
+      { text: 'Código', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+      { text: 'Nombre', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+      { text: 'Responsable', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+      { text: 'Fecha Inicio', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+      { text: 'Fecha Fin', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+      { text: 'Estado', fontSize: 9, bold: true, color: '#FFFFFF', fillColor: '#004272' },
+    ];
+
+    const tareaDataRows = tareasConEvidencias.map(({ tarea }, idx) => [
+      { text: tarea.codigo || '-', fontSize: 9, fillColor: idx % 2 === 0 ? '#f5f8fa' : null },
+      { text: tarea.nombre, fontSize: 9, fillColor: idx % 2 === 0 ? '#f5f8fa' : null },
+      {
+        text: tarea.asignado
+          ? `${tarea.asignado.nombre} ${tarea.asignado.apellido}`
+          : 'Sin asignar',
+        fontSize: 9,
+        fillColor: idx % 2 === 0 ? '#f5f8fa' : null,
+      },
+      {
+        text: tarea.fechaInicio ? this.formatDate(tarea.fechaInicio) : '-',
+        fontSize: 9,
+        fillColor: idx % 2 === 0 ? '#f5f8fa' : null,
+      },
+      {
+        text: tarea.fechaFin ? this.formatDate(tarea.fechaFin) : '-',
+        fontSize: 9,
+        fillColor: idx % 2 === 0 ? '#f5f8fa' : null,
+      },
+      {
+        text: tarea.estado || '-',
+        fontSize: 9,
+        fillColor: idx % 2 === 0 ? '#f5f8fa' : null,
+      },
+    ]);
+
+    content.push({
+      table: {
+        headerRows: 1,
+        widths: [52, '*', 90, 56, 56, 60],
+        body: [tareaHeaderRow, ...tareaDataRows],
+      },
+      layout: {
+        hLineWidth: (i: number, node: any) =>
+          i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5,
+        vLineWidth: () => 0.5,
+        hLineColor: () => '#cccccc',
+        vLineColor: () => '#cccccc',
+        paddingTop: () => 5,
+        paddingBottom: () => 5,
+        paddingLeft: () => 5,
+        paddingRight: () => 5,
+      },
+      margin: [0, 0, 0, 10],
+    });
+
+    return content;
+  }
+
+  /**
+   * Crea una sección por cada tarea: encabezado + info + imágenes de evidencia
+   */
+  private createTareasConImagenesContent(
+    tareasConEvidencias: TareaConEvidencias[],
+    imageCache: ImageCache,
+  ): Content[] {
+    const content: Content[] = [];
+    let anyImage = false;
+
+    for (const { tarea, evidencias } of tareasConEvidencias) {
+      const imagenesDisponibles = evidencias.filter(
+        (ev) => this.isImageFile(ev.tipo, ev.nombre) && ev.url && imageCache[ev.url],
+      );
+
+      if (imagenesDisponibles.length === 0) continue;
+
+      anyImage = true;
+
+      // Salto de página antes de cada tarea (separación clara)
+      content.push({ text: '', pageBreak: 'before' });
+
+      // Encabezado de la tarea
+      content.push({
+        table: {
+          widths: ['*'],
+          body: [
+            [
+              {
+                text: `${tarea.codigo}  —  ${tarea.nombre}`,
+                fontSize: 11,
+                bold: true,
+                color: '#FFFFFF',
+                fillColor: '#004272',
+                margin: [6, 8, 6, 8],
+              },
+            ],
+          ],
+        },
+        layout: 'noBorders',
+        margin: [0, 0, 0, 8],
+      });
+
+      // Info de la tarea: responsable, estado, fechas
+      content.push({
+        table: {
+          widths: [95, '*', 85, '*'],
+          body: [
+            [
+              { text: 'Responsable:', bold: true, fontSize: 9 },
+              {
+                text: tarea.asignado
+                  ? `${tarea.asignado.nombre} ${tarea.asignado.apellido}`
+                  : 'Sin asignar',
+                fontSize: 9,
+              },
+              { text: 'Estado:', bold: true, fontSize: 9 },
+              { text: tarea.estado || '-', fontSize: 9 },
+            ],
+            [
+              { text: 'Fecha Inicio:', bold: true, fontSize: 9 },
+              {
+                text: tarea.fechaInicio ? this.formatDate(tarea.fechaInicio) : '-',
+                fontSize: 9,
+              },
+              { text: 'Fecha Fin:', bold: true, fontSize: 9 },
+              {
+                text: tarea.fechaFin ? this.formatDate(tarea.fechaFin) : '-',
+                fontSize: 9,
+              },
+            ],
+          ],
+        },
+        layout: 'noBorders',
+        margin: [0, 0, 0, 12],
+      });
+
+      // Imágenes de evidencia
+      for (const ev of imagenesDisponibles) {
+        content.push({
+          stack: [
+            {
+              text: ev.nombre,
+              fontSize: 8,
+              italics: true,
+              color: '#555555',
+              margin: [0, 0, 0, 4],
+            },
+            {
+              image: imageCache[ev.url!],
+              width: 515,
+              alignment: 'center',
+              margin: [0, 0, 0, 14],
+            },
+          ],
+        });
+      }
+    }
+
+    if (!anyImage) {
+      content.push({
+        text: '\nNo hay imágenes de evidencia disponibles.',
+        fontSize: 12,
+        alignment: 'center',
+        margin: [0, 50, 0, 0],
+      });
+    }
+
+    return content;
+  }
+
+  /**
+   * Estilos del documento PDF
+   */
+  private getPdfStyles(): Record<string, any> {
+    return {
+      sectionTitle: {
+        fontSize: 11,
+        bold: true,
+        color: '#004272',
+      },
+      label: { fontSize: 9, bold: true },
+      value: { fontSize: 9 },
+      tableHeader: { fontSize: 9, bold: true, color: '#FFFFFF' },
+      tableCell: { fontSize: 9 },
+    };
   }
 
   /**

@@ -1292,10 +1292,10 @@ export class HistoriaUsuarioService {
       throw new NotFoundException(`Historia de Usuario con ID ${id} no encontrada`);
     }
 
-    // Validar que la HU esté en estado "En revisión"
-    if (hu.estado !== HuEstado.EN_REVISION) {
+    // Validar que la HU esté en estado "En revisión" o "Finalizado"
+    if (hu.estado !== HuEstado.EN_REVISION && hu.estado !== HuEstado.FINALIZADO) {
       throw new BadRequestException(
-        `Solo se puede regenerar el PDF de Historias de Usuario en estado "En revisión". ` +
+        `Solo se puede generar el PDF de Historias de Usuario en estado "En revisión" o "Finalizado". ` +
         `Estado actual: "${hu.estado}"`,
       );
     }
