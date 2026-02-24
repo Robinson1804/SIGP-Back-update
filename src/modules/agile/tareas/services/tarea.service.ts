@@ -213,6 +213,17 @@ export class TareaService {
     // Filtrar asignadoA y asignadosIds para manejar por separado
     const { asignadoA, asignadosIds, ...restDto } = createDto;
 
+    // Auto-derivar subproyectoId desde la HU cuando es tarea SCRUM (si no viene en el DTO)
+    if (createDto.tipo === TareaTipo.SCRUM && createDto.historiaUsuarioId && !restDto.subproyectoId) {
+      const huParaSubproyecto = await this.historiaUsuarioRepository.findOne({
+        where: { id: createDto.historiaUsuarioId },
+        select: ['id', 'subproyectoId'],
+      });
+      if (huParaSubproyecto?.subproyectoId) {
+        restDto.subproyectoId = huParaSubproyecto.subproyectoId;
+      }
+    }
+
     // Si hay asignadosIds, usar el primero como asignadoA principal (compatibilidad)
     const asignadoPrincipal = asignadosIds && asignadosIds.length > 0
       ? asignadosIds[0]
