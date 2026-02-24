@@ -18,6 +18,7 @@ import { SprintEstado } from '../../sprints/enums/sprint.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
 import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
+import { Subactividad } from '../../../poi/subactividades/entities/subactividad.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
 import { Personal } from '../../../rrhh/personal/entities/personal.entity';
 import { CreateTareaDto } from '../dto/create-tarea.dto';
@@ -62,6 +63,8 @@ export class TareaService {
     private readonly proyectoRepository: Repository<Proyecto>,
     @InjectRepository(Actividad)
     private readonly actividadRepository: Repository<Actividad>,
+    @InjectRepository(Subactividad)
+    private readonly subactividadRepository: Repository<Subactividad>,
     @InjectRepository(Usuario)
     private readonly usuarioRepository: Repository<Usuario>,
     @InjectRepository(Personal)
@@ -127,8 +130,8 @@ export class TareaService {
     if (createDto.tipo === TareaTipo.SCRUM && !createDto.historiaUsuarioId) {
       throw new BadRequestException('historiaUsuarioId es requerido para tareas SCRUM');
     }
-    if (createDto.tipo === TareaTipo.KANBAN && !createDto.actividadId) {
-      throw new BadRequestException('actividadId es requerido para tareas KANBAN');
+    if (createDto.tipo === TareaTipo.KANBAN && !createDto.actividadId && !createDto.subactividadId) {
+      throw new BadRequestException('actividadId o subactividadId es requerido para tareas KANBAN');
     }
 
     // IMPLEMENTADOR no puede crear tareas en actividades (solo subtareas)
@@ -144,6 +147,16 @@ export class TareaService {
       });
       if (actividad && actividad.estado === 'Finalizado') {
         throw new ForbiddenException('No se pueden crear tareas en una actividad finalizada');
+      }
+    }
+    // No se pueden crear tareas KANBAN en subactividades finalizadas
+    if (createDto.tipo === TareaTipo.KANBAN && createDto.subactividadId) {
+      const subactividad = await this.subactividadRepository.findOne({
+        where: { id: createDto.subactividadId },
+        select: ['id', 'estado'],
+      });
+      if (subactividad && subactividad.estado === 'Finalizado') {
+        throw new ForbiddenException('No se pueden crear tareas en una subactividad finalizada');
       }
     }
 
@@ -323,6 +336,11 @@ export class TareaService {
     // Auto-transition: Actividad pasa de "Pendiente" a "En desarrollo" cuando se crea una tarea KANBAN
     if (tareaGuardada.tipo === TareaTipo.KANBAN && tareaGuardada.actividadId) {
       await this.recalcularEstadoActividad(tareaGuardada.actividadId, userId);
+    }
+
+    // Auto-transition: Subactividad pasa de "Pendiente" a "En desarrollo" cuando se crea una tarea KANBAN
+    if (tareaGuardada.tipo === TareaTipo.KANBAN && tareaGuardada.subactividadId) {
+      await this.recalcularEstadoSubactividad(tareaGuardada.subactividadId, userId);
     }
 
     return tareaGuardada;
@@ -763,6 +781,11 @@ export class TareaService {
     // Actualizar estado de la Actividad automáticamente (solo para tareas KANBAN)
     if (tarea.tipo === TareaTipo.KANBAN && tarea.actividadId) {
       await this.recalcularEstadoActividad(tarea.actividadId, userId);
+    }
+
+    // Actualizar estado de la Subactividad automáticamente (solo para tareas KANBAN en subactividades)
+    if (tarea.tipo === TareaTipo.KANBAN && tarea.subactividadId) {
+      await this.recalcularEstadoSubactividad(tarea.subactividadId, userId);
     }
 
     return tareaActualizada;
@@ -2166,6 +2189,57 @@ export class TareaService {
           `El frontend debe mostrar modal de confirmación para finalizar la actividad.`,
         );
         // NO cambiar el estado aquí - el frontend lo hará con el modal
+      }
+    }
+  }
+
+  /**
+   * Recalcula el estado de una subactividad basándose en el estado de sus tareas.
+   * Pendiente → En desarrollo: cuando se crea la primera tarea
+   * En desarrollo → Finalizado: solo manualmente desde el frontend
+   */
+  async recalcularEstadoSubactividad(subactividadId: number, userId?: number): Promise<void> {
+    const subactividad = await this.subactividadRepository.findOne({
+      where: { id: subactividadId },
+      select: ['id', 'codigo', 'nombre', 'estado', 'coordinadorId', 'gestorId'],
+    });
+
+    if (!subactividad) {
+      console.log(`[Subactividad ${subactividadId}] No encontrada, no se puede recalcular estado.`);
+      return;
+    }
+
+    const estadoAnterior = subactividad.estado;
+
+    const tareas = await this.tareaRepository.find({
+      where: { subactividadId, activo: true, tipo: TareaTipo.KANBAN },
+      select: ['id', 'estado'],
+    });
+
+    const totalTareas = tareas.length;
+
+    // Si hay tareas y la subactividad está en Pendiente → cambiar a En desarrollo
+    if (totalTareas > 0 && estadoAnterior === 'Pendiente') {
+      await this.subactividadRepository.update(subactividadId, { estado: 'En desarrollo' as any, updatedBy: userId });
+
+      console.log(`[Subactividad ${subactividad.codigo}] Estado cambiado de "Pendiente" a "En desarrollo" (primera tarea creada)`);
+
+      const destinatarios = [subactividad.coordinadorId, subactividad.gestorId].filter(
+        (id): id is number => id !== null && id !== undefined,
+      );
+
+      if (destinatarios.length > 0) {
+        await this.notificacionService.notificarMultiples(
+          TipoNotificacion.PROYECTOS,
+          destinatarios,
+          {
+            titulo: `Subactividad iniciada: ${subactividad.codigo}`,
+            descripcion: `La subactividad "${subactividad.nombre}" ha cambiado a estado "En desarrollo" (se creó la primera tarea).`,
+            entidadTipo: 'Subactividad',
+            entidadId: subactividad.id,
+            urlAccion: `/poi/subactividad/detalles?id=${subactividad.id}`,
+          },
+        );
       }
     }
   }

@@ -12,6 +12,7 @@ import {
 import { TareaTipo, TareaEstado, TareaPrioridad } from '../enums/tarea.enum';
 import { HistoriaUsuario } from '../../historias-usuario/entities/historia-usuario.entity';
 import { Actividad } from '../../../poi/actividades/entities/actividad.entity';
+import { Subactividad } from '../../../poi/subactividades/entities/subactividad.entity';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
 import { Subproyecto } from '../../../poi/subproyectos/entities/subproyecto.entity';
 import { Usuario } from '../../../auth/entities/usuario.entity';
@@ -40,6 +41,9 @@ export class Tarea {
 
   @Column({ name: 'actividad_id', nullable: true })
   actividadId: number;
+
+  @Column({ name: 'subactividad_id', nullable: true })
+  subactividadId: number;
 
   @Column({ length: 20 })
   codigo: string;
@@ -141,6 +145,10 @@ export class Tarea {
   @ManyToOne(() => Actividad, { nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'actividad_id' })
   actividad: Actividad;
+
+  @ManyToOne(() => Subactividad, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'subactividad_id' })
+  subactividad: Subactividad;
 
   @ManyToOne(() => Usuario, { nullable: true })
   @JoinColumn({ name: 'asignado_a' })

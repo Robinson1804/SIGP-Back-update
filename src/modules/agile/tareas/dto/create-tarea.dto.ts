@@ -28,9 +28,13 @@ export class CreateTareaDto {
   @IsInt()
   historiaUsuarioId?: number;
 
-  @ValidateIf((o) => o.tipo === TareaTipo.KANBAN)
+  @ValidateIf((o) => o.tipo === TareaTipo.KANBAN && !o.subactividadId)
   @IsInt()
   actividadId?: number;
+
+  @IsOptional()
+  @IsInt()
+  subactividadId?: number;
 
   @IsString()
   @MaxLength(20)

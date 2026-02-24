@@ -5,6 +5,7 @@ import { StorageModule } from '../storage/storage.module';
 import { Personal } from '../rrhh/personal/entities/personal.entity';
 import { Proyecto } from '../poi/proyectos/entities/proyecto.entity';
 import { Actividad } from '../poi/actividades/entities/actividad.entity';
+import { Subactividad } from '../poi/subactividades/entities/subactividad.entity';
 import { Requerimiento } from '../poi/requerimientos/entities/requerimiento.entity';
 import { Archivo } from '../storage/entities/archivo.entity';
 import { Usuario } from '../auth/entities/usuario.entity';
@@ -133,6 +134,7 @@ import {
       // POI (para relación proyecto, actividad, y validación de requerimientos)
       Proyecto,
       Actividad,
+      Subactividad,
       Requerimiento,
       // Storage (para obtener archivos de evidencias)
       Archivo,

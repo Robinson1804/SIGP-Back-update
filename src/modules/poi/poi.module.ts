@@ -7,6 +7,7 @@ import { RrhhModule } from '../rrhh/rrhh.module';
 // Entities
 import { Proyecto } from './proyectos/entities/proyecto.entity';
 import { Actividad } from './actividades/entities/actividad.entity';
+import { Subactividad } from './subactividades/entities/subactividad.entity';
 import { Subproyecto } from './subproyectos/entities/subproyecto.entity';
 import { Documento } from './documentos/entities/documento.entity';
 import { Acta } from './actas/entities/acta.entity';
@@ -21,6 +22,7 @@ import { Tarea } from '../agile/tareas/entities/tarea.entity';
 // Services
 import { ProyectoService } from './proyectos/services/proyecto.service';
 import { ActividadService } from './actividades/services/actividad.service';
+import { SubactividadService } from './subactividades/services/subactividad.service';
 import { SubproyectoService } from './subproyectos/services/subproyecto.service';
 import { DocumentoService } from './documentos/services/documento.service';
 import { ActaService } from './actas/services/acta.service';
@@ -36,6 +38,10 @@ import {
   AccionEstrategicaProyectosController,
 } from './proyectos/controllers/proyecto.controller';
 import { ActividadController, AccionEstrategicaActividadesController } from './actividades/controllers/actividad.controller';
+import {
+  SubactividadController,
+  ActividadSubactividadesController,
+} from './subactividades/controllers/subactividad.controller';
 import {
   SubproyectoController,
   ProyectoSubproyectosController,
@@ -82,6 +88,7 @@ import {
     TypeOrmModule.forFeature([
       Proyecto,
       Actividad,
+      Subactividad,
       Subproyecto,
       Documento,
       Acta,
@@ -103,6 +110,9 @@ import {
     // Actividades
     ActividadController,
     AccionEstrategicaActividadesController,
+    // Subactividades
+    SubactividadController,
+    ActividadSubactividadesController,
     // Subproyectos
     SubproyectoController,
     ProyectoSubproyectosController,
@@ -137,6 +147,7 @@ import {
   providers: [
     ProyectoService,
     ActividadService,
+    SubactividadService,
     SubproyectoService,
     DocumentoService,
     ActaService,
@@ -153,6 +164,7 @@ import {
   exports: [
     ProyectoService,
     ActividadService,
+    SubactividadService,
     SubproyectoService,
     DocumentoService,
     ActaService,
