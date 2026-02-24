@@ -8,6 +8,7 @@ import { RedisModule } from '@nestjs-modules/ioredis';
 import { FixHuEstadoEnRevision1769200000000 } from './database/migrations/1769200000000-FixHuEstadoEnRevision';
 import { UpdateHuEstadoEnum1769300000000 } from './database/migrations/1769300000000-UpdateHuEstadoEnum';
 import { CreateEvidenciasTareaTable1769400000000 } from './database/migrations/1769400000000-CreateEvidenciasTareaTable';
+import { CreateSubactividadesAndAddColumnToTareas1769800000000 } from './database/migrations/1769800000000-CreateSubactividadesAndAddColumnToTareas';
 
 // Config imports
 import databaseConfig from './config/database.config';
@@ -63,6 +64,9 @@ const LEGACY_MIGRATIONS = [
   { timestamp: 1768900000000, name: 'AddActividadIdToNotificaciones1768900000000' },
   { timestamp: 1769000000000, name: 'EnhanceSubproyectoSchema1769000000000' },
   { timestamp: 1769100000000, name: 'AddSubproyectoIdToAgileEntities1769100000000' },
+  { timestamp: 1769500000000, name: 'RemovePatrocinadorIdFromProyectos1769500000000' },
+  { timestamp: 1769600000000, name: 'ChangeSubproyectoAreaUsuariaToSingular1769600000000' },
+  { timestamp: 1769700000000, name: 'ChangeProyectoAreaUsuariaToSingular1769700000000' },
 ];
 
 @Module({
@@ -146,6 +150,7 @@ const LEGACY_MIGRATIONS = [
             FixHuEstadoEnRevision1769200000000,
             UpdateHuEstadoEnum1769300000000,
             CreateEvidenciasTareaTable1769400000000,
+            CreateSubactividadesAndAddColumnToTareas1769800000000,
           ],
           migrationsRun: true,
         };
