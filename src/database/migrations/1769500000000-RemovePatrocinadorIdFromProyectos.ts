@@ -4,6 +4,9 @@ export class RemovePatrocinadorIdFromProyectos1769500000000 implements Migration
   name = 'RemovePatrocinadorIdFromProyectos1769500000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.query(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='poi' AND table_name='proyectos') as e`);
+    if (!exists[0]?.e) return;
+
     // Eliminar columna patrocinador_id de proyectos
     await queryRunner.query(`
       ALTER TABLE poi.proyectos

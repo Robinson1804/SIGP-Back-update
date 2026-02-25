@@ -4,6 +4,9 @@ export class ChangeProyectoAreaUsuariaToSingular1769700000000 implements Migrati
   name = 'ChangeProyectoAreaUsuariaToSingular1769700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.query(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='poi' AND table_name='proyectos') as e`);
+    if (!exists[0]?.e) return;
+
     // Cambiar columna area_usuaria de INTEGER[] a INTEGER en proyectos
     // El área usuaria es un solo patrocinador, no múltiple
     await queryRunner.query(`

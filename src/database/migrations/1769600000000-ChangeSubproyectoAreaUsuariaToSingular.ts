@@ -4,6 +4,9 @@ export class ChangeSubproyectoAreaUsuariaToSingular1769600000000 implements Migr
   name = 'ChangeSubproyectoAreaUsuariaToSingular1769600000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.query(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='poi' AND table_name='subproyectos') as e`);
+    if (!exists[0]?.e) return;
+
     // Cambiar columna area_usuaria de INTEGER[] a INTEGER en subproyectos
     // Para subproyectos, el área usuaria es un solo patrocinador, no múltiple
     await queryRunner.query(`

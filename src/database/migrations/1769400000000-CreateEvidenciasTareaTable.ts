@@ -10,6 +10,9 @@ export class CreateEvidenciasTareaTable1769400000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.query(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='agile' AND table_name='tareas') as e`);
+    if (!exists[0]?.e) return;
+
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS agile.evidencias_tarea (
         id SERIAL PRIMARY KEY,

@@ -1,4 +1,5 @@
 export * from './1000000000000-BootstrapMigrationsHistory';
+export * from './1000000000001-BootstrapMigrationsHistoryV2';
 export * from './1734153600000-CreateSchemas';
 export * from './1734153700000-CreateFunctionsAndTriggers';
 export * from './1734200000000-AddUsernameToUsuarios';
@@ -34,3 +35,7 @@ export * from './1769100000000-AddSubproyectoIdToAgileEntities';
 export * from './1769200000000-FixHuEstadoEnRevision';
 export * from './1769300000000-UpdateHuEstadoEnum';
 export * from './1769400000000-CreateEvidenciasTareaTable';
+export * from './1769500000000-RemovePatrocinadorIdFromProyectos';
+export * from './1769600000000-ChangeSubproyectoAreaUsuariaToSingular';
+export * from './1769700000000-ChangeProyectoAreaUsuariaToSingular';
+export * from './1769800000000-CreateSubactividadesAndAddColumnToTareas';

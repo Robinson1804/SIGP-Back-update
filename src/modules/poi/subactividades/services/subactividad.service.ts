@@ -156,11 +156,45 @@ export class SubactividadService {
     return saved;
   }
 
-  async findByActividad(actividadPadreId: number): Promise<Subactividad[]> {
-    return this.subactividadRepo.find({
+  async findByActividad(actividadPadreId: number): Promise<(Subactividad & { tareasCount: number; tareasEnProgreso: number; tareasCompletadas: number })[]> {
+    const subactividades = await this.subactividadRepo.find({
       where: { actividadPadreId, activo: true },
       relations: ['coordinador', 'gestor', 'actividadPadre'],
       order: { codigo: 'ASC' },
+    });
+
+    if (subactividades.length === 0) return [];
+
+    // Obtener conteos de tareas en una sola consulta agrupada por subactividadId
+    const subIds = subactividades.map(s => s.id);
+    const conteosRaw: { subactividad_id: string; total: string; en_progreso: string; completadas: string }[] =
+      await this.tareaRepo.createQueryBuilder('t')
+        .select('t.subactividad_id', 'subactividad_id')
+        .addSelect('COUNT(t.id)', 'total')
+        .addSelect(`SUM(CASE WHEN t.estado = '${TareaEstado.EN_PROGRESO}' THEN 1 ELSE 0 END)`, 'en_progreso')
+        .addSelect(`SUM(CASE WHEN t.estado = '${TareaEstado.FINALIZADO}' THEN 1 ELSE 0 END)`, 'completadas')
+        .where('t.subactividad_id IN (:...ids)', { ids: subIds })
+        .andWhere('t.activo = true')
+        .andWhere('t.tipo = :tipo', { tipo: TareaTipo.KANBAN })
+        .groupBy('t.subactividad_id')
+        .getRawMany();
+
+    const conteosMap = new Map<number, { total: number; enProgreso: number; completadas: number }>();
+    for (const row of conteosRaw) {
+      conteosMap.set(Number(row.subactividad_id), {
+        total: parseInt(row.total, 10),
+        enProgreso: parseInt(row.en_progreso, 10),
+        completadas: parseInt(row.completadas, 10),
+      });
+    }
+
+    return subactividades.map(sub => {
+      const conteo = conteosMap.get(sub.id) ?? { total: 0, enProgreso: 0, completadas: 0 };
+      return Object.assign(sub, {
+        tareasCount: conteo.total,
+        tareasEnProgreso: conteo.enProgreso,
+        tareasCompletadas: conteo.completadas,
+      });
     });
   }
 
@@ -196,8 +230,10 @@ export class SubactividadService {
       }
     }
 
-    Object.assign(subactividad, dto, { updatedBy: userId });
-    return this.subactividadRepo.save(subactividad);
+    // Usar update() directo para evitar que TypeORM use el objeto de relación
+    // cacheado (gestor, coordinador) como fuente del FK en lugar del nuevo ID
+    await this.subactividadRepo.update(id, { ...(dto as any), updatedBy: userId });
+    return this.findOne(id);
   }
 
   async remove(id: number, userId?: number): Promise<Subactividad> {

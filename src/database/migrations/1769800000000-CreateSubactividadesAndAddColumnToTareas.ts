@@ -9,6 +9,9 @@ export class CreateSubactividadesAndAddColumnToTareas1769800000000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const exists = await queryRunner.query(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='poi' AND table_name='actividades') as e`);
+    if (!exists[0]?.e) return;
+
     // 1. Crear tabla poi.subactividades
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS poi.subactividades (

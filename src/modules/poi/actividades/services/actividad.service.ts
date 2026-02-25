@@ -229,8 +229,9 @@ export class ActividadService {
     const coordinadorAnterior = actividad.coordinadorId;
     const gestorAnterior = actividad.gestorId;
 
-    Object.assign(actividad, updateDto, { updatedBy: userId });
-    const actividadActualizada = await this.actividadRepository.save(actividad);
+    // Usar update() directo para evitar que TypeORM use el objeto de relación
+    // cacheado (gestor, coordinador) como fuente del FK en lugar del nuevo ID
+    await this.actividadRepository.update(id, { ...(updateDto as any), updatedBy: userId });
 
     // Notificar al nuevo coordinador y PMOs si cambió
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
@@ -248,12 +249,12 @@ export class ActividadService {
         TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
         destinatariosCoord,
         {
-          titulo: `Actividad asignada ${actividadActualizada.codigo}: ${actividadActualizada.nombre}`,
-          descripcion: `Se ha asignado como Coordinador de la actividad "${actividadActualizada.nombre}"`,
+          titulo: `Actividad asignada ${actividad.codigo}: ${actividad.nombre}`,
+          descripcion: `Se ha asignado como Coordinador de la actividad "${actividad.nombre}"`,
           entidadTipo: 'Actividad',
-          entidadId: actividadActualizada.id,
-          actividadId: actividadActualizada.id,
-          urlAccion: `/poi/actividad/detalles?id=${actividadActualizada.id}`,
+          entidadId: actividad.id,
+          actividadId: actividad.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividad.id}`,
         },
       );
     }
@@ -274,17 +275,17 @@ export class ActividadService {
         TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
         destinatariosGestor,
         {
-          titulo: `Actividad asignada ${actividadActualizada.codigo}: ${actividadActualizada.nombre}`,
-          descripcion: `Se ha asignado como Gestor de la actividad "${actividadActualizada.nombre}"`,
+          titulo: `Actividad asignada ${actividad.codigo}: ${actividad.nombre}`,
+          descripcion: `Se ha asignado como Gestor de la actividad "${actividad.nombre}"`,
           entidadTipo: 'Actividad',
-          entidadId: actividadActualizada.id,
-          actividadId: actividadActualizada.id,
-          urlAccion: `/poi/actividad/detalles?id=${actividadActualizada.id}`,
+          entidadId: actividad.id,
+          actividadId: actividad.id,
+          urlAccion: `/poi/actividad/detalles?id=${actividad.id}`,
         },
       );
     }
 
-    return actividadActualizada;
+    return this.findOne(id);
   }
 
   async remove(id: number, userId?: number): Promise<Actividad> {

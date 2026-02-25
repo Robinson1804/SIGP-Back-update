@@ -8,6 +8,15 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  */
 export class UpdateHuEstadoEnum1769300000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // Verificar si la tabla existe antes de ejecutar la migración
+    const tableExists = await queryRunner.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'agile' AND table_name = 'historias_usuario'
+      ) as exists
+    `);
+    if (!tableExists[0]?.exists) return;
+
     // 1. Primero convertir la columna a text para poder manipular los datos
     await queryRunner.query(`
       ALTER TABLE agile.historias_usuario
