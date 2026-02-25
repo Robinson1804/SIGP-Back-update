@@ -202,7 +202,9 @@ export class TareaService {
     // Check for duplicate code
     const whereCondition = createDto.tipo === TareaTipo.SCRUM
       ? { historiaUsuarioId: createDto.historiaUsuarioId, codigo: createDto.codigo }
-      : { actividadId: createDto.actividadId, codigo: createDto.codigo };
+      : createDto.subactividadId
+        ? { subactividadId: createDto.subactividadId, codigo: createDto.codigo }
+        : { actividadId: createDto.actividadId, codigo: createDto.codigo };
 
     const existing = await this.tareaRepository.findOne({ where: whereCondition });
 
