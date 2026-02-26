@@ -35,6 +35,7 @@ export class NotificacionController {
     @Query('proyectoId') proyectoId?: string,
     @Query('actividadId') actividadId?: string,
     @Query('entidadId') entidadId?: string,
+    @Query('entidadTipo') entidadTipo?: string,
   ) {
     return this.notificacionService.findAll(usuarioId, {
       leida: leida !== undefined ? leida === 'true' : undefined,
@@ -44,6 +45,7 @@ export class NotificacionController {
       proyectoId: proyectoId ? parseInt(proyectoId, 10) : undefined,
       actividadId: actividadId ? parseInt(actividadId, 10) : undefined,
       entidadId: entidadId ? parseInt(entidadId, 10) : undefined,
+      entidadTipo,
     }, userRole);
   }
 

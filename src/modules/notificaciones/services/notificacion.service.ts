@@ -15,6 +15,7 @@ interface FindAllFilters {
   proyectoId?: number;
   actividadId?: number;
   entidadId?: number;
+  entidadTipo?: string;
 }
 
 interface NotificarData {
@@ -42,7 +43,7 @@ export class NotificacionService {
     filters: FindAllFilters = {},
     userRole?: string,
   ): Promise<{ data: any[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
-    const { leida, tipo, page = 1, limit = 20, proyectoId, actividadId, entidadId } = filters;
+    const { leida, tipo, page = 1, limit = 20, proyectoId, actividadId, entidadId, entidadTipo } = filters;
 
     const queryBuilder = this.notificacionRepository
       .createQueryBuilder('n')
@@ -57,14 +58,23 @@ export class NotificacionService {
       queryBuilder.andWhere('n.leida = :leida', { leida });
     }
 
-    // DESARROLLADOR sees TAREAS, IMPLEMENTADOR only sees subtasks
-    if (userRole === Role.DESARROLLADOR) {
+    // Apply tipo filter: explicit tipo param takes precedence over role defaults
+    if (tipo) {
+      queryBuilder.andWhere('n.tipo = :tipo', { tipo });
+    } else if (userRole === Role.DESARROLLADOR) {
+      // Default for DESARROLLADOR with no tipo filter: show TAREAS
       queryBuilder.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
     } else if (userRole === Role.IMPLEMENTADOR) {
+      // Default for IMPLEMENTADOR with no tipo filter: show subtareas
       queryBuilder.andWhere('n.tipo = :tipo', { tipo: TipoNotificacion.TAREAS });
-      queryBuilder.andWhere('n.entidadTipo = :entidadTipo', { entidadTipo: 'subtarea' });
-    } else if (tipo) {
-      queryBuilder.andWhere('n.tipo = :tipo', { tipo });
+      if (!entidadTipo) {
+        queryBuilder.andWhere('n.entidadTipo = :defaultEntidadTipo', { defaultEntidadTipo: 'subtarea' });
+      }
+    }
+
+    // Apply entidadTipo filter if provided explicitly
+    if (entidadTipo) {
+      queryBuilder.andWhere('n.entidadTipo = :entidadTipo', { entidadTipo });
     }
 
     if (proyectoId) {
