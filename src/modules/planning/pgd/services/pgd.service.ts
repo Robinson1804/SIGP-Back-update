@@ -34,9 +34,10 @@ export class PgdService {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
     }
 
-    // Validar que el PGD tenga exactamente 4 años
-    if (createPgdDto.anioFin - createPgdDto.anioInicio !== 3) {
-      throw new BadRequestException('El PGD debe tener exactamente 4 años (ejemplo: 2025-2028)');
+    // Validar que el PGD tenga 3 o 4 años
+    const duracionCreate = createPgdDto.anioFin - createPgdDto.anioInicio;
+    if (duracionCreate < 2 || duracionCreate > 3) {
+      throw new BadRequestException('El PGD debe tener 3 o 4 años (ejemplo: 2025-2027 o 2025-2028)');
     }
 
     // Validar que no exista solapamiento con otros PGDs
@@ -134,9 +135,10 @@ export class PgdService {
       throw new ConflictException('El año de fin debe ser mayor al año de inicio');
     }
 
-    // Validar que el PGD tenga exactamente 4 años
-    if (anioFin - anioInicio !== 3) {
-      throw new BadRequestException('El PGD debe tener exactamente 4 años (ejemplo: 2025-2028)');
+    // Validar que el PGD tenga 3 o 4 años
+    const duracionUpdate = anioFin - anioInicio;
+    if (duracionUpdate < 2 || duracionUpdate > 3) {
+      throw new BadRequestException('El PGD debe tener 3 o 4 años (ejemplo: 2025-2027 o 2025-2028)');
     }
 
     // Validar que no exista solapamiento con otros PGDs (excluyendo el actual)

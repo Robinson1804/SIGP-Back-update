@@ -49,6 +49,17 @@ export class ActividadService {
   }
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Genera el siguiente código de actividad disponible (ACT N°X)
    */
   private async generateCodigo(): Promise<string> {
@@ -109,6 +120,12 @@ export class ActividadService {
         }
       }
 
+      // Agregar ADMIN
+      const adminIdCoord = await this.getAdminUserId();
+      if (adminIdCoord && adminIdCoord !== userId && !destinatariosCoord.includes(adminIdCoord)) {
+        destinatariosCoord.push(adminIdCoord);
+      }
+
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
         destinatariosCoord,
@@ -133,6 +150,12 @@ export class ActividadService {
         if (pmoId !== userId && !destinatariosGestor.includes(pmoId)) {
           destinatariosGestor.push(pmoId);
         }
+      }
+
+      // Agregar ADMIN
+      const adminIdGestor = await this.getAdminUserId();
+      if (adminIdGestor && adminIdGestor !== userId && !destinatariosGestor.includes(adminIdGestor)) {
+        destinatariosGestor.push(adminIdGestor);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -245,6 +268,12 @@ export class ActividadService {
         }
       }
 
+      // Agregar ADMIN
+      const adminIdCoord = await this.getAdminUserId();
+      if (adminIdCoord && adminIdCoord !== userId && !destinatariosCoord.includes(adminIdCoord)) {
+        destinatariosCoord.push(adminIdCoord);
+      }
+
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
         destinatariosCoord,
@@ -269,6 +298,12 @@ export class ActividadService {
         if (pmoId !== userId && !destinatariosGestor.includes(pmoId)) {
           destinatariosGestor.push(pmoId);
         }
+      }
+
+      // Agregar ADMIN
+      const adminIdGestor = await this.getAdminUserId();
+      if (adminIdGestor && adminIdGestor !== userId && !destinatariosGestor.includes(adminIdGestor)) {
+        destinatariosGestor.push(adminIdGestor);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -455,6 +490,12 @@ export class ActividadService {
     const destinatarios = [actividad.coordinadorId, actividad.gestorId].filter(
       (id): id is number => id !== null && id !== undefined,
     );
+
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== userId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
+    }
 
     if (destinatarios.length > 0) {
       await this.notificacionService.notificarMultiples(

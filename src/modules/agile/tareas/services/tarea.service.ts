@@ -78,6 +78,17 @@ export class TareaService {
   ) {}
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Genera la urlAccion correcta para notificaciones de tarea según su tipo.
    * Incluye el ID del proyecto/actividad en la URL para navegación directa sin localStorage.
    * SCRUM → /poi/proyecto/detalles?id={proyectoId}&tab=Backlog
@@ -311,6 +322,12 @@ export class TareaService {
         // Agregar gestor si existe y no es el creador ni el asignado ni el coordinador
         if (actividad.gestorId && actividad.gestorId !== userId && actividad.gestorId !== asignadoPrincipal && actividad.gestorId !== actividad.coordinadorId) {
           destinatariosGestores.push(actividad.gestorId);
+        }
+
+        // Agregar ADMIN
+        const adminIdCreate = await this.getAdminUserId();
+        if (adminIdCreate && adminIdCreate !== userId && !destinatariosGestores.includes(adminIdCreate)) {
+          destinatariosGestores.push(adminIdCreate);
         }
 
         // Notificar a coordinador/gestor
@@ -755,6 +772,12 @@ export class TareaService {
         // Agregar gestor si existe y no es el que cambió el estado ni el asignado ni el coordinador
         if (actividad.gestorId && actividad.gestorId !== userId && actividad.gestorId !== tarea.asignadoA && actividad.gestorId !== actividad.coordinadorId) {
           destinatariosGestoresEstado.push(actividad.gestorId);
+        }
+
+        // Agregar ADMIN
+        const adminIdEstado = await this.getAdminUserId();
+        if (adminIdEstado && adminIdEstado !== userId && !destinatariosGestoresEstado.includes(adminIdEstado)) {
+          destinatariosGestoresEstado.push(adminIdEstado);
         }
 
         // Notificar a coordinador/gestor
@@ -1595,6 +1618,13 @@ export class TareaService {
         if (proyecto.scrumMasterId && proyecto.scrumMasterId !== proyecto.coordinadorId) {
           destinatarios.push(proyecto.scrumMasterId);
         }
+
+        // Agregar ADMIN
+        const adminId = await this.getAdminUserId();
+        if (adminId && !destinatarios.includes(adminId)) {
+          destinatarios.push(adminId);
+        }
+
         if (destinatarios.length === 0) return;
 
         await this.notificacionService.notificarMultiples(
@@ -1620,6 +1650,13 @@ export class TareaService {
         if (subproyecto.scrumMasterId && subproyecto.scrumMasterId !== subproyecto.coordinadorId) {
           destinatarios.push(subproyecto.scrumMasterId);
         }
+
+        // Agregar ADMIN
+        const adminIdSub = await this.getAdminUserId();
+        if (adminIdSub && !destinatarios.includes(adminIdSub)) {
+          destinatarios.push(adminIdSub);
+        }
+
         if (destinatarios.length === 0) return;
 
         await this.notificacionService.notificarMultiples(
@@ -1679,6 +1716,12 @@ export class TareaService {
         destinatarios.push(proyecto.scrumMasterId);
       }
 
+      // Agregar ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId && !destinatarios.includes(adminId)) {
+        destinatarios.push(adminId);
+      }
+
       if (destinatarios.length === 0) return;
 
       await this.notificacionService.notificarMultiples(
@@ -1736,6 +1779,12 @@ export class TareaService {
       if (subproyecto.coordinadorId) destinatarios.push(subproyecto.coordinadorId);
       if (subproyecto.scrumMasterId && subproyecto.scrumMasterId !== subproyecto.coordinadorId) {
         destinatarios.push(subproyecto.scrumMasterId);
+      }
+
+      // Agregar ADMIN
+      const adminIdSub = await this.getAdminUserId();
+      if (adminIdSub && !destinatarios.includes(adminIdSub)) {
+        destinatarios.push(adminIdSub);
       }
 
       if (destinatarios.length === 0) return;
@@ -2110,6 +2159,12 @@ export class TareaService {
         destinatarios.push(actividad.gestorId);
       }
 
+      // Agregar ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId && adminId !== userId && !destinatarios.includes(adminId)) {
+        destinatarios.push(adminId);
+      }
+
       if (destinatarios.length === 0) return;
 
       const urlAccion = await this.buildTareaUrlAccion(tarea);
@@ -2174,6 +2229,12 @@ export class TareaService {
       const destinatarios = [actividad.coordinadorId, actividad.gestorId].filter(
         (id): id is number => id !== null && id !== undefined,
       );
+
+      // Agregar ADMIN
+      const adminIdRecalc = await this.getAdminUserId();
+      if (adminIdRecalc && adminIdRecalc !== userId && !destinatarios.includes(adminIdRecalc)) {
+        destinatarios.push(adminIdRecalc);
+      }
 
       if (destinatarios.length > 0) {
         await this.notificacionService.notificarMultiples(
@@ -2240,6 +2301,12 @@ export class TareaService {
       const destinatarios = [subactividad.coordinadorId, subactividad.gestorId].filter(
         (id): id is number => id !== null && id !== undefined,
       );
+
+      // Agregar ADMIN
+      const adminIdSubRecalc = await this.getAdminUserId();
+      if (adminIdSubRecalc && adminIdSubRecalc !== userId && !destinatarios.includes(adminIdSubRecalc)) {
+        destinatarios.push(adminIdSubRecalc);
+      }
 
       if (destinatarios.length > 0) {
         await this.notificacionService.notificarMultiples(

@@ -47,13 +47,13 @@ export class CreateProyectoDto {
   @IsInt()
   accionEstrategicaId?: number;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'El coordinador es obligatorio' })
   @IsInt()
-  coordinadorId?: number;
+  coordinadorId: number;
 
-  @IsOptional()
+  @IsNotEmpty({ message: 'El Scrum Master es obligatorio' })
   @IsInt()
-  scrumMasterId?: number;
+  scrumMasterId: number;
 
   @IsOptional()
   @IsInt()

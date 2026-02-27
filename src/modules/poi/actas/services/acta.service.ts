@@ -24,6 +24,17 @@ export class ActaService {
   ) {}
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Obtiene usuarios con rol PMO o PATROCINADOR para notificaciones
    */
   private async getAprobadores(): Promise<{ pmoUsers: Usuario[]; patrocinadorUsers: Usuario[] }> {
@@ -548,6 +559,12 @@ export class ActaService {
         }
       }
 
+      // Agregar ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId) {
+        destinatarios.add(adminId);
+      }
+
       // Excluir al usuario que realizó la acción (no notificarse a sí mismo)
       if (excludeUserId) {
         destinatarios.delete(excludeUserId);
@@ -623,6 +640,16 @@ export class ActaService {
         await this.notificacionService.notificar(
           TipoNotificacion.VALIDACIONES,
           patrocinadorUser.id,
+          notificationData,
+        );
+      }
+
+      // Notificar al ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId && adminId !== userId) {
+        await this.notificacionService.notificar(
+          TipoNotificacion.APROBACIONES,
+          adminId,
           notificationData,
         );
       }

@@ -37,6 +37,8 @@ import { HuEvidenciaPdfService } from './hu-evidencia-pdf.service';
 import { MinioService } from '../../../storage/services/minio.service';
 import { Requerimiento } from '../../../poi/requerimientos/entities/requerimiento.entity';
 import { RequerimientoTipo } from '../../../poi/requerimientos/enums/requerimiento.enum';
+import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Role } from '../../../../common/constants/roles.constant';
 
 @Injectable()
 export class HistoriaUsuarioService {
@@ -57,6 +59,8 @@ export class HistoriaUsuarioService {
     private readonly tareaRepository: Repository<Tarea>,
     @InjectRepository(Requerimiento)
     private readonly requerimientoRepository: Repository<Requerimiento>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
     private readonly historialCambioService: HistorialCambioService,
     private readonly epicaService: EpicaService,
     @Inject(forwardRef(() => NotificacionService))
@@ -65,6 +69,17 @@ export class HistoriaUsuarioService {
     private readonly minioService: MinioService,
     private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
 
   /**
    * Valida que existan requerimientos funcionales en el proyecto antes de crear HU
@@ -247,6 +262,13 @@ export class HistoriaUsuarioService {
         if (proyecto.p_scrum_master_id && proyecto.p_scrum_master_id !== proyecto.p_coordinador_id) {
           destinatarios.push(proyecto.p_scrum_master_id);
         }
+
+        // Agregar ADMIN
+        const adminId = await this.getAdminUserId();
+        if (adminId && !destinatarios.includes(adminId)) {
+          destinatarios.push(adminId);
+        }
+
         if (destinatarios.length === 0) return;
 
         await this.notificacionService.notificarMultiples(
@@ -276,6 +298,13 @@ export class HistoriaUsuarioService {
         if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
           destinatarios.push(subproyecto.s_scrum_master_id);
         }
+
+        // Agregar ADMIN
+        const adminIdSub = await this.getAdminUserId();
+        if (adminIdSub && !destinatarios.includes(adminIdSub)) {
+          destinatarios.push(adminIdSub);
+        }
+
         if (destinatarios.length === 0) return;
 
         await this.notificacionService.notificarMultiples(
@@ -338,6 +367,12 @@ export class HistoriaUsuarioService {
         destinatarios.push(proyecto.p_scrum_master_id);
       }
 
+      // Agregar ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId && !destinatarios.includes(adminId)) {
+        destinatarios.push(adminId);
+      }
+
       if (destinatarios.length === 0) return;
 
       await this.notificacionService.notificarMultiples(
@@ -398,6 +433,12 @@ export class HistoriaUsuarioService {
       if (subproyecto.s_coordinador_id) destinatarios.push(subproyecto.s_coordinador_id);
       if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
         destinatarios.push(subproyecto.s_scrum_master_id);
+      }
+
+      // Agregar ADMIN
+      const adminIdSub = await this.getAdminUserId();
+      if (adminIdSub && !destinatarios.includes(adminIdSub)) {
+        destinatarios.push(adminIdSub);
       }
 
       if (destinatarios.length === 0) return;

@@ -142,7 +142,7 @@ const LEGACY_MIGRATIONS = [
           password: config.get('database.password'),
           database: config.get('database.database'),
           autoLoadEntities: true,
-          synchronize: false,
+          synchronize: config.get('database.synchronize') ?? false,
           logging: config.get('database.logging'),
           ssl: sslConfig,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],

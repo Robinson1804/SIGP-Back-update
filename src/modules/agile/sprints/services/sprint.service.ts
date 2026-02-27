@@ -26,6 +26,8 @@ import { NotificacionService } from '../../../notificaciones/services/notificaci
 import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
 import { Proyecto } from '../../../poi/proyectos/entities/proyecto.entity';
 import { ProyectoEstado } from '../../../poi/proyectos/enums/proyecto-estado.enum';
+import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Role } from '../../../../common/constants/roles.constant';
 
 @Injectable()
 export class SprintService {
@@ -36,10 +38,23 @@ export class SprintService {
     private readonly huRepository: Repository<HistoriaUsuario>,
     @InjectRepository(Proyecto)
     private readonly proyectoRepository: Repository<Proyecto>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
     private readonly historialCambioService: HistorialCambioService,
     @Inject(forwardRef(() => NotificacionService))
     private readonly notificacionService: NotificacionService,
   ) {}
+
+  /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
 
   async create(createDto: CreateSprintDto, userId?: number): Promise<Sprint> {
     // Validar que tenga proyecto o subproyecto (mutuamente exclusivo)
@@ -97,6 +112,12 @@ export class SprintService {
             destinatarios.push(proyecto.scrumMasterId);
           }
 
+          // Agregar ADMIN
+          const adminIdProy = await this.getAdminUserId();
+          if (adminIdProy && adminIdProy !== userId && !destinatarios.includes(adminIdProy)) {
+            destinatarios.push(adminIdProy);
+          }
+
           if (destinatarios.length > 0) {
             await this.notificacionService.notificarMultiples(
               TipoNotificacion.PROYECTOS,
@@ -137,6 +158,13 @@ export class SprintService {
           if (subproyecto.s_scrum_master_id && subproyecto.s_scrum_master_id !== userId && subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id) {
             destSubproyecto.push(subproyecto.s_scrum_master_id);
           }
+
+          // Agregar ADMIN
+          const adminIdSub = await this.getAdminUserId();
+          if (adminIdSub && adminIdSub !== userId && !destSubproyecto.includes(adminIdSub)) {
+            destSubproyecto.push(adminIdSub);
+          }
+
           if (destSubproyecto.length > 0) {
             await this.notificacionService.notificarMultiples(
               TipoNotificacion.PROYECTOS,
@@ -170,6 +198,12 @@ export class SprintService {
             }
             if (proyectoPadre.scrumMasterId && proyectoPadre.scrumMasterId !== userId && proyectoPadre.scrumMasterId !== proyectoPadre.coordinadorId) {
               destProyecto.push(proyectoPadre.scrumMasterId);
+            }
+
+            // Agregar ADMIN
+            const adminIdPadre = await this.getAdminUserId();
+            if (adminIdPadre && adminIdPadre !== userId && !destProyecto.includes(adminIdPadre)) {
+              destProyecto.push(adminIdPadre);
             }
 
             if (destProyecto.length > 0) {
@@ -464,6 +498,12 @@ export class SprintService {
       destinatarios.push(proyecto.scrumMasterId);
     }
 
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
+    }
+
     if (destinatarios.length === 0) return;
 
     const titulo = evento === 'iniciado'
@@ -539,6 +579,12 @@ export class SprintService {
       destinatarios.push(proyecto.p_scrum_master_id);
     }
 
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
+    }
+
     if (destinatarios.length === 0) {
       return;
     }
@@ -608,6 +654,12 @@ export class SprintService {
       subproyecto.s_scrum_master_id !== subproyecto.s_coordinador_id
     ) {
       destinatarios.push(Number(subproyecto.s_scrum_master_id));
+    }
+
+    // Agregar ADMIN
+    const adminIdSubproy = await this.getAdminUserId();
+    if (adminIdSubproy && !destinatarios.includes(adminIdSubproy)) {
+      destinatarios.push(adminIdSubproy);
     }
 
     if (destinatarios.length === 0) return;

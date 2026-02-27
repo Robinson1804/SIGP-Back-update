@@ -43,6 +43,18 @@ export class ProyectoService {
   }
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   * El ADMIN recibe notificaciones de todos los eventos aunque no esté asignado al proyecto.
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Verifica si todos los campos requeridos del proyecto están completos
    * para considerar la transición automática de estado.
    */
@@ -295,6 +307,12 @@ export class ProyectoService {
         destinatariosEstado.push(createDto.scrumMasterId);
       }
 
+      // Agregar ADMIN
+      const adminIdEstado = await this.getAdminUserId();
+      if (adminIdEstado && adminIdEstado !== userId && !destinatariosEstado.includes(adminIdEstado)) {
+        destinatariosEstado.push(adminIdEstado);
+      }
+
       if (destinatariosEstado.length > 0) {
         await this.notificacionService.notificarMultiples(
           TipoNotificacion.PROYECTOS,
@@ -311,7 +329,7 @@ export class ProyectoService {
       }
     }
 
-    // Notificar al coordinador y PMOs si se le asigna el proyecto
+    // Notificar al coordinador, PMOs y ADMIN si se le asigna el proyecto
     if (createDto.coordinadorId && createDto.coordinadorId !== userId) {
       const destinatariosCoord: number[] = [createDto.coordinadorId];
 
@@ -321,6 +339,12 @@ export class ProyectoService {
         if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
           destinatariosCoord.push(pmoId);
         }
+      }
+
+      // Agregar ADMIN: recibe todas las notificaciones de proyectos según matriz de permisos
+      const adminId = await this.getAdminUserId();
+      if (adminId && !destinatariosCoord.includes(adminId)) {
+        destinatariosCoord.push(adminId);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -337,7 +361,7 @@ export class ProyectoService {
       );
     }
 
-    // Notificar al Scrum Master y PMOs si se le asigna
+    // Notificar al Scrum Master, PMOs y ADMIN si se le asigna
     if (createDto.scrumMasterId && createDto.scrumMasterId !== userId && createDto.scrumMasterId !== createDto.coordinadorId) {
       const destinatariosSM: number[] = [createDto.scrumMasterId];
 
@@ -347,6 +371,12 @@ export class ProyectoService {
         if (pmoId !== userId && !destinatariosSM.includes(pmoId)) {
           destinatariosSM.push(pmoId);
         }
+      }
+
+      // Agregar ADMIN
+      const adminId = await this.getAdminUserId();
+      if (adminId && !destinatariosSM.includes(adminId)) {
+        destinatariosSM.push(adminId);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -489,6 +519,7 @@ export class ProyectoService {
     // Capturar valores anteriores para notificaciones
     const coordinadorAnterior = proyecto.coordinadorId;
     const scrumMasterAnterior = proyecto.scrumMasterId;
+    const areaUsuariaAnterior = proyecto.areaUsuariaId;
 
     if (updateDto.fechaInicio && updateDto.fechaFin) {
       if (new Date(updateDto.fechaFin) < new Date(updateDto.fechaInicio)) {
@@ -583,6 +614,12 @@ export class ProyectoService {
           destinatarios.push(saved.scrumMasterId);
         }
 
+        // Agregar ADMIN
+        const adminIdAutoTransicion = await this.getAdminUserId();
+        if (adminIdAutoTransicion && adminIdAutoTransicion !== userId && !destinatarios.includes(adminIdAutoTransicion)) {
+          destinatarios.push(adminIdAutoTransicion);
+        }
+
         if (destinatarios.length > 0) {
           await this.notificacionService.notificarMultiples(
             TipoNotificacion.PROYECTOS,
@@ -629,6 +666,22 @@ export class ProyectoService {
       );
     }
 
+    // Notificar al coordinador anterior que fue reemplazado
+    if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && coordinadorAnterior && coordinadorAnterior !== userId) {
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [coordinadorAnterior],
+        {
+          titulo: `Reasignación en proyecto: ${proyecto.codigo}`,
+          descripcion: `Has sido reemplazado como Coordinador del proyecto "${proyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+        },
+      );
+    }
+
     // Notificar al nuevo Scrum Master y PMOs si cambió
     if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && updateDto.scrumMasterId !== userId) {
       const destinatariosSM: number[] = [updateDto.scrumMasterId];
@@ -655,6 +708,28 @@ export class ProyectoService {
       );
     }
 
+    // Notificar al Scrum Master anterior que fue reasignado
+    if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && scrumMasterAnterior && scrumMasterAnterior !== userId) {
+      const nuevoSm = await this.usuarioRepository.findOne({
+        where: { id: updateDto.scrumMasterId },
+        select: ['id', 'nombre', 'apellido'],
+      });
+      const nombreNuevoSm = nuevoSm ? `${nuevoSm.nombre} ${nuevoSm.apellido}`.trim() : 'el nuevo Scrum Master';
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [scrumMasterAnterior],
+        {
+          titulo: `Reasignación de Scrum Master en proyecto: ${proyecto.codigo}`,
+          descripcion: `En el proyecto ${proyecto.codigo} - ${proyecto.nombre} ha sido reasignado el Scrum Master ${nombreNuevoSm}. Ya no eres parte del proyecto`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+        },
+      );
+    }
+
     // Notificar al nuevo patrocinador del Área Usuaria
     if (
       updateDto.areaUsuariaId !== undefined &&
@@ -668,6 +743,36 @@ export class ProyectoService {
         {
           titulo: `Asignado como Área Usuaria: ${proyecto.codigo}`,
           descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyecto.nombre}"`,
+          entidadTipo: 'Proyecto',
+          entidadId: proyecto.id,
+          proyectoId: proyecto.id,
+          urlAccion: `/poi/proyecto/detalles?id=${proyecto.id}`,
+        },
+      );
+    }
+
+    // Notificar al patrocinador/Área Usuaria anterior que fue reasignado
+    if (
+      updateDto.areaUsuariaId !== undefined &&
+      updateDto.areaUsuariaId !== null &&
+      updateDto.areaUsuariaId !== areaUsuariaAnterior &&
+      areaUsuariaAnterior &&
+      areaUsuariaAnterior !== userId
+    ) {
+      const nuevoPatrocinador = await this.usuarioRepository.findOne({
+        where: { id: updateDto.areaUsuariaId },
+        select: ['id', 'nombre', 'apellido'],
+      });
+      const nombreNuevoPatrocinador = nuevoPatrocinador
+        ? `${nuevoPatrocinador.nombre} ${nuevoPatrocinador.apellido}`.trim()
+        : 'el nuevo Área Usuaria';
+
+      await this.notificacionService.notificarMultiples(
+        TipoNotificacion.PROYECTOS,
+        [areaUsuariaAnterior],
+        {
+          titulo: `Reasignación de Área Usuaria en proyecto: ${proyecto.codigo}`,
+          descripcion: `En el proyecto ${proyecto.codigo} - ${proyecto.nombre} ha sido reasignado el Área Usuaria/Patrocinador ${nombreNuevoPatrocinador}. Ya no eres parte del proyecto`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
@@ -741,6 +846,12 @@ export class ProyectoService {
       if (pmoId !== userId && !destinatarios.includes(pmoId)) {
         destinatarios.push(pmoId);
       }
+    }
+
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== userId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
     }
 
     if (destinatarios.length > 0) {

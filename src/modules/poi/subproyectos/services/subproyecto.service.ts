@@ -43,6 +43,18 @@ export class SubproyectoService {
   // ==========================================
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   * El ADMIN recibe notificaciones de todos los eventos aunque no esté asignado al proyecto.
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Obtiene los IDs de todos los usuarios con rol PMO activos
    */
   private async getPmoUserIds(): Promise<number[]> {
@@ -224,6 +236,12 @@ export class SubproyectoService {
     const pmoIds = await this.getPmoUserIds();
     destinatarios.push(...pmoIds);
 
+    // ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== userId) {
+      destinatarios.push(adminId);
+    }
+
     // Eliminar duplicados
     const uniqueDestinatarios = [...new Set(destinatarios)];
 
@@ -309,6 +327,12 @@ export class SubproyectoService {
     // PMO
     const pmoIds = await this.getPmoUserIds();
     destinatarios.push(...pmoIds);
+
+    // ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== userId) {
+      destinatarios.push(adminId);
+    }
 
     // Eliminar duplicados
     const uniqueDestinatarios = [...new Set(destinatarios)];
@@ -647,6 +671,12 @@ export class SubproyectoService {
       if (!destinatarios.includes(pmoId)) {
         destinatarios.push(pmoId);
       }
+    }
+
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
     }
 
     if (destinatarios.length > 0) {

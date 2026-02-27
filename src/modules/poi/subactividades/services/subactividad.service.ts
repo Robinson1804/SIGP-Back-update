@@ -55,6 +55,17 @@ export class SubactividadService {
   }
 
   /**
+   * Obtiene el ID del usuario ADMINISTRADOR (único en el sistema).
+   */
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepo.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  /**
    * Genera el siguiente código para una subactividad de una actividad padre.
    * Formato: SUBACT-001, SUBACT-002, ...
    */
@@ -126,6 +137,11 @@ export class SubactividadService {
       for (const pmoId of pmoIds) {
         if (pmoId !== userId && !destinatarios.includes(pmoId)) destinatarios.push(pmoId);
       }
+      // Agregar ADMIN
+      const adminIdCoord = await this.getAdminUserId();
+      if (adminIdCoord && adminIdCoord !== userId && !destinatarios.includes(adminIdCoord)) {
+        destinatarios.push(adminIdCoord);
+      }
       await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
         titulo: `Subactividad asignada ${saved.codigo}: ${saved.nombre}`,
         descripcion: `Se ha asignado como Coordinador de la subactividad "${saved.nombre}"`,
@@ -142,6 +158,11 @@ export class SubactividadService {
       const pmoIds = await this.getPmoUserIds();
       for (const pmoId of pmoIds) {
         if (pmoId !== userId && !destinatarios.includes(pmoId)) destinatarios.push(pmoId);
+      }
+      // Agregar ADMIN
+      const adminIdGestor = await this.getAdminUserId();
+      if (adminIdGestor && adminIdGestor !== userId && !destinatarios.includes(adminIdGestor)) {
+        destinatarios.push(adminIdGestor);
       }
       await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
         titulo: `Subactividad asignada ${saved.codigo}: ${saved.nombre}`,
@@ -302,6 +323,13 @@ export class SubactividadService {
     const destinatarios = [subactividad.coordinadorId, subactividad.gestorId].filter(
       (id): id is number => id !== null && id !== undefined,
     );
+
+    // Agregar ADMIN
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== userId && !destinatarios.includes(adminId)) {
+      destinatarios.push(adminId);
+    }
+
     if (destinatarios.length > 0) {
       await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
         titulo: `Subactividad finalizada: ${subactividad.codigo}`,
@@ -351,6 +379,12 @@ export class SubactividadService {
     const pmoIds = await this.getPmoUserIds();
     for (const pmoId of pmoIds) {
       if (!destinatarios.includes(pmoId)) destinatarios.push(pmoId);
+    }
+
+    // Agregar ADMIN
+    const adminIdVerif = await this.getAdminUserId();
+    if (adminIdVerif && !destinatarios.includes(adminIdVerif)) {
+      destinatarios.push(adminIdVerif);
     }
 
     if (destinatarios.length > 0) {
