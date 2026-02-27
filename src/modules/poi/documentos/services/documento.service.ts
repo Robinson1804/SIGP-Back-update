@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Documento } from '../entities/documento.entity';
@@ -7,6 +7,11 @@ import { UpdateDocumentoDto } from '../dto/update-documento.dto';
 import { AprobarDocumentoDto } from '../dto/aprobar-documento.dto';
 import { DocumentoFase, DocumentoEstado, TipoContenedor } from '../enums/documento.enum';
 import { ArchivoService } from '../../../storage/services/archivo.service';
+import { NotificacionService } from '../../../notificaciones/services/notificacion.service';
+import { TipoNotificacion } from '../../../notificaciones/enums/tipo-notificacion.enum';
+import { Usuario } from '../../../auth/entities/usuario.entity';
+import { Role } from '../../../../common/constants/roles.constant';
+import { Proyecto } from '../../proyectos/entities/proyecto.entity';
 
 @Injectable()
 export class DocumentoService {
@@ -15,7 +20,13 @@ export class DocumentoService {
   constructor(
     @InjectRepository(Documento)
     private readonly documentoRepository: Repository<Documento>,
+    @InjectRepository(Usuario)
+    private readonly usuarioRepository: Repository<Usuario>,
+    @InjectRepository(Proyecto)
+    private readonly proyectoRepository: Repository<Proyecto>,
     private readonly archivoService: ArchivoService,
+    @Inject(forwardRef(() => NotificacionService))
+    private readonly notificacionService: NotificacionService,
   ) {}
 
   async create(createDto: CreateDocumentoDto, userId?: number): Promise<Documento> {
@@ -49,7 +60,22 @@ export class DocumentoService {
       updatedBy: userId,
     });
 
-    return this.documentoRepository.save(documento);
+    const saved = await this.documentoRepository.save(documento);
+
+    // Notificar a PMO y ADMIN que hay un documento pendiente de aprobación
+    if (createDto.tipoContenedor === TipoContenedor.PROYECTO && createDto.proyectoId) {
+      try {
+        await this.notificarDocumentoPendienteAprobacion(
+          saved,
+          createDto.proyectoId,
+          userId,
+        );
+      } catch (error) {
+        this.logger.warn(`Error enviando notificación de documento pendiente: ${error.message}`);
+      }
+    }
+
+    return saved;
   }
 
   async findAll(filters?: {
@@ -145,7 +171,18 @@ export class DocumentoService {
     documento.fechaAprobacion = new Date();
     documento.updatedBy = userId;
 
-    return this.documentoRepository.save(documento);
+    const saved = await this.documentoRepository.save(documento);
+
+    // Notificar al creador y roles clave sobre el resultado de la aprobación
+    if (documento.tipoContenedor === TipoContenedor.PROYECTO && documento.proyectoId) {
+      try {
+        await this.notificarResultadoDocumento(saved, documento, aprobarDto.estado, aprobarDto.observacion, userId);
+      } catch (error) {
+        this.logger.warn(`Error enviando notificación de resultado de aprobación: ${error.message}`);
+      }
+    }
+
+    return saved;
   }
 
   async remove(id: number, userId?: number): Promise<Documento> {
@@ -153,6 +190,118 @@ export class DocumentoService {
     documento.activo = false;
     documento.updatedBy = userId;
     return this.documentoRepository.save(documento);
+  }
+
+  // ─── Helpers privados ────────────────────────────────────────────────────────
+
+  private async getAdminUserId(): Promise<number | null> {
+    const admin = await this.usuarioRepository.findOne({
+      where: { rol: Role.ADMIN, activo: true },
+      select: ['id'],
+    });
+    return admin?.id ?? null;
+  }
+
+  private async getPmoUserIds(): Promise<number[]> {
+    const pmos = await this.usuarioRepository.find({
+      where: { rol: Role.PMO, activo: true },
+      select: ['id'],
+    });
+    return pmos.map(u => u.id);
+  }
+
+  /**
+   * Notifica a PMO y ADMIN que un nuevo documento está pendiente de aprobación
+   */
+  private async notificarDocumentoPendienteAprobacion(
+    documento: Documento,
+    proyectoId: number,
+    creadorId?: number,
+  ): Promise<void> {
+    // Obtener nombre del proyecto
+    const proyecto = await this.proyectoRepository.findOne({
+      where: { id: proyectoId },
+      select: ['id', 'nombre'],
+    });
+    const proyectoNombre = proyecto?.nombre ?? `Proyecto ID ${proyectoId}`;
+
+    const notificationData = {
+      titulo: 'Documento pendiente de aprobación',
+      descripcion: `Se ha agregado el documento "${documento.nombre}" (${documento.fase}) al proyecto "${proyectoNombre}" y requiere su aprobación.`,
+      entidadTipo: 'Documento',
+      entidadId: documento.id,
+      proyectoId,
+      urlAccion: `/poi/proyecto/detalles?id=${proyectoId}&tab=Documentos`,
+    };
+
+    // Notificar a todos los PMO (excepto el creador)
+    const pmoIds = await this.getPmoUserIds();
+    for (const pmoId of pmoIds) {
+      if (pmoId !== creadorId) {
+        await this.notificacionService.notificar(
+          TipoNotificacion.APROBACIONES,
+          pmoId,
+          notificationData,
+        );
+      }
+    }
+
+    // Notificar al ADMIN (excepto si es el creador)
+    const adminId = await this.getAdminUserId();
+    if (adminId && adminId !== creadorId) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.APROBACIONES,
+        adminId,
+        notificationData,
+      );
+    }
+  }
+
+  /**
+   * Notifica al creador del documento y a SM/Coordinador sobre el resultado de la aprobación
+   */
+  private async notificarResultadoDocumento(
+    saved: Documento,
+    documentoOriginal: Documento,
+    nuevoEstado: DocumentoEstado,
+    observacion?: string,
+    aprobadorId?: number,
+  ): Promise<void> {
+    const proyectoId = documentoOriginal.proyectoId;
+    const proyectoNombre = documentoOriginal.proyecto?.nombre ?? `Proyecto ID ${proyectoId}`;
+    const aprobado = nuevoEstado === DocumentoEstado.APROBADO;
+
+    const notificationData = {
+      titulo: aprobado ? 'Documento aprobado' : 'Documento no aprobado',
+      descripcion: aprobado
+        ? `El documento "${documentoOriginal.nombre}" del proyecto "${proyectoNombre}" ha sido aprobado.`
+        : `El documento "${documentoOriginal.nombre}" del proyecto "${proyectoNombre}" no fue aprobado.${observacion ? ` Observación: ${observacion}` : ''}`,
+      entidadTipo: 'Documento',
+      entidadId: documentoOriginal.id,
+      proyectoId,
+      urlAccion: `/poi/proyecto/detalles?id=${proyectoId}&tab=Documentos`,
+      observacion: observacion,
+    };
+
+    // Recopilar destinatarios únicos (creador, SM, Coordinador) excluyendo al aprobador
+    const destinatarios = new Set<number>();
+    if (documentoOriginal.createdBy && documentoOriginal.createdBy !== aprobadorId) {
+      destinatarios.add(documentoOriginal.createdBy);
+    }
+    if (documentoOriginal.proyecto?.scrumMasterId && documentoOriginal.proyecto.scrumMasterId !== aprobadorId) {
+      destinatarios.add(documentoOriginal.proyecto.scrumMasterId);
+    }
+    if (documentoOriginal.proyecto?.coordinadorId && documentoOriginal.proyecto.coordinadorId !== aprobadorId) {
+      destinatarios.add(documentoOriginal.proyecto.coordinadorId);
+    }
+
+    for (const destinatarioId of destinatarios) {
+      await this.notificacionService.notificar(
+        TipoNotificacion.APROBACIONES,
+        destinatarioId,
+        notificationData,
+      );
+    }
   }
 
   /**
