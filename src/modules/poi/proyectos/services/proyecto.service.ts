@@ -283,6 +283,16 @@ export class ProyectoService {
 
     const proyectoGuardado: Proyecto = await this.proyectoRepository.save(proyecto);
 
+    // Obtener nombres de usuarios asignados para notificaciones
+    const [coordinadorUser, scrumMasterUser, areaUsuariaUser] = await Promise.all([
+      createDto.coordinadorId ? this.usuarioRepository.findOne({ where: { id: createDto.coordinadorId }, select: ['id', 'nombre', 'apellido'] }) : null,
+      createDto.scrumMasterId ? this.usuarioRepository.findOne({ where: { id: createDto.scrumMasterId }, select: ['id', 'nombre', 'apellido'] }) : null,
+      createDto.areaUsuariaId ? this.usuarioRepository.findOne({ where: { id: createDto.areaUsuariaId }, select: ['id', 'nombre', 'apellido'] }) : null,
+    ]);
+    const coordNombre = coordinadorUser ? `${coordinadorUser.nombre} ${coordinadorUser.apellido}`.trim() : 'Sin asignar';
+    const smNombre = scrumMasterUser ? `${scrumMasterUser.nombre} ${scrumMasterUser.apellido}`.trim() : 'Sin asignar';
+    const auNombre = areaUsuariaUser ? `${areaUsuariaUser.nombre} ${areaUsuariaUser.apellido}`.trim() : 'Sin asignar';
+
     // Crear cronograma automáticamente para el proyecto
     try {
       await this.cronogramaService.create({
@@ -352,7 +362,7 @@ export class ProyectoService {
         destinatariosCoord,
         {
           titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
-          descripcion: `Se ha asignado como Coordinador del proyecto "${proyectoGuardado.nombre}"`,
+          descripcion: `${coordNombre} ha sido asignado/a como Coordinador del proyecto "${proyectoGuardado.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyectoGuardado.id,
           proyectoId: proyectoGuardado.id,
@@ -384,7 +394,7 @@ export class ProyectoService {
         destinatariosSM,
         {
           titulo: `Nuevo proyecto asignado: ${proyectoGuardado.codigo}`,
-          descripcion: `Se ha asignado como Scrum Master del proyecto "${proyectoGuardado.nombre}"`,
+          descripcion: `${smNombre} ha sido asignado/a como Scrum Master del proyecto "${proyectoGuardado.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyectoGuardado.id,
           proyectoId: proyectoGuardado.id,
@@ -405,7 +415,7 @@ export class ProyectoService {
         [createDto.areaUsuariaId],
         {
           titulo: `Asignado como Área Usuaria: ${proyectoGuardado.codigo}`,
-          descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyectoGuardado.nombre}"`,
+          descripcion: `${auNombre} ha sido asignado/a como Área Usuaria del proyecto "${proyectoGuardado.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyectoGuardado.id,
           proyectoId: proyectoGuardado.id,
@@ -644,6 +654,12 @@ export class ProyectoService {
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
       const destinatariosCoord: number[] = [updateDto.coordinadorId];
 
+      const nuevoCoord = await this.usuarioRepository.findOne({
+        where: { id: updateDto.coordinadorId },
+        select: ['id', 'nombre', 'apellido'],
+      });
+      const nombreNuevoCoord = nuevoCoord ? `${nuevoCoord.nombre} ${nuevoCoord.apellido}`.trim() : 'el nuevo Coordinador';
+
       // Agregar PMOs para que vean la asignación
       const pmoIds = await this.getPmoUserIds();
       for (const pmoId of pmoIds) {
@@ -657,7 +673,7 @@ export class ProyectoService {
         destinatariosCoord,
         {
           titulo: `Asignado como Coordinador: ${proyecto.codigo}`,
-          descripcion: `Se ha asignado como Coordinador del proyecto "${proyecto.nombre}"`,
+          descripcion: `${nombreNuevoCoord} ha sido asignado/a como Coordinador del proyecto "${proyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
@@ -686,6 +702,12 @@ export class ProyectoService {
     if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && updateDto.scrumMasterId !== userId) {
       const destinatariosSM: number[] = [updateDto.scrumMasterId];
 
+      const nuevoSmUpdate = await this.usuarioRepository.findOne({
+        where: { id: updateDto.scrumMasterId },
+        select: ['id', 'nombre', 'apellido'],
+      });
+      const nombreNuevoSmUpdate = nuevoSmUpdate ? `${nuevoSmUpdate.nombre} ${nuevoSmUpdate.apellido}`.trim() : 'el nuevo Scrum Master';
+
       // Agregar PMOs
       const pmoIds = await this.getPmoUserIds();
       for (const pmoId of pmoIds) {
@@ -699,7 +721,7 @@ export class ProyectoService {
         destinatariosSM,
         {
           titulo: `Asignado como Scrum Master: ${proyecto.codigo}`,
-          descripcion: `Se ha asignado como Scrum Master del proyecto "${proyecto.nombre}"`,
+          descripcion: `${nombreNuevoSmUpdate} ha sido asignado/a como Scrum Master del proyecto "${proyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
@@ -737,12 +759,18 @@ export class ProyectoService {
       updateDto.areaUsuariaId !== proyecto.areaUsuariaId &&
       updateDto.areaUsuariaId !== userId
     ) {
+      const nuevoAuUpdate = await this.usuarioRepository.findOne({
+        where: { id: updateDto.areaUsuariaId },
+        select: ['id', 'nombre', 'apellido'],
+      });
+      const nombreNuevoAuUpdate = nuevoAuUpdate ? `${nuevoAuUpdate.nombre} ${nuevoAuUpdate.apellido}`.trim() : 'el nuevo Área Usuaria';
+
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
         [updateDto.areaUsuariaId],
         {
           titulo: `Asignado como Área Usuaria: ${proyecto.codigo}`,
-          descripcion: `Se te ha asignado como Área Usuaria del proyecto "${proyecto.nombre}"`,
+          descripcion: `${nombreNuevoAuUpdate} ha sido asignado/a como Área Usuaria del proyecto "${proyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: proyecto.id,
           proyectoId: proyecto.id,
