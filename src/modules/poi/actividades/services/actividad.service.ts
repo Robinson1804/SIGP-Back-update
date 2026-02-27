@@ -256,30 +256,28 @@ export class ActividadService {
     // cacheado (gestor, coordinador) como fuente del FK en lugar del nuevo ID
     await this.actividadRepository.update(id, { ...(updateDto as any), updatedBy: userId });
 
-    // Notificar al nuevo coordinador y PMOs si cambió
+    // Notificar al nuevo coordinador si cambió
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
+      const nuevoCoordAct = await this.usuarioRepository.findOne({ where: { id: updateDto.coordinadorId }, select: ['id', 'nombre', 'apellido'] });
+      const nombreCoordAct = nuevoCoordAct ? `${nuevoCoordAct.nombre} ${nuevoCoordAct.apellido}`.trim() : 'el nuevo Coordinador';
+
       const destinatariosCoord: number[] = [updateDto.coordinadorId];
-
-      // Agregar PMOs para que vean la asignación
-      const pmoIds = await this.getPmoUserIds();
-      for (const pmoId of pmoIds) {
-        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
-          destinatariosCoord.push(pmoId);
-        }
-      }
-
-      // Agregar ADMIN
+      const doerRoleCoord = await this.getDoerRole(userId);
       const adminIdCoord = await this.getAdminUserId();
-      if (adminIdCoord && adminIdCoord !== userId && !destinatariosCoord.includes(adminIdCoord)) {
-        destinatariosCoord.push(adminIdCoord);
+      const pmoIdsCoord = await this.getPmoUserIds();
+
+      if (doerRoleCoord === 'ADMIN') {
+        for (const pmoId of pmoIdsCoord) { if (!destinatariosCoord.includes(pmoId)) destinatariosCoord.push(pmoId); }
+      } else if (doerRoleCoord === 'PMO') {
+        if (adminIdCoord && !destinatariosCoord.includes(adminIdCoord)) destinatariosCoord.push(adminIdCoord);
       }
 
       await this.notificacionService.notificarMultiples(
-        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        TipoNotificacion.PROYECTOS,
         destinatariosCoord,
         {
           titulo: `Actividad asignada ${actividad.codigo}: ${actividad.nombre}`,
-          descripcion: `Se ha asignado como Coordinador de la actividad "${actividad.nombre}"`,
+          descripcion: `${nombreCoordAct} ha sido asignado/a como Coordinador de la actividad "${actividad.nombre}"`,
           entidadTipo: 'Actividad',
           entidadId: actividad.id,
           actividadId: actividad.id,
@@ -288,30 +286,28 @@ export class ActividadService {
       );
     }
 
-    // Notificar al nuevo gestor y PMOs si cambió
+    // Notificar al nuevo gestor si cambió
     if (updateDto.gestorId && updateDto.gestorId !== gestorAnterior && updateDto.gestorId !== userId) {
+      const nuevoGestorAct = await this.usuarioRepository.findOne({ where: { id: updateDto.gestorId }, select: ['id', 'nombre', 'apellido'] });
+      const nombreGestorAct = nuevoGestorAct ? `${nuevoGestorAct.nombre} ${nuevoGestorAct.apellido}`.trim() : 'el nuevo Gestor';
+
       const destinatariosGestor: number[] = [updateDto.gestorId];
-
-      // Agregar PMOs
-      const pmoIds = await this.getPmoUserIds();
-      for (const pmoId of pmoIds) {
-        if (pmoId !== userId && !destinatariosGestor.includes(pmoId)) {
-          destinatariosGestor.push(pmoId);
-        }
-      }
-
-      // Agregar ADMIN
+      const doerRoleGestor = await this.getDoerRole(userId);
       const adminIdGestor = await this.getAdminUserId();
-      if (adminIdGestor && adminIdGestor !== userId && !destinatariosGestor.includes(adminIdGestor)) {
-        destinatariosGestor.push(adminIdGestor);
+      const pmoIdsGestor = await this.getPmoUserIds();
+
+      if (doerRoleGestor === 'ADMIN') {
+        for (const pmoId of pmoIdsGestor) { if (!destinatariosGestor.includes(pmoId)) destinatariosGestor.push(pmoId); }
+      } else if (doerRoleGestor === 'PMO') {
+        if (adminIdGestor && !destinatariosGestor.includes(adminIdGestor)) destinatariosGestor.push(adminIdGestor);
       }
 
       await this.notificacionService.notificarMultiples(
-        TipoNotificacion.PROYECTOS, // Activity assignments use 'Proyectos' type
+        TipoNotificacion.PROYECTOS,
         destinatariosGestor,
         {
           titulo: `Actividad asignada ${actividad.codigo}: ${actividad.nombre}`,
-          descripcion: `Se ha asignado como Gestor de la actividad "${actividad.nombre}"`,
+          descripcion: `${nombreGestorAct} ha sido asignado/a como Gestor de la actividad "${actividad.nombre}"`,
           entidadTipo: 'Actividad',
           entidadId: actividad.id,
           actividadId: actividad.id,
@@ -327,7 +323,49 @@ export class ActividadService {
     const actividad = await this.findOne(id);
     actividad.activo = false;
     actividad.updatedBy = userId;
-    return this.actividadRepository.save(actividad);
+    const result = await this.actividadRepository.save(actividad);
+
+    try {
+      const doerRole = await this.getDoerRole(userId);
+      if (doerRole === 'PMO') {
+        const adminId = await this.getAdminUserId();
+        if (adminId) {
+          const doer = userId ? await this.usuarioRepository.findOne({ where: { id: userId }, select: ['id', 'nombre', 'apellido'] }) : null;
+          const doerNombre = doer ? `${doer.nombre} ${doer.apellido}`.trim() : 'Un PMO';
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, [adminId], {
+            titulo: `Actividad eliminada: ${actividad.codigo}`,
+            descripcion: `${doerNombre} (PMO) eliminó la actividad "${actividad.nombre}"`,
+            entidadTipo: 'Actividad',
+            entidadId: actividad.id,
+            actividadId: actividad.id,
+          });
+        }
+      } else if (doerRole === 'ADMIN') {
+        const pmoIds = await this.getPmoUserIds();
+        if (pmoIds.length > 0) {
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, pmoIds, {
+            titulo: `Actividad eliminada: ${actividad.codigo}`,
+            descripcion: `El Administrador eliminó la actividad "${actividad.nombre}"`,
+            entidadTipo: 'Actividad',
+            entidadId: actividad.id,
+            actividadId: actividad.id,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error enviando notificación de eliminación de actividad:', error);
+    }
+
+    return result;
+  }
+
+  private async getDoerRole(userId: number | undefined): Promise<'ADMIN' | 'PMO' | 'OTHER'> {
+    if (!userId) return 'OTHER';
+    const adminId = await this.getAdminUserId();
+    if (adminId === userId) return 'ADMIN';
+    const pmoIds = await this.getPmoUserIds();
+    if (pmoIds.includes(userId)) return 'PMO';
+    return 'OTHER';
   }
 
   async findByAccionEstrategica(accionEstrategicaId: number): Promise<Actividad[]> {

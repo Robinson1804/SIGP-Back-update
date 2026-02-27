@@ -650,22 +650,25 @@ export class ProyectoService {
       }
     }
 
-    // Notificar al nuevo coordinador y PMOs si cambió
+    // Notificar al nuevo coordinador si cambió
     if (updateDto.coordinadorId && updateDto.coordinadorId !== coordinadorAnterior && updateDto.coordinadorId !== userId) {
-      const destinatariosCoord: number[] = [updateDto.coordinadorId];
-
       const nuevoCoord = await this.usuarioRepository.findOne({
         where: { id: updateDto.coordinadorId },
         select: ['id', 'nombre', 'apellido'],
       });
       const nombreNuevoCoord = nuevoCoord ? `${nuevoCoord.nombre} ${nuevoCoord.apellido}`.trim() : 'el nuevo Coordinador';
 
-      // Agregar PMOs para que vean la asignación
+      const destinatariosCoord: number[] = [updateDto.coordinadorId];
+      const doerRole = await this.getDoerRole(userId);
+      const adminId = await this.getAdminUserId();
       const pmoIds = await this.getPmoUserIds();
-      for (const pmoId of pmoIds) {
-        if (pmoId !== userId && !destinatariosCoord.includes(pmoId)) {
-          destinatariosCoord.push(pmoId);
+
+      if (doerRole === 'ADMIN') {
+        for (const pmoId of pmoIds) {
+          if (!destinatariosCoord.includes(pmoId)) destinatariosCoord.push(pmoId);
         }
+      } else if (doerRole === 'PMO') {
+        if (adminId && !destinatariosCoord.includes(adminId)) destinatariosCoord.push(adminId);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -698,22 +701,25 @@ export class ProyectoService {
       );
     }
 
-    // Notificar al nuevo Scrum Master y PMOs si cambió
+    // Notificar al nuevo Scrum Master si cambió
     if (updateDto.scrumMasterId && updateDto.scrumMasterId !== scrumMasterAnterior && updateDto.scrumMasterId !== userId) {
-      const destinatariosSM: number[] = [updateDto.scrumMasterId];
-
       const nuevoSmUpdate = await this.usuarioRepository.findOne({
         where: { id: updateDto.scrumMasterId },
         select: ['id', 'nombre', 'apellido'],
       });
       const nombreNuevoSmUpdate = nuevoSmUpdate ? `${nuevoSmUpdate.nombre} ${nuevoSmUpdate.apellido}`.trim() : 'el nuevo Scrum Master';
 
-      // Agregar PMOs
-      const pmoIds = await this.getPmoUserIds();
-      for (const pmoId of pmoIds) {
-        if (pmoId !== userId && !destinatariosSM.includes(pmoId)) {
-          destinatariosSM.push(pmoId);
+      const destinatariosSM: number[] = [updateDto.scrumMasterId];
+      const doerRoleSM = await this.getDoerRole(userId);
+      const adminIdSM = await this.getAdminUserId();
+      const pmoIdsSM = await this.getPmoUserIds();
+
+      if (doerRoleSM === 'ADMIN') {
+        for (const pmoId of pmoIdsSM) {
+          if (!destinatariosSM.includes(pmoId)) destinatariosSM.push(pmoId);
         }
+      } else if (doerRoleSM === 'PMO') {
+        if (adminIdSM && !destinatariosSM.includes(adminIdSM)) destinatariosSM.push(adminIdSM);
       }
 
       await this.notificacionService.notificarMultiples(
@@ -765,9 +771,22 @@ export class ProyectoService {
       });
       const nombreNuevoAuUpdate = nuevoAuUpdate ? `${nuevoAuUpdate.nombre} ${nuevoAuUpdate.apellido}`.trim() : 'el nuevo Área Usuaria';
 
+      const destinatariosAU: number[] = [updateDto.areaUsuariaId];
+      const doerRoleAU = await this.getDoerRole(userId);
+      const adminIdAU = await this.getAdminUserId();
+      const pmoIdsAU = await this.getPmoUserIds();
+
+      if (doerRoleAU === 'ADMIN') {
+        for (const pmoId of pmoIdsAU) {
+          if (!destinatariosAU.includes(pmoId)) destinatariosAU.push(pmoId);
+        }
+      } else if (doerRoleAU === 'PMO') {
+        if (adminIdAU && !destinatariosAU.includes(adminIdAU)) destinatariosAU.push(adminIdAU);
+      }
+
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        [updateDto.areaUsuariaId],
+        destinatariosAU,
         {
           titulo: `Asignado como Área Usuaria: ${proyecto.codigo}`,
           descripcion: `${nombreNuevoAuUpdate} ha sido asignado/a como Área Usuaria del proyecto "${proyecto.nombre}"`,
@@ -910,7 +929,50 @@ export class ProyectoService {
     const proyecto = await this.findOne(id);
     proyecto.activo = false;
     proyecto.updatedBy = userId;
-    return this.proyectoRepository.save(proyecto);
+    const result = await this.proyectoRepository.save(proyecto);
+
+    // Notificaciones de eliminación: PMO elimina → ADMIN; ADMIN elimina → PMO
+    try {
+      const doerRole = await this.getDoerRole(userId);
+      if (doerRole === 'PMO') {
+        const adminId = await this.getAdminUserId();
+        if (adminId) {
+          const doer = userId ? await this.usuarioRepository.findOne({ where: { id: userId }, select: ['id', 'nombre', 'apellido'] }) : null;
+          const doerNombre = doer ? `${doer.nombre} ${doer.apellido}`.trim() : 'Un PMO';
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, [adminId], {
+            titulo: `Proyecto eliminado: ${proyecto.codigo}`,
+            descripcion: `${doerNombre} (PMO) eliminó el proyecto "${proyecto.nombre}"`,
+            entidadTipo: 'Proyecto',
+            entidadId: proyecto.id,
+            proyectoId: proyecto.id,
+          });
+        }
+      } else if (doerRole === 'ADMIN') {
+        const pmoIds = await this.getPmoUserIds();
+        if (pmoIds.length > 0) {
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, pmoIds, {
+            titulo: `Proyecto eliminado: ${proyecto.codigo}`,
+            descripcion: `El Administrador eliminó el proyecto "${proyecto.nombre}"`,
+            entidadTipo: 'Proyecto',
+            entidadId: proyecto.id,
+            proyectoId: proyecto.id,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error enviando notificación de eliminación de proyecto:', error);
+    }
+
+    return result;
+  }
+
+  private async getDoerRole(userId: number | undefined): Promise<'ADMIN' | 'PMO' | 'OTHER'> {
+    if (!userId) return 'OTHER';
+    const adminId = await this.getAdminUserId();
+    if (adminId === userId) return 'ADMIN';
+    const pmoIds = await this.getPmoUserIds();
+    if (pmoIds.includes(userId)) return 'PMO';
+    return 'OTHER';
   }
 
   async findByAccionEstrategica(accionEstrategicaId: number): Promise<Proyecto[]> {

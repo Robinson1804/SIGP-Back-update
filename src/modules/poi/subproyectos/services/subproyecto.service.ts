@@ -269,17 +269,32 @@ export class SubproyectoService {
     rolesChanged: { coordinador?: boolean; scrumMaster?: boolean; patrocinador?: boolean },
     userId?: number,
   ): Promise<void> {
+    const doerRole = await this.getDoerRole(userId);
+    const adminId = await this.getAdminUserId();
     const pmoIds = await this.getPmoUserIds();
+
+    const buildDestinatarios = (assignedId: number): number[] => {
+      const dest: number[] = [assignedId];
+      if (doerRole === 'ADMIN') {
+        for (const pmoId of pmoIds) {
+          if (!dest.includes(pmoId)) dest.push(pmoId);
+        }
+      } else if (doerRole === 'PMO') {
+        if (adminId && !dest.includes(adminId)) dest.push(adminId);
+      }
+      return dest;
+    };
 
     // Notificar cambio de coordinador
     if (rolesChanged.coordinador && subproyecto.coordinadorId && subproyecto.coordinadorId !== userId) {
-      const destinatarios = [subproyecto.coordinadorId, ...pmoIds];
+      const coordUser = await this.usuarioRepository.findOne({ where: { id: subproyecto.coordinadorId }, select: ['id', 'nombre', 'apellido'] });
+      const coordNombre = coordUser ? `${coordUser.nombre} ${coordUser.apellido}`.trim() : 'el nuevo Coordinador';
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        destinatarios,
+        buildDestinatarios(subproyecto.coordinadorId),
         {
           titulo: `Asignación: Coordinador de ${subproyecto.codigo}`,
-          descripcion: `Has sido asignado como coordinador del subproyecto "${subproyecto.nombre}"`,
+          descripcion: `${coordNombre} ha sido asignado/a como Coordinador del subproyecto "${subproyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: subproyecto.id,
           proyectoId: subproyecto.proyectoPadreId,
@@ -289,13 +304,14 @@ export class SubproyectoService {
 
     // Notificar cambio de Scrum Master
     if (rolesChanged.scrumMaster && subproyecto.scrumMasterId && subproyecto.scrumMasterId !== userId) {
-      const destinatarios = [subproyecto.scrumMasterId, ...pmoIds];
+      const smUser = await this.usuarioRepository.findOne({ where: { id: subproyecto.scrumMasterId }, select: ['id', 'nombre', 'apellido'] });
+      const smNombre = smUser ? `${smUser.nombre} ${smUser.apellido}`.trim() : 'el nuevo Scrum Master';
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        destinatarios,
+        buildDestinatarios(subproyecto.scrumMasterId),
         {
           titulo: `Asignación: Scrum Master de ${subproyecto.codigo}`,
-          descripcion: `Has sido asignado como Scrum Master del subproyecto "${subproyecto.nombre}"`,
+          descripcion: `${smNombre} ha sido asignado/a como Scrum Master del subproyecto "${subproyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: subproyecto.id,
           proyectoId: subproyecto.proyectoPadreId,
@@ -563,12 +579,25 @@ export class SubproyectoService {
       updateDto.areaUsuariaId !== subproyecto.areaUsuariaId &&
       updateDto.areaUsuariaId !== userId
     ) {
+      const nuevoAuUser = await this.usuarioRepository.findOne({ where: { id: updateDto.areaUsuariaId }, select: ['id', 'nombre', 'apellido'] });
+      const auNombre = nuevoAuUser ? `${nuevoAuUser.nombre} ${nuevoAuUser.apellido}`.trim() : 'el nuevo Área Usuaria';
+
+      const doerRoleAU = await this.getDoerRole(userId);
+      const adminIdAU = await this.getAdminUserId();
+      const pmoIdsAU = await this.getPmoUserIds();
+      const destinatariosAU: number[] = [updateDto.areaUsuariaId];
+      if (doerRoleAU === 'ADMIN') {
+        for (const pmoId of pmoIdsAU) { if (!destinatariosAU.includes(pmoId)) destinatariosAU.push(pmoId); }
+      } else if (doerRoleAU === 'PMO') {
+        if (adminIdAU && !destinatariosAU.includes(adminIdAU)) destinatariosAU.push(adminIdAU);
+      }
+
       await this.notificacionService.notificarMultiples(
         TipoNotificacion.PROYECTOS,
-        [updateDto.areaUsuariaId],
+        destinatariosAU,
         {
           titulo: `Asignado como Área Usuaria: ${subproyecto.codigo}`,
-          descripcion: `Se te ha asignado como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
+          descripcion: `${auNombre} ha sido asignado/a como Área Usuaria del subproyecto "${subproyecto.nombre}"`,
           entidadTipo: 'Proyecto',
           entidadId: subproyecto.id,
           proyectoId: subproyecto.proyectoPadreId,
@@ -792,7 +821,49 @@ export class SubproyectoService {
     const subproyecto = await this.findOne(id);
     subproyecto.activo = false;
     subproyecto.updatedBy = userId;
-    return this.subproyectoRepository.save(subproyecto);
+    const result = await this.subproyectoRepository.save(subproyecto);
+
+    try {
+      const doerRole = await this.getDoerRole(userId);
+      if (doerRole === 'PMO') {
+        const adminId = await this.getAdminUserId();
+        if (adminId) {
+          const doer = userId ? await this.usuarioRepository.findOne({ where: { id: userId }, select: ['id', 'nombre', 'apellido'] }) : null;
+          const doerNombre = doer ? `${doer.nombre} ${doer.apellido}`.trim() : 'Un PMO';
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, [adminId], {
+            titulo: `Subproyecto eliminado: ${subproyecto.codigo}`,
+            descripcion: `${doerNombre} (PMO) eliminó el subproyecto "${subproyecto.nombre}"`,
+            entidadTipo: 'Proyecto',
+            entidadId: subproyecto.id,
+            proyectoId: subproyecto.proyectoPadreId,
+          });
+        }
+      } else if (doerRole === 'ADMIN') {
+        const pmoIds = await this.getPmoUserIds();
+        if (pmoIds.length > 0) {
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, pmoIds, {
+            titulo: `Subproyecto eliminado: ${subproyecto.codigo}`,
+            descripcion: `El Administrador eliminó el subproyecto "${subproyecto.nombre}"`,
+            entidadTipo: 'Proyecto',
+            entidadId: subproyecto.id,
+            proyectoId: subproyecto.proyectoPadreId,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error enviando notificación de eliminación de subproyecto:', error);
+    }
+
+    return result;
+  }
+
+  private async getDoerRole(userId: number | undefined): Promise<'ADMIN' | 'PMO' | 'OTHER'> {
+    if (!userId) return 'OTHER';
+    const adminId = await this.getAdminUserId();
+    if (adminId === userId) return 'ADMIN';
+    const pmoIds = await this.getPmoUserIds();
+    if (pmoIds.includes(userId)) return 'PMO';
+    return 'OTHER';
   }
 
   /**

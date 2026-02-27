@@ -65,6 +65,15 @@ export class SubactividadService {
     return admin?.id ?? null;
   }
 
+  private async getDoerRole(userId: number | undefined): Promise<'ADMIN' | 'PMO' | 'OTHER'> {
+    if (!userId) return 'OTHER';
+    const adminId = await this.getAdminUserId();
+    if (adminId === userId) return 'ADMIN';
+    const pmoIds = await this.getPmoUserIds();
+    if (pmoIds.includes(userId)) return 'PMO';
+    return 'OTHER';
+  }
+
   /**
    * Genera el siguiente código para una subactividad de una actividad padre.
    * Formato: SUBACT-001, SUBACT-002, ...
@@ -235,6 +244,9 @@ export class SubactividadService {
   async update(id: number, dto: UpdateSubactividadDto, userId?: number): Promise<Subactividad> {
     const subactividad = await this.findOne(id);
 
+    const coordinadorAnterior = subactividad.coordinadorId;
+    const gestorAnterior = subactividad.gestorId;
+
     // Validar años contra la actividad padre si se están actualizando
     if (dto.anios && dto.anios.length > 0) {
       const actividadPadre = await this.actividadRepo.findOne({
@@ -251,17 +263,108 @@ export class SubactividadService {
       }
     }
 
-    // Usar update() directo para evitar que TypeORM use el objeto de relación
-    // cacheado (gestor, coordinador) como fuente del FK en lugar del nuevo ID
     await this.subactividadRepo.update(id, { ...(dto as any), updatedBy: userId });
-    return this.findOne(id);
+    const saved = await this.findOne(id);
+
+    // Notificaciones de reasignación de coordinador
+    if (dto.coordinadorId && dto.coordinadorId !== coordinadorAnterior && dto.coordinadorId !== userId) {
+      try {
+        const nuevoCoord = await this.usuarioRepo.findOne({ where: { id: dto.coordinadorId }, select: ['id', 'nombre', 'apellido'] });
+        const coordNombre = nuevoCoord ? `${nuevoCoord.nombre} ${nuevoCoord.apellido}`.trim() : 'el nuevo Coordinador';
+
+        const destinatarios: number[] = [dto.coordinadorId];
+        const doerRole = await this.getDoerRole(userId);
+        const adminId = await this.getAdminUserId();
+        const pmoIds = await this.getPmoUserIds();
+
+        if (doerRole === 'ADMIN') {
+          for (const pmoId of pmoIds) { if (!destinatarios.includes(pmoId)) destinatarios.push(pmoId); }
+        } else if (doerRole === 'PMO') {
+          if (adminId && !destinatarios.includes(adminId)) destinatarios.push(adminId);
+        }
+
+        await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
+          titulo: `Subactividad asignada: ${saved.nombre}`,
+          descripcion: `${coordNombre} ha sido asignado/a como Coordinador de la subactividad "${saved.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: saved.id,
+          actividadId: saved.actividadPadreId,
+        });
+      } catch (error) {
+        console.error('Error enviando notificación de reasignación de coordinador en subactividad:', error);
+      }
+    }
+
+    // Notificaciones de reasignación de gestor
+    if (dto.gestorId && dto.gestorId !== gestorAnterior && dto.gestorId !== userId) {
+      try {
+        const nuevoGestor = await this.usuarioRepo.findOne({ where: { id: dto.gestorId }, select: ['id', 'nombre', 'apellido'] });
+        const gestorNombre = nuevoGestor ? `${nuevoGestor.nombre} ${nuevoGestor.apellido}`.trim() : 'el nuevo Gestor';
+
+        const destinatarios: number[] = [dto.gestorId];
+        const doerRole = await this.getDoerRole(userId);
+        const adminId = await this.getAdminUserId();
+        const pmoIds = await this.getPmoUserIds();
+
+        if (doerRole === 'ADMIN') {
+          for (const pmoId of pmoIds) { if (!destinatarios.includes(pmoId)) destinatarios.push(pmoId); }
+        } else if (doerRole === 'PMO') {
+          if (adminId && !destinatarios.includes(adminId)) destinatarios.push(adminId);
+        }
+
+        await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, destinatarios, {
+          titulo: `Subactividad asignada: ${saved.nombre}`,
+          descripcion: `${gestorNombre} ha sido asignado/a como Gestor de la subactividad "${saved.nombre}"`,
+          entidadTipo: 'Actividad',
+          entidadId: saved.id,
+          actividadId: saved.actividadPadreId,
+        });
+      } catch (error) {
+        console.error('Error enviando notificación de reasignación de gestor en subactividad:', error);
+      }
+    }
+
+    return saved;
   }
 
   async remove(id: number, userId?: number): Promise<Subactividad> {
     const subactividad = await this.findOne(id);
     subactividad.activo = false;
     subactividad.updatedBy = userId;
-    return this.subactividadRepo.save(subactividad);
+    const result = await this.subactividadRepo.save(subactividad);
+
+    try {
+      const doerRole = await this.getDoerRole(userId);
+      if (doerRole === 'PMO') {
+        const adminId = await this.getAdminUserId();
+        if (adminId) {
+          const doer = userId ? await this.usuarioRepo.findOne({ where: { id: userId }, select: ['id', 'nombre', 'apellido'] }) : null;
+          const doerNombre = doer ? `${doer.nombre} ${doer.apellido}`.trim() : 'Un PMO';
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, [adminId], {
+            titulo: `Subactividad eliminada: ${subactividad.nombre}`,
+            descripcion: `${doerNombre} (PMO) eliminó la subactividad "${subactividad.nombre}"`,
+            entidadTipo: 'Actividad',
+            entidadId: subactividad.id,
+            actividadId: subactividad.actividadPadreId,
+          });
+        }
+      } else if (doerRole === 'ADMIN') {
+        const pmoIds = await this.getPmoUserIds();
+        if (pmoIds.length > 0) {
+          await this.notificacionService.notificarMultiples(TipoNotificacion.PROYECTOS, pmoIds, {
+            titulo: `Subactividad eliminada: ${subactividad.nombre}`,
+            descripcion: `El Administrador eliminó la subactividad "${subactividad.nombre}"`,
+            entidadTipo: 'Actividad',
+            entidadId: subactividad.id,
+            actividadId: subactividad.actividadPadreId,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error enviando notificación de eliminación de subactividad:', error);
+    }
+
+    return result;
   }
 
   async getTareas(subactividadId: number): Promise<Tarea[]> {
